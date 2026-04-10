@@ -1,0 +1,94 @@
+pipeline {
+    agent any
+
+    environment {
+        JAR_FILE_NAME = "fluenta-hsm-sales-service"
+        APP_PORT = 8487
+        LOCAL_DIR = "E:\\Project\\Projects\\FluentaMES\\Artifacts\\UAT"
+        GIT_BRANCH = "uat"
+        GIT_URL = " https://hindindustec1-admin@bitbucket.org/hindindustec1/fluenta-hsm-sales-service.git"
+        MAIL_BODY = "Build Completed"
+        MAIL_SUBJECT = "UAT Build and Deployment Completed for Sales Service"
+        MAIL_DEVTEAM = "amit.bhalerao@hindindustec.com"
+        REMOTE_VM_USERNAME = "Administrator"
+        REMOTE_VM_PASSWORD = "admin@123"
+        REMOTE_VM_IP_ADDRESS = "10.37.0.103"
+        SERVER_DIR = "D:\\Fluenta-MS-jars\\Docker\\Fluenta-HSM-Sales-Service"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                script {
+                    echo "Code Checkout in Progress..."
+                    git branch: "${env.GIT_BRANCH}",
+                        credentialsId: 'Biktbucket',
+                        url: "${env.GIT_URL}"
+                }
+            }
+        }
+
+        stage('Build Artifact') {
+            steps {
+                echo "Build in Progress..."
+                bat "mvn clean install"
+            }
+        }
+
+        stage('Copy File') {
+            steps {
+                script {
+                    echo "Copying JAR file locally..."
+                    bat """
+                    copy "target\\${env.JAR_FILE_NAME}.jar" "${env.LOCAL_DIR}\\" /Y
+                    echo File copied successfully.
+                    """
+                }
+            }
+        }
+
+        stage('Transfer File') {
+            steps {
+                script {
+                    echo "Transferring file to remote VM..."
+                    // Ensure pscp is in PATH (from PuTTY)
+                    bat """
+                    echo y | pscp -pw ${env.REMOTE_VM_PASSWORD} "${env.LOCAL_DIR}\\${env.JAR_FILE_NAME}.jar" ${env.REMOTE_VM_USERNAME}@${env.REMOTE_VM_IP_ADDRESS}:"${env.SERVER_DIR}\\${env.JAR_FILE_NAME}.jar"
+                    """
+                }
+            }
+        }
+
+        stage('Build Docker Image on UAT') {
+            steps {
+                script {
+                    echo "Building and running Docker image on remote UAT server..."
+                    try {
+                        sshCommand remote: [
+                            name: "remote-server",
+                            host: "${env.REMOTE_VM_IP_ADDRESS}",
+                            user: "${env.REMOTE_VM_USERNAME}",
+                            password: "${env.REMOTE_VM_PASSWORD}",
+                            allowAnyHosts: true
+                        ], command: "powershell -ExecutionPolicy Bypass -File ${env.SERVER_DIR}\\${env.JAR_FILE_NAME}.ps1"
+                    } catch (Exception e) {
+                        error "Error executing Docker commands on UAT: ${e.getMessage()}"
+                    }
+                }
+            }
+        }
+
+        stage('Email') {
+            steps {
+                mail bcc: '',
+                     body: "${env.MAIL_BODY}",
+                     cc: '',
+                     from: '',
+                     replyTo: '',
+                     subject: "${env.MAIL_SUBJECT}",
+                     to: "${env.MAIL_DEVTEAM}"
+            }
+        }
+    }
+}
