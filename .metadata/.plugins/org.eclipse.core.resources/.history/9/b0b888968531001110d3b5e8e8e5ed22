@@ -1,0 +1,85 @@
+package com.hindindustec.fluenta.hsm.masters.common;
+
+@SuppressWarnings({"java:S125", "java:S6541"}) 
+/* * import java.io.IOException;
+ * 
+ * import org.slf4j.Logger; import org.slf4j.LoggerFactory; import
+ * org.springframework.beans.factory.annotation.Value; import
+ * org.springframework.http.HttpEntity; import
+ * org.springframework.http.HttpHeaders; import
+ * org.springframework.http.HttpMethod; import
+ * org.springframework.http.ResponseEntity; import
+ * org.springframework.stereotype.Component; import
+ * org.springframework.web.client.RestTemplate;
+ * 
+ * import jakarta.servlet.Filter; import jakarta.servlet.FilterChain; import
+ * jakarta.servlet.FilterConfig; import jakarta.servlet.ServletException; import
+ * jakarta.servlet.ServletRequest; import jakarta.servlet.ServletResponse;
+ * import jakarta.servlet.http.HttpServletRequest;
+ * 
+ *//**
+	 * This class takes request from user and validates the JWT token.
+	 * 
+	 * @author Roshani Rathod
+	 *//*
+		 * 
+		 * @Component public class RequestFilter implements Filter {
+		 * 
+		 * private RestTemplate restTemplate;
+		 * 
+		 * @Value("${api.auth.service.url}") private String authServiceUrl;
+		 * 
+		 * private boolean isExecutedForCurrentRequest = false;
+		 * 
+		 * private static final Logger LOGGER =
+		 * LoggerFactory.getLogger(RequestFilter.class);
+		 * 
+		 * public RequestFilter(RestTemplate restTemplate) { super(); this.restTemplate
+		 * = restTemplate; }
+		 * 
+		 * @Override public void init(FilterConfig filterConfig) throws ServletException
+		 * { // Initialization logic if needed }
+		 * 
+		 * @Override public void doFilter(ServletRequest request, ServletResponse
+		 * response, FilterChain chain) throws IOException, ServletException {
+		 * HttpServletRequest httpRequest = (HttpServletRequest) request; // Allow
+		 * Swagger UI and API docs String path = httpRequest.getServletPath(); if
+		 * (path.startsWith(OfsConstants.V3_API_DOCS) ||
+		 * path.startsWith(OfsConstants.SWAGGER_UI) ||
+		 * path.startsWith(OfsConstants.SWAGGER_RESOURCES)) { chain.doFilter(request,
+		 * response); return; }
+		 * 
+		 * if (!isExecutedForCurrentRequest) {
+		 * 
+		 * httpRequest.getHeaderNames().asIterator() .forEachRemaining(headerName ->
+		 * LOGGER.info(headerName, ": {}", httpRequest.getHeader(headerName)));
+		 * 
+		 * String authHeader = httpRequest.getHeader(HttpHeaders.AUTHORIZATION);
+		 * LOGGER.info("Authorization Header in Service: {}", authHeader);
+		 * 
+		 * // Extract the token (remove the "Bearer " prefix) if (authHeader != null &&
+		 * authHeader.startsWith(OfsConstants.BEARER)) { String token =
+		 * authHeader.substring(7);
+		 * 
+		 * try { // Create headers for the request to the authentication service
+		 * HttpHeaders headers = new HttpHeaders();
+		 * headers.set(OfsConstants.AUTHORIZATION, OfsConstants.BEARER + token);
+		 * 
+		 * HttpEntity<String> entity = new HttpEntity<>(headers);
+		 * 
+		 * // REST call to the authentication service ResponseEntity<String>
+		 * authResponse = restTemplate.exchange(authServiceUrl, HttpMethod.GET, entity,
+		 * String.class);
+		 * 
+		 * LOGGER.info("Auth service response: {}", authResponse.getStatusCode());
+		 * 
+		 * // If the token is valid, proceed with the request chain.doFilter(request,
+		 * response);
+		 * 
+		 * } catch (Exception e) { throw new ServletException(OfsConstants.EXCEPTION,
+		 * e); } } else { LOGGER.error(OfsConstants.ERROR); } } else {
+		 * chain.doFilter(request, response); } }
+		 * 
+		 * @Override public void destroy() { // Optional: Clean up filter resources if
+		 * needed } }
+		 */

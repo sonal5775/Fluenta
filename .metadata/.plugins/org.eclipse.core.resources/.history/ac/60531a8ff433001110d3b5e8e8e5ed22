@@ -1,0 +1,467 @@
+package com.hindindustec.fluenta.sales.repository;
+
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Repository;
+
+import com.hindindustec.fluenta.hsm.masters.repository.FlatnessToleranceCustRepository;
+import com.hindindustec.fluenta.sales.common.OfsConstants;
+import com.hindindustec.fluenta.sales.common.OfsStatusConstants;
+import com.hindindustec.fluenta.sales.dto.OrderBookRequest;
+import com.hindindustec.fluenta.sales.dto.OrderBookViewDto;
+import com.hindindustec.fluenta.sales.dto.SegmentDto;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
+import jakarta.persistence.TypedQuery;
+
+@Repository
+public class OrderBookCustRepository {
+
+	private EntityManager entityManager;
+	private static final Logger LOGGER = LoggerFactory.getLogger(OrderBookCustRepository.class);
+	public OrderBookCustRepository(EntityManager entityManager) {
+		super();
+		this.entityManager = entityManager;
+	}
+	
+	List<String> invStatusListForStock = Arrays.asList(
+			OfsStatusConstants.BATCH_PRODUCED,
+			OfsStatusConstants.BATCH_CONF_PEND_AT_PRD,
+			OfsStatusConstants.BATCH_CONF_PEND_AT_QA,
+			OfsStatusConstants.BATCH_HOLD,
+			OfsStatusConstants.BATCH_INPS_PENDING,
+			OfsStatusConstants.BATCH_AVAILABLE,
+			OfsStatusConstants.BATCH_SCHEDULED,
+			OfsStatusConstants.BATCH_IDENTIFIED,
+			OfsStatusConstants.BATCH_CHARGING,
+			OfsStatusConstants.BATCH_CONS_PENDING,
+			OfsStatusConstants.BATCH_READY_FOR_DISPATCH,
+			OfsStatusConstants.BATCH_MATERIAL_RELEASED,
+			OfsStatusConstants.BATCH_LOADED
+			);
+
+	public Page<OrderBookViewDto> getOrderBookViewDetails(OrderBookRequest request, int page, int size, String query,
+			String countQueryParm) {
+
+		
+		TypedQuery<OrderBookViewDto> q = entityManager.createQuery(query, OrderBookViewDto.class);
+		q.setParameter(OfsConstants.SO_NUMBER, request.getSoNumber());
+		q.setParameter(OfsConstants.ITEM, request.getItem());
+		q.setParameter(OfsConstants.CUSTOMER_NAME, request.getCustomerName());
+		q.setParameter(OfsConstants.PRODUCT, request.getProduct());
+		q.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+		q.setParameter(OfsConstants.THK_MIN, request.getThkmin());
+		q.setParameter(OfsConstants.THK_MAX, request.getThkmax());
+		q.setParameter(OfsConstants.WDT_MIN, request.getWdtmin());
+		q.setParameter(OfsConstants.WDT_MAX, request.getWdtmax());
+		q.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+		q.setParameter(OfsConstants.PLANTCODE, OfsConstants.PLANT_CODE);
+		q.setParameter(OfsConstants.BATCH_DISPATCH, OfsConstants.BATCH_DISPATCHED.toUpperCase());
+		q.setParameter(OfsConstants.BATCH_STS_AVAILABLE, OfsConstants.BATCH_AVAILABLE.toUpperCase());
+		q.setParameter(OfsConstants.BATCH_STS_RFD, OfsConstants.BATCH_READY_FOR_DISPATCH.toUpperCase());
+		q.setParameter(OfsConstants.STOCK_STATUS_LIST, invStatusListForStock);
+		q.setFirstResult(page * size);
+		q.setMaxResults(size);
+		List<OrderBookViewDto> resultList = q.getResultList();
+
+		Query countQuery = entityManager.createQuery(countQueryParm);
+		countQuery.setParameter(OfsConstants.SO_NUMBER, request.getSoNumber());
+		countQuery.setParameter(OfsConstants.ITEM, request.getItem());
+		countQuery.setParameter(OfsConstants.CUSTOMER_NAME, request.getCustomerName());
+		countQuery.setParameter(OfsConstants.PRODUCT, request.getProduct());
+		countQuery.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+		countQuery.setParameter(OfsConstants.THK_MIN, request.getThkmin());
+		countQuery.setParameter(OfsConstants.THK_MAX, request.getThkmax());
+		countQuery.setParameter(OfsConstants.WDT_MIN, request.getWdtmin());
+		countQuery.setParameter(OfsConstants.WDT_MAX, request.getWdtmax());
+		countQuery.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+		countQuery.setParameter(OfsConstants.PLANTCODE, OfsConstants.PLANT_CODE);
+
+		Long totalRows = (Long) countQuery.getSingleResult();
+
+		Pageable pageable = PageRequest.of(page, size);
+		return new PageImpl<>(resultList, pageable, totalRows);
+	}
+
+	public List<SegmentDto> getSegments(String prdid) {
+
+		TypedQuery<SegmentDto> q = entityManager.createQuery("SELECT new com.hindindustec.fluenta.sales.dto.SegmentDto("
+				+ "SUM(sol.soqty)," + "SUM(CASE WHEN UPPER(sol.sosegmt) = 'EXPORT' THEN sol.soqty ELSE 0 END),"
+				+ "SUM(CASE WHEN UPPER(sol.sosegmt) = 'RETAIL' THEN sol.soqty ELSE 0 END),"
+				+ "SUM(CASE WHEN UPPER(sol.sosegmt) = 'OEM' THEN sol.soqty ELSE 0 END),"
+				+ "SUM(CASE WHEN UPPER(sol.sosegmt) = 'EXPORT' AND UPPER(sol.sosts) = :DISPATCHED THEN sol.soqty ELSE 0 END),"
+				+ "SUM(CASE WHEN UPPER(sol.sosegmt) = 'RETAIL' AND UPPER(sol.sosts) = :DISPATCHED THEN sol.soqty ELSE 0 END),"
+				+ "SUM(CASE WHEN UPPER(sol.sosegmt) = 'OEM' AND UPPER(sol.sosts) = :DISPATCHED THEN sol.soqty ELSE 0 END),"
+				+ "SUM(CASE WHEN UPPER(sol.sosegmt) = 'EXPORT' AND UPPER(sol.sosts) = 'RFD' THEN sol.soqty ELSE 0 END),"
+				+ "SUM(CASE WHEN UPPER(sol.sosegmt) = 'RETAIL' AND UPPER(sol.sosts) = 'RFD' THEN sol.soqty ELSE 0 END),"
+				+ "SUM(CASE WHEN UPPER(sol.sosegmt) = 'OEM' AND UPPER(sol.sosts) = 'RFD' THEN sol.soqty ELSE 0 END)"
+				+ ")" + " FROM SolSt sol" + " where sol.prdid = :prdid ", SegmentDto.class);
+
+		q.setParameter("prdid", prdid);
+		q.setParameter("DISPATCHED", OfsConstants.DISPATCHED);
+		return q.getResultList();
+
+	}
+
+	public List<String> getSo() {
+		TypedQuery<String> q = entityManager.createQuery("SELECT distinct (sl.id.soid) from SolSt sl"
+				 + " order by sl.id.soid desc", String.class);
+		return q.getResultList();
+	}
+	
+
+
+	public List<String> getProductByType(String productType) {
+		TypedQuery<String> q = entityManager.createQuery(
+				"SELECT distinct (p.prdid) from PrdCs p"
+						+ " where p.prdty = :productType"
+						+ " order by p.prdid asc",
+				String.class);
+		q.setParameter("productType", productType);
+		return q.getResultList();
+	}
+
+	public List<Long> getSoItem() {
+		TypedQuery<Long> q = entityManager.createQuery("SELECT distinct (sl.id.solid) from SolSt sl"
+				+ " where sl.id.solid is not null" + " order by sl.id.solid asc", Long.class);
+		return q.getResultList();
+	}
+
+	public BigDecimal getSoqty(OrderBookRequest request) {
+			TypedQuery<BigDecimal> q = entityManager.createQuery(
+			    "SELECT ROUND(COALESCE(SUM(po2.poprqty), 0), 0) "
+			    + "FROM PoprplSt po3, PoprlSt po2, PohSt po1, SolSt sol, SolbomdSt sob, SohSt soh "
+			    + "WHERE po3.id.poid = po2.id.poid "
+			    + "AND po3.id.poprctr = po2.id.poprctr "
+			    + "AND po3.id.poid = po1.poid "
+			    + "AND po1.soid = sol.id.soid "
+			    + "AND po1.solid = sol.id.solid "
+			    + "AND soh.soid = po1.soid "
+			    + "AND po2.soid = sob.id.soid "
+			    + "AND po2.solid = sob.id.solid "
+			    + "AND po2.opprdid = sob.id.prdid "
+			    + "AND po2.dimind = sob.id.dimind "
+			    + "AND po3.id.plid = 'HSM1' "
+			    + "AND sol.erpsosts = :soStatus "
+			    + "AND sol.sosts = :soStatus "
+			    + "AND (:soNumber IS NULL OR sol.id.soid = :soNumber) "
+			    + "AND (:item IS NULL OR sol.id.solid = :item) "
+			    + "AND (:product IS NULL OR sol.prdid = :product) "
+			    + "AND (:thkmin IS NULL OR sob.thkaim >= :thkmin) "
+			    + "AND (:thkmax IS NULL OR sob.thkaim <= :thkmax) "
+			    + "AND (:wdtmin IS NULL OR sob.wdtaim >= :wdtmin) "
+			    + "AND (:wdtmax IS NULL OR sob.wdtaim <= :wdtmax) "
+			    + "AND (:customerName IS NULL OR sol.stcustnm = :customerName) "
+			    + "GROUP BY sol.id.soid, sol.id.solid", BigDecimal.class);
+
+			q.setParameter("soNumber", request.getSoNumber());
+			q.setParameter("item", request.getItem());
+			q.setParameter("customerName", request.getCustomerName());
+			q.setParameter("thkmin", request.getThkmin());
+			q.setParameter("thkmax", request.getThkmax());
+			q.setParameter("wdtmin", request.getWdtmin());
+			q.setParameter("wdtmax", request.getWdtmax());
+			q.setParameter("soStatus", request.getSoStatus());
+			q.setParameter("product", request.getProduct());
+			return q.getSingleResult();
+
+	}
+	@SuppressWarnings("java:S1192")
+	public static final String MAINQUARY = new StringBuilder()
+		.append("SELECT distinct new com.hindindustec.fluenta.sales.dto.OrderBookViewDto(")
+	    .append(" sol.id.soid,")
+	    .append(" sol.id.solid,")
+	    .append(" sol.prdid,")
+	    .append(" sol.soqty,")
+	    .append(" sol.soqtymax,")
+	    .append(" po2.poprqty,")
+	    .append(" sol.tdcid,")
+	    .append(" sol.stcustnm,")
+	    .append(" sol.prdcdeid,")
+	    .append(" sol.sorelDt,")
+	    .append(" sol.docty, ")
+	    .append(" sol.erpsosts,")
+	    .append(" sol.solmodctr,")
+	    .append(" sol.sopromDt,") 
+	    .append(" sol.custreqDt,")
+	    .append(" sol.incoterm, ")
+	    .append(" sol.frtterm,")
+	    .append(" sol.markinstn,")
+	    .append(" sol.packinstn,")
+	    .append(" sol.loadinstn,")
+	    .append(" sol.eqSpec, ")
+	    .append(" sol.eqSpecGroup,")
+	    .append(" sol.eqSpecSubGroup,")
+	    .append(" sol.lcexpDt,")
+	    .append(" sol.sosegmt,")
+	    .append(" sob.thkaim, ")
+	    .append(" sob.wdtaim,")
+	    .append(" sob.lenaim,") 
+	    .append(" sob.grdid,")
+	    .append(" soh.btcustid,")
+	    .append(" cs.erpStid,") 
+	    .append(" cs.stid, ") 
+	    .append(" sol.sosts,")
+	    .append(" ROUND(COALESCE((SELECT SUM(PPH.wgt * PPRT.bwyld) ")
+	    .append(" FROM PphMt PPH, PpRouteDtlEntity PPRT ")
+	    .append(" WHERE PPH.poid = po2.id.poid ")
+	    .append(" AND PPH.poprctr = po2.id.poprctr ")
+	    .append(" AND PPH.ppsts = :batchStsDispatched ")
+	    .append(" AND PPH.id.ppid = PPRT.id.ppid ")
+	    .append(" AND PPH.id.ppctr = PPRT.id.ppctr ")
+	    .append(" AND PPRT.prdid = :product ")
+	    .append(" AND UPPER(PPRT.completionsts) = 'COMPLETE'), 0), 0) AS dispatchWgt, ")
+	    .append(" ROUND(COALESCE((SELECT SUM(PPH.wgt * PPRT.bwyld) ")
+	    .append(" FROM PphMt PPH, PpRouteDtlEntity PPRT ")
+	    .append(" WHERE PPH.poid = po2.id.poid ")
+	    .append(" AND PPH.poprctr = po2.id.poprctr ")
+	    .append(" AND PPH.ppsts IN :stockStatusList ")
+	    .append(" AND PPH.id.ppid = PPRT.id.ppid ")
+	    .append(" AND PPH.id.ppctr = PPRT.id.ppctr ")
+	    .append(" AND PPRT.prdid = :product ")
+	    .append(" AND UPPER(PPRT.completionsts) = 'COMPLETE'), 0), 0) AS stockWgt, ")
+	    .append(" ROUND(COALESCE((SELECT SUM(sh3.slbwgt) ")
+	    .append(" FROM HsmSchOrderEntity sh2, HsmSchSlabDtlEntity sh3 ")
+	    .append(" WHERE sh2.poid = po2.id.poid ")
+	    .append(" AND sh2.poprctr = po2.id.poprctr ")
+	    .append(" AND sh2.id.schdid = sh3.id.schdid ")
+	    .append(" AND sh2.id.poseqid = sh3.poseqid ")
+	    .append(" AND sh3.schdslbsts IN ('SCHEDULED','IDENTIFIED','CHARGED') ")
+	    .append(" ), 0), 0) AS scheduledQty, ")
+	    .append(" ROUND(COALESCE((SELECT SUM(p.wgt) ")
+	    .append(" FROM PphMt p ")
+	    .append(" WHERE p.poid = po2.id.poid ")
+	    .append(" AND p.poprctr = po2.id.poprctr")
+	    .append(" AND UPPER(p.ppsts) = :batchStsAvailable), 0), 0) AS availableWgt, ")
+	    .append(" ROUND(COALESCE((SELECT SUM(p.wgt) ")
+	    .append(" FROM PphMt p ")
+	    .append(" WHERE p.poid = po2.id.poid ")
+	    .append(" AND p.poprctr = po2.id.poprctr")
+	    .append(" AND UPPER(p.ppsts) = :batchStsRfd), 0), 0) AS rfdWgt, ")
+	    .append(" CONCAT(sol.id.soid, '-', sol.id.solid) AS delshdl, ")
+	    .append(" CONCAT(sol.eqSpec, sol.eqSpecGroup, sol.eqSpecSubGroup) AS externalGrade,")
+	    .append(" sol.closerem)")
+	    .append(" FROM PoprplSt po3, PoprlSt po2, PohSt po1, SolSt sol, SolbomdSt sob, SohSt soh")
+	    .append(" LEFT JOIN StCs cs ON cs.stid = :plantCode")
+	    .append(" WHERE po3.id.poid = po2.id.poid AND po3.id.poprctr = po2.id.poprctr")
+	    .append(" AND po3.id.poid = po1.poid")
+	    .append(" AND po1.soid = sol.id.soid AND po1.solid = sol.id.solid")
+	    .append(" AND soh.soid = po1.soid")
+	    .append(" AND po2.soid = sob.id.soid AND po2.solid = sob.id.solid")
+	    .append(" AND po2.opprdid = sob.id.prdid AND po2.dimind = sob.id.dimind")
+	    .append(" AND po3.id.plid = 'HSM1'")
+	    .append(" AND sol.erpsosts = :soStatus")
+	    .append(" AND sol.sosts = :soStatus")
+	    .append(" AND (:soNumber is null OR sol.id.soid = :soNumber) ")
+	    .append(" AND (:item is null OR sol.id.solid = :item) ")
+	    .append(" AND (:product is null OR sol.prdid = :product) ")
+	    .append(" AND (:thkmin is null OR sob.thkaim >= :thkmin)")
+	    .append(" AND (:thkmax is null OR sob.thkaim <= :thkmax)")
+	    .append(" AND (:wdtmin is null OR sob.wdtaim >= :wdtmin)")
+	    .append(" AND (:wdtmax is null OR sob.wdtaim <= :wdtmax)")
+	    .append(" AND (:customerName is null OR sol.stcustnm = :customerName)")
+	    .toString();
+
+	
+	public static final String COUNTMAINQUARY = new StringBuilder()
+		.append("SELECT distinct COUNT(sol) ")
+	    .append(" FROM PoprplSt po3, PoprlSt po2, PohSt po1, SolSt sol, SolbomdSt sob, SohSt soh")
+	    .append(" LEFT JOIN StCs cs ON cs.stid = :plantCode")
+	    .append(" WHERE po3.id.poid = po2.id.poid AND po3.id.poprctr = po2.id.poprctr")
+	    .append(" AND po3.id.poid = po1.poid")
+	    .append(" AND po1.soid = sol.id.soid AND po1.solid = sol.id.solid")
+	    .append(" AND soh.soid = po1.soid")
+	    .append(" AND po2.soid = sob.id.soid AND po2.solid = sob.id.solid")
+	    .append(" AND po2.opprdid = sob.id.prdid AND po2.dimind = sob.id.dimind")
+	    .append(" AND po3.id.plid = 'HSM1'")
+	    .append(" AND sol.erpsosts = :soStatus")
+	    .append(" AND sol.sosts = :soStatus")
+	    .append(" AND (:soNumber IS NULL OR sol.id.soid = :soNumber) ")
+	    .append(" AND (:item IS NULL OR sol.id.solid = :item) ")
+	    .append(" AND (:product IS NULL OR sol.prdid = :product) ")
+	    .append(" AND (:thkmin IS NULL OR sob.thkaim >= :thkmin)")
+	    .append(" AND (:thkmax IS NULL OR sob.thkaim <= :thkmax)")
+	    .append(" AND (:wdtmin IS NULL OR sob.wdtaim >= :wdtmin)")
+	    .append(" AND (:wdtmax IS NULL OR sob.wdtaim >= :wdtmax)")
+	    .append(" AND (:customerName IS NULL OR sol.stcustnm = :customerName)")
+	    .toString();
+
+	public static final String COUNTFROMQUERY = new StringBuilder()
+		.append(" FROM PoprplSt po3, PoprlSt po2, PohSt po1, SolSt sol, SolbomdSt sob, SohSt soh")
+	    .append(" LEFT JOIN StCs cs ON cs.stid = :plantCode")
+	    .append(" WHERE po3.id.poid = po2.id.poid AND po3.id.poprctr = po2.id.poprctr")
+	    .append(" AND po3.id.poid = po1.poid")
+	    .append(" AND po1.soid = sol.id.soid AND po1.solid = sol.id.solid")
+	    .append(" AND soh.soid = po1.soid")
+	    .append(" AND po2.soid = sob.id.soid AND po2.solid = sob.id.solid")
+	    .append(" AND po2.opprdid = sob.id.prdid AND po2.dimind = sob.id.dimind")
+	    .append(" AND po3.id.plid = 'HSM1'")
+	    .append(" AND sol.erpsosts = :soStatus")
+	    .append(" AND sol.sosts = :soStatus")
+	    .append(" AND (:soNumber IS NULL OR sol.id.soid = :soNumber) ")
+	    .append(" AND (:item IS NULL OR sol.id.solid = :item) ")
+	    .append(" AND (:product IS NULL OR sol.prdid = :product) ")
+	    .append(" AND (:thkmin IS NULL OR sob.thkaim >= :thkmin)")
+	    .append(" AND (:thkmax IS NULL OR sob.thkaim <= :thkmax)")
+	    .append(" AND (:wdtmin IS NULL OR sob.wdtaim >= :wdtmin)")
+	    .append(" AND (:wdtmax IS NULL OR sob.wdtaim >= :wdtmax)")
+	    .append(" AND (:customerName IS NULL OR sol.stcustnm = :customerName)")
+	    .toString();
+
+
+public Page<OrderBookViewDto> getSlabStocks(OrderBookRequest request,String status, int page, int size,String query,String countQueryParm,Integer skip){
+    int effectiveOffset = page * size;
+    int effectivePageSize = size;
+    
+    if (skip != null && skip > 0) {
+        if (skip >= size) {
+            effectiveOffset += skip;
+            skip = 0; 
+        } else {
+            effectiveOffset += skip; 
+            effectivePageSize -= skip; 
+        }
+    }
+
+    TypedQuery<OrderBookViewDto> q = entityManager.createQuery(query, OrderBookViewDto.class);
+    q.setParameter(OfsConstants.SO_NUMBER, request.getSoNumber());
+	q.setParameter(OfsConstants.ITEM, request.getItem());
+	q.setParameter(OfsConstants.PRODUCT, request.getProduct());
+	q.setParameter(OfsConstants.THK_MIN, request.getThkmin());
+	q.setParameter(OfsConstants.THK_MAX, request.getThkmax());
+	q.setParameter(OfsConstants.WDT_MIN, request.getWdtmin());
+	q.setParameter(OfsConstants.WDT_MAX, request.getWdtmax());	
+	q.setParameter(OfsConstants.CUSTOMER_NAME, request.getCustomerName());	
+	q.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+	q.setParameter(OfsConstants.PLANTCODE, OfsConstants.PLANT_CODE);
+	q.setParameter(OfsConstants.BATCH_DISPATCH, OfsConstants.BATCH_DISPATCHED.toUpperCase());
+	q.setParameter(OfsConstants.BATCH_STS_AVAILABLE, OfsConstants.BATCH_AVAILABLE.toUpperCase());
+	q.setParameter(OfsConstants.BATCH_STS_RFD, OfsConstants.BATCH_READY_FOR_DISPATCH.toUpperCase());
+	q.setParameter(OfsConstants.STOCK_STATUS_LIST, invStatusListForStock);
+
+    q.setFirstResult(effectiveOffset);
+    q.setMaxResults(effectivePageSize);
+    List<OrderBookViewDto> resultList = q.getResultList();
+
+   
+    Query countQuery = entityManager.createQuery(countQueryParm);
+
+       
+    countQuery.setParameter(OfsConstants.SO_NUMBER, request.getSoNumber());
+	countQuery.setParameter(OfsConstants.ITEM, request.getItem());
+	countQuery.setParameter(OfsConstants.CUSTOMER_NAME, request.getCustomerName());
+	countQuery.setParameter(OfsConstants.PRODUCT, request.getProduct());
+	countQuery.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+	countQuery.setParameter(OfsConstants.THK_MIN, request.getThkmin());
+	countQuery.setParameter(OfsConstants.THK_MAX, request.getThkmax());
+	countQuery.setParameter(OfsConstants.WDT_MIN, request.getWdtmin());
+	countQuery.setParameter(OfsConstants.WDT_MAX, request.getWdtmax());
+	countQuery.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+	countQuery.setParameter(OfsConstants.PLANTCODE, OfsConstants.PLANT_CODE);
+    
+
+    Long totalRows = (Long) countQuery.getSingleResult();
+    Pageable pageable = PageRequest.of(page, size);
+    return new PageImpl<>(resultList, pageable, totalRows);
+	
+}
+
+public Long getMainSlabeStockQueryCount(OrderBookRequest request,String query, String status) {
+	Query countQuery = entityManager.createQuery(query); 
+	countQuery.setParameter(OfsConstants.SO_NUMBER, request.getSoNumber());
+	countQuery.setParameter(OfsConstants.ITEM, request.getItem());
+	countQuery.setParameter(OfsConstants.CUSTOMER_NAME, request.getCustomerName());
+	countQuery.setParameter(OfsConstants.PRODUCT, request.getProduct());
+	countQuery.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+	countQuery.setParameter(OfsConstants.THK_MIN, request.getThkmin());
+	countQuery.setParameter(OfsConstants.THK_MAX, request.getThkmax());
+	countQuery.setParameter(OfsConstants.WDT_MIN, request.getWdtmin());
+	countQuery.setParameter(OfsConstants.WDT_MAX, request.getWdtmax());
+	countQuery.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+	countQuery.setParameter(OfsConstants.PLANTCODE, OfsConstants.PLANT_CODE);
+    return (Long) countQuery.getSingleResult();
+}
+
+
+
+public Page<Object[]> getGroupingListData(String queryForGrouping, String queryForGroupingAndFilteringCount,
+		Integer page, Integer size, Integer skip, OrderBookRequest request, String status) {
+    Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+    queryCount.setParameter(OfsConstants.SO_NUMBER, request.getSoNumber());
+    queryCount.setParameter(OfsConstants.ITEM, request.getItem());
+    queryCount.setParameter(OfsConstants.CUSTOMER_NAME, request.getCustomerName());
+	queryCount.setParameter(OfsConstants.PRODUCT, request.getProduct());
+	queryCount.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+	queryCount.setParameter(OfsConstants.THK_MIN, request.getThkmin());
+	queryCount.setParameter(OfsConstants.THK_MAX, request.getThkmax());
+	queryCount.setParameter(OfsConstants.WDT_MIN, request.getWdtmin());
+	queryCount.setParameter(OfsConstants.WDT_MAX, request.getWdtmax());
+	queryCount.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+	queryCount.setParameter(OfsConstants.PLANTCODE, OfsConstants.PLANT_CODE);
+    
+    Number resultNumber = (Number) queryCount.getSingleResult();
+    int totalRows = resultNumber.intValue();
+    int effectiveOffset = page * size;
+    int effectivePageSize = size;
+
+    if (skip != null && skip > 0) {
+        if (skip >= size) {
+            effectiveOffset += skip; 
+            skip = 0; 
+        } else {
+            effectiveOffset += skip;
+            effectivePageSize -= skip; 
+        }
+    }
+
+    Pageable pageable = PageRequest.of(page, size);
+    TypedQuery<Object[]> query = entityManager.createQuery(queryForGrouping, Object[].class);
+    query.setParameter(OfsConstants.SO_NUMBER, request.getSoNumber());
+    query.setParameter(OfsConstants.ITEM, request.getItem());
+    query.setParameter(OfsConstants.CUSTOMER_NAME, request.getCustomerName());
+    query.setParameter(OfsConstants.PRODUCT, request.getProduct());
+    query.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+    query.setParameter(OfsConstants.THK_MIN, request.getThkmin());
+    query.setParameter(OfsConstants.THK_MAX, request.getThkmax());
+    query.setParameter(OfsConstants.WDT_MIN, request.getWdtmin());
+    query.setParameter(OfsConstants.WDT_MAX, request.getWdtmax());
+    query.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+    query.setParameter(OfsConstants.PLANTCODE, OfsConstants.PLANT_CODE);
+    
+    
+    query.setFirstResult(effectiveOffset); 
+    query.setMaxResults(effectivePageSize); 
+    List<Object[]> resultList = query.getResultList();
+    return new PageImpl<>(resultList, pageable, totalRows);
+}
+
+
+
+public Long groupCountQuery(String queryForGroupingAndFilteringCount, OrderBookRequest request, String status) {
+	Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+	queryCount.setParameter(OfsConstants.SO_NUMBER, request.getSoNumber());
+	queryCount.setParameter(OfsConstants.ITEM, request.getItem());
+    queryCount.setParameter(OfsConstants.CUSTOMER_NAME, request.getCustomerName());
+	queryCount.setParameter(OfsConstants.PRODUCT, request.getProduct());
+	queryCount.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+	queryCount.setParameter(OfsConstants.THK_MIN, request.getThkmin());
+	queryCount.setParameter(OfsConstants.THK_MAX, request.getThkmax());
+	queryCount.setParameter(OfsConstants.WDT_MIN, request.getWdtmin());
+	queryCount.setParameter(OfsConstants.WDT_MAX, request.getWdtmax());
+	queryCount.setParameter(OfsConstants.SO_STATUS, request.getSoStatus());
+	queryCount.setParameter(OfsConstants.PLANTCODE, OfsConstants.PLANT_CODE);
+    Number resultNumber = (Number) queryCount.getSingleResult();
+    return resultNumber.longValue();
+}
+
+
+}

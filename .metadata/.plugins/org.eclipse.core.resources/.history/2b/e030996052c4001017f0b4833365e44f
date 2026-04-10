@@ -1,0 +1,1053 @@
+package com.hindindustec.fluenta.reports.service.serviceimpl;
+
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.stereotype.Service;
+
+import com.hindindustec.fluenta.reports.common.DevExtGridFilterUtils;
+import com.hindindustec.fluenta.reports.common.DevExtremePaginationConstant;
+import com.hindindustec.fluenta.reports.common.OfsConstants;
+import com.hindindustec.fluenta.reports.common.response.FluentaPaginatedResponse;
+import com.hindindustec.fluenta.reports.common.response.Group;
+import com.hindindustec.fluenta.reports.common.response.GroupedDataResponse;
+import com.hindindustec.fluenta.reports.dto.CoilDetailsDto;
+import com.hindindustec.fluenta.reports.dto.CoilDetailsFilterRequestDto;
+import com.hindindustec.fluenta.reports.dto.FeatureDto;
+import com.hindindustec.fluenta.reports.dto.GroupedColumnDto;
+import com.hindindustec.fluenta.reports.dto.ReportRequestDto;
+import com.hindindustec.fluenta.reports.model.ChemrsltQt;
+import com.hindindustec.fluenta.reports.model.PpChemEntity;
+import com.hindindustec.fluenta.reports.model.SpecimenQualityTransactionEntity;
+import com.hindindustec.fluenta.reports.repository.ChemrsltRepository;
+import com.hindindustec.fluenta.reports.repository.CoilDetailsCustRepository;
+import com.hindindustec.fluenta.reports.repository.PpChemRepository;
+import com.hindindustec.fluenta.reports.repository.SpecimenQualityTransactionRepository;
+import com.hindindustec.fluenta.reports.service.CoilDetailsService;
+
+@Service
+public class CoilDetailsServiceImpl implements CoilDetailsService {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(CoilDetailsServiceImpl.class);
+
+	private CoilDetailsCustRepository coilDetailsCustRepository;
+
+	private SpecimenQualityTransactionRepository specimenQualityTransactionRepository;
+
+	private ChemrsltRepository chemrsltRepository;
+
+	private PpChemRepository ppChemRepository;
+
+	
+
+	public CoilDetailsServiceImpl(CoilDetailsCustRepository coilDetailsCustRepository,
+			SpecimenQualityTransactionRepository specimenQualityTransactionRepository,
+			ChemrsltRepository chemrsltRepository, PpChemRepository ppChemRepository) {
+		super();
+		this.coilDetailsCustRepository = coilDetailsCustRepository;
+		this.specimenQualityTransactionRepository = specimenQualityTransactionRepository;
+		this.chemrsltRepository = chemrsltRepository;
+		this.ppChemRepository = ppChemRepository;
+	}
+
+	@Override
+	public List<String> getCoilIdList() {
+		LOGGER.info("Fetching Coil Ids data");
+		return coilDetailsCustRepository.getCoilIdList();
+	}
+
+	@Override
+	public List<String> getHeatIdList() {
+		LOGGER.info("Fetching Heat Ids data");
+		return coilDetailsCustRepository.getHeatIdList();
+	}
+
+	private int[] processPageAndSize(Integer pageNumber, Integer pageSize, Integer pageStore) {
+		if (pageNumber == null) {
+			pageNumber = 0;
+		}
+		if (pageSize == null) {
+			pageSize = pageStore;
+		}
+		return new int[] { pageNumber, pageSize };
+	}
+
+	public String getMainCoildetailsQueryCount() {
+		return OfsConstants.SELECT + "  COUNT(ppp) "
+				+ CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_CONDITION
+				+ CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_WHERE_CONDITION;
+	}
+
+	private <T> T handleGroupOnly(CoilDetailsFilterRequestDto request, List<String> groupList, int pageNumber,
+			int pageSize, int skip, String status, Integer pageStore, Integer latestGroupCount) {
+		LOGGER.info("status : {} ", status);
+		LOGGER.info("pageStore : {} ", pageStore);
+		LOGGER.info("latestGroupCount : {} ", latestGroupCount);
+
+		pageSize = pageNumber + pageSize;
+		pageNumber = 0;
+		String groupQuery = getQueryForGrouping(groupList);
+		String groupCountQuery = getQueryForGroupingCount(groupList);
+		String mainCountQuery = getMainCoildetailsQueryCount();
+		Long mainQueryCount = coilDetailsCustRepository.getMainCoildetailsQueryCount(request, mainCountQuery);
+
+		Page<Object[]> groupingListData = coilDetailsCustRepository.getGroupingListData(groupQuery, groupCountQuery,
+				pageNumber, pageSize, skip, request);
+		Long totalDistCount = coilDetailsCustRepository.groupCountQuery(groupCountQuery, request);
+
+		return buildGroupedDataResponse(groupingListData, mainQueryCount, totalDistCount);
+	}
+
+	private String getQueryForGroupingCount(List<String> groupList) {
+		String groupColumn = groupList.get(1); // Assuming the second element is the group column
+		StringBuilder query = new StringBuilder();
+		query.append(OfsConstants.SELECT + "  ").append("COUNT( DISTINCT ").append(checkClassAleas().get(groupColumn))
+				.append(")").append(CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_CONDITION)
+				.append(CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_WHERE_CONDITION);
+		return query.toString();
+	}
+
+	private String getQueryForGrouping(List<String> groupList) {
+		if (groupList == null || groupList.isEmpty()) {
+			throw new IllegalArgumentException("groupList cannot be null or empty");
+		}
+
+		String desc = groupList.get(3);
+		String groupColumn = groupList.get(1);
+		StringBuilder query = new StringBuilder();
+		query.append(OfsConstants.SELECT + " ").append(checkClassAleas().get(groupColumn)).append(" ,COUNT(*")
+				.append(")").append(CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_CONDITION)
+				.append(CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_WHERE_CONDITION);
+		query.append(" " + OfsConstants.GROUP_BY + " " + checkClassAleas().get(groupColumn));
+
+		if ("true".equals(desc)) {
+			query.append(" " + OfsConstants.ORDER_BY + " ").append(checkClassAleas().get(groupColumn))
+					.append(" " + OfsConstants.DESC + " ");
+		} else {
+			query.append(" " + OfsConstants.ORDER_BY + " ").append(checkClassAleas().get(groupColumn));
+		}
+		return query.toString();
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T buildGroupedDataResponse(Page<Object[]> groupingListData, Long mainQueryCount, Long totalDistCount) {
+		GroupedDataResponse<CoilDetailsDto> result = new GroupedDataResponse<>(null, 0L, 0L);
+		List<Group<CoilDetailsDto>> list = new ArrayList<>();
+
+		for (Object[] row : groupingListData) {
+			String groupKey = row[0] instanceof BigDecimal ? ((BigDecimal) row[0]).toPlainString()
+					: String.valueOf(row[0]);
+			Long count = row[1] instanceof BigDecimal ? ((BigDecimal) row[1]).longValue() : (Long) row[1];
+			list.add(new Group<>(groupKey, null, count));
+		}
+
+		result.setData(list);
+		result.setTotalCount(mainQueryCount);
+		result.setGroupCount(totalDistCount);
+		return (T) result;
+	}
+
+	private <T> T handleGroupWithFilterOrSort(CoilDetailsFilterRequestDto request, List<String> groupList,
+			List<String> filterList, List<String> sortList, Integer page, Integer size, Integer skip,
+			boolean requireTotalCount, Integer pageStore, Integer latestGroupCounts) {
+		if (requireTotalCount && size == null) {
+			size = pageStore;
+		} else {
+			size = page + size;
+			page = 0;
+		}
+
+		String queryForGrouping = getCoilDetailsQueryForGroupingAndFiltering(groupList, filterList);
+		String queryForGroupingAndFilteringCount = getCoilDetailsQueryForGroupingAndFilteringCount(groupList,
+				filterList, sortList);
+		String mainCountQuery = getMainCoildetailsQueryCount();
+		Long mainQueryCount = coilDetailsCustRepository.getMainCoildetailsQueryCount(request, mainCountQuery);
+		Page<Object[]> groupingListData = coilDetailsCustRepository.getGroupingListData(queryForGrouping,
+				queryForGroupingAndFilteringCount, page, size, skip, request);
+		Long totalDistCount = coilDetailsCustRepository.groupCountQuery(queryForGroupingAndFilteringCount, request);
+		return buildGroupedDataResponse(groupingListData, mainQueryCount,
+				(totalDistCount != null && totalDistCount != 0) ? totalDistCount : latestGroupCounts);
+	}
+
+	public String getCoilDetailsQueryForGroupingAndFilteringCount(List<String> groupList, List<String> filterList,
+			List<String> sortList) {
+		LOGGER.info("sortList : {} ", sortList);
+		String filterQueryUsingFilterList = null;
+		String groupColumn = groupList.get(1);
+		StringBuilder query = new StringBuilder();
+		query.append(OfsConstants.SELECT + " ").append("COUNT( DISTINCT ").append(checkClassAleas().get(groupColumn))
+				.append(") ").append(CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_CONDITION)
+				.append(CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_WHERE_CONDITION);
+		filterQueryUsingFilterList = query.toString();
+		if (!filterList.isEmpty()) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList(filterList, query.toString());
+		}
+
+		return filterQueryUsingFilterList;
+
+	}
+
+	public String getCoilDetailsQueryForGroupingAndFiltering(List<String> groupList, List<String> filterList) {
+		String groupColumn = groupList.get(1);
+		String desc = groupList.get(3);
+		StringBuilder query = new StringBuilder();
+		query.append(OfsConstants.SELECT + " ").append(checkClassAleas().get(groupColumn)).append(" ,COUNT(*")
+				.append(")").append(CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_CONDITION)
+				.append(CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_WHERE_CONDITION);
+		String filterQueryUsingFilterList = query.toString();
+
+		if (!filterList.isEmpty()) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList(filterList, query.toString());
+		}
+		filterQueryUsingFilterList = filterQueryUsingFilterList + " " + " " + OfsConstants.GROUP_BY + " "
+				+ checkClassAleas().get(groupColumn) + "" + " " + " " + OfsConstants.ORDER_BY + " "
+				+ checkClassAleas().get(groupColumn) + "";
+		if ("true".equals(desc)) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList + " " + OfsConstants.DESC + " ";
+		}
+
+		return filterQueryUsingFilterList;
+
+	}
+
+	@Override
+	public <T> T getCoilDetails(CoilDetailsFilterRequestDto request, String status, int pageNumber, int pageSize,
+			String filter, String sort, String group, int skip, boolean requireTotalCount, boolean requireGroupCount,
+			String searchValue, Integer pageStore, Integer latestGroupCount) {
+		LOGGER.info("Inside CoilDetailsServiceImp :: getCoilDetails: {}", request);
+
+		List<String> filterList = DevExtGridFilterUtils.extractElements(filter);
+		for (String string : filterList) {
+			if (string.equalsIgnoreCase(OfsConstants.SHIFT_ID)) { // Case insensitive comparison
+				int index = filterList.indexOf(string);
+				String shiftValue = filterList.get(index + 2).toUpperCase(); // Normalize to uppercase
+				switch (shiftValue) {
+				case OfsConstants.A: // Matches uppercase "A"
+					filterList.set(index + 2, OfsConstants.M);
+					break;
+				case OfsConstants.B: // Matches uppercase "B"
+					filterList.set(index + 2, OfsConstants.A);
+					break;
+				case OfsConstants.C: // Matches uppercase "C"
+					filterList.set(index + 2, OfsConstants.N);
+					break;
+				}
+			}
+		}
+		int[] pageSizeArr = processPageAndSize(pageNumber, pageSize, pageStore);
+		pageNumber = pageSizeArr[0];
+		pageSize = pageSizeArr[1];
+
+		List<String> groupList = DevExtGridFilterUtils.getSortListFromString(group);
+
+		List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);
+
+		if (DevExtGridFilterUtils.isGroupWithoutFilterOrSort(group, filter, sort)) {
+			LOGGER.info("isGroupWithoutFilterOrSort---- : {} ", request);
+			return handleGroupOnly(request, groupList, pageNumber, pageSize, skip, status, pageStore, latestGroupCount);
+		}
+
+		if (DevExtGridFilterUtils.isGroupWithFilterOrSort(group, filter, sort)) {
+			LOGGER.info("isGroupWithFilterOrSort---- : {} ", request);
+			return handleGroupWithFilterOrSort(request, groupList, filterList, sortList, pageNumber, pageSize, skip,
+					requireTotalCount, pageStore, latestGroupCount);
+		}
+
+		if (DevExtGridFilterUtils.isFilterOrSortOnly(group, filter, sort)) {
+			LOGGER.info("isFilterOrSortOnly -----: {} ", request);
+			return handleFilterOrSort(request, filterList, sortList, pageNumber, pageSize, skip, requireTotalCount,
+					pageStore, latestGroupCount);
+		}
+
+		return null;
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T handleFilterOrSort(CoilDetailsFilterRequestDto request, List<String> filterList,
+			List<String> sortList, Integer page, Integer size, Integer skip, boolean requireTotalCount,
+			Integer pageStore, Integer latestGroupCount) {
+
+		if (!requireTotalCount) {
+			size = page + size;
+			page = 0;
+		}
+
+		String query = getMainCoilDetailsQuery();
+		String countQuery = getMainCoildetailsQueryCount();
+		LOGGER.info("query  handleFilterOrSort : ---------{} ", query);
+		LOGGER.info("countQuery  handleFilterOrSort: -----{} ", countQuery);
+		if (!filterList.isEmpty()) {
+			query = filterQueryUsingFilterList(filterList, query);
+			countQuery = filterQueryUsingFilterList(filterList, countQuery);
+		}
+
+		query = applySorting(sortList, query);
+		LOGGER.info("query  handleFilterOrSort111 : ---------{} ", query);
+		
+		Page<CoilDetailsDto> paginatedResult = coilDetailsCustRepository.getCoilDetails(request, page, size, query,
+				countQuery, skip);
+		LOGGER.info(" handleFilterOrSort paginatedResult : ---------{} ", paginatedResult);
+	
+		List<CoilDetailsDto> processedContent = paginatedResult.getContent().stream().peek(dto -> {
+			coilDetailsChemcialElements(dto);
+		}).collect(Collectors.toList());
+		return (T) new FluentaPaginatedResponse<>(processedContent, paginatedResult.getTotalElements());
+	}
+
+	private String applySorting(List<String> sortList, String query) {
+		if (!sortList.isEmpty()) {
+			Map<String, String> columnAlias = checkClassAleasWithNoStop();
+			if (sortList.get(3).equals("true")) {
+				query += OfsConstants.ORDER_BY + columnAlias.get(sortList.get(1)) + " " + OfsConstants.DESC + " ";
+			} else {
+				query += OfsConstants.ORDER_BY + columnAlias.get(sortList.get(1));
+			}
+		} else {
+			query += " " + OfsConstants.ORDER_BY + " ph.prodDt " + OfsConstants.DESC + " ";
+		}
+		return query;
+	}
+
+	public String getMainCoilDetailsQuery() {
+		return CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY
+				+ CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_CONDITION
+				+ CoilDetailsCustRepository.COIL_DETAILS_GENERATE_REPORT_QUERY_WHERE_CONDITION;
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
+	public Page<CoilDetailsDto> getCoilDetails(CoilDetailsFilterRequestDto request, int page, int size, String filter,
+			String sort) {
+
+		List<String> filterList = DevExtGridFilterUtils.extractElements(filter);
+		List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);
+		filterlistCoilDetailsData(filterList);
+		String q = coilDetailsCustRepository.getAllPaginatedCoilDetailsReportInString();
+		String countQuery = coilDetailsCustRepository.getAllPaginatedCoilDetailsReportInStringForCount();
+
+		if (!filterList.isEmpty()) {
+			q = filterQueryUsingFilterList(filterList, q);
+			countQuery = filterQueryUsingFilterList(filterList, countQuery);
+
+			q = processSqlQuery(q);
+			countQuery = processSqlQuery(countQuery);
+		}
+
+		Map<String, String> columnAlise = checkClassAleasWithNoStop();
+		if (!sortList.isEmpty()) {
+			if (sortList.get(3).equals("true")) {
+				q = q + DevExtremePaginationConstant.ORDER_BY + columnAlise.get(sortList.get(1)) + " "
+						+ OfsConstants.DESC + " ";
+			} else {
+				q = q + DevExtremePaginationConstant.ORDER_BY + columnAlise.get(sortList.get(1));
+			}
+		}
+
+		Page<CoilDetailsDto> paginatedResult = coilDetailsCustRepository.getCoilDetails(request, page, size, q,
+				countQuery);
+
+		List<CoilDetailsDto> processedContent = paginatedResult.getContent().stream().peek(dto -> {
+			coilDetailsChemcialElements(dto);
+		}).collect(Collectors.toList());
+
+		return new PageImpl<>(processedContent, paginatedResult.getPageable(), paginatedResult.getTotalElements());
+	}
+
+	private void filterlistCoilDetailsData(List<String> filterList) {
+		if (!filterList.isEmpty()) {
+
+			String conditionForFiled = null;
+			String valueForSearch = null;
+			boolean isSalesOrderNo = false;
+			for (String s : filterList) {
+				if (s.equals(OfsConstants.SOID)) {
+					int indexOfField = filterList.indexOf(OfsConstants.SOID);
+					conditionForFiled = filterList.get(indexOfField + 1);
+					valueForSearch = filterList.get(indexOfField + 2);
+					String tempStringValue = null;
+					if (valueForSearch.contains("-")) {
+						String[] arr = valueForSearch.split("-");
+						tempStringValue = arr[0];
+					} else {
+						tempStringValue = valueForSearch;
+					}
+
+					filterList.set(indexOfField, OfsConstants.ORDERITEML_ID);
+					filterList.set(indexOfField + 2, tempStringValue);
+					isSalesOrderNo = true;
+				}
+			}
+
+			salesOrderData(filterList, valueForSearch, isSalesOrderNo);
+		}
+	}
+
+	private void salesOrderData(List<String> filterList, String valueForSearch, boolean isSalesOrderNo) {
+		if (isSalesOrderNo) {
+			String tempStringValue = null;
+			if (valueForSearch.contains("-")) {
+				String[] arr = valueForSearch.split("-");
+				tempStringValue = arr[1];
+			} else {
+				tempStringValue = valueForSearch;
+			}
+			filterList.add(" or ");
+			filterList.add(OfsConstants.ORDERITEMLIST_ID);
+			filterList.add("=");
+			if (isNumber(tempStringValue)) {
+				filterList.add(tempStringValue);
+			} else {
+				filterList.add("0");
+			}
+		}
+	}
+
+	private void setElements(CoilDetailsDto dto, ChemrsltQt chem, PpChemEntity ladleChemistry) {
+		LOGGER.info(" handleFilterOrSort ladleChemistry chem : ---------{} ", chem);
+		LOGGER.info(" handleFilterOrSort ladleChemistry ladleChemistry : ---------{} ", ladleChemistry);
+		String element = null;
+		BigDecimal value = null;
+		if (chem != null) {
+			element = chem.getId().getElement();
+			value = chem.getElementval();
+		} else if (ladleChemistry != null) {
+			element = ladleChemistry.getId().getElement();
+			value = ladleChemistry.getElementval();
+		}
+		LOGGER.info(" handleFilterOrSort ladleChemistry element : ---------{} ", element);
+		LOGGER.info(" handleFilterOrSort ladleChemistry value : ---------{} ", value);
+		switch (element) {
+		case OfsConstants.AL:
+			dto.setAL(value);
+			break;
+		case "AL_SOL":
+			dto.setAL(value);
+			break;
+		case OfsConstants.SB:
+			dto.setSB(value);
+			break;
+		case OfsConstants.AS:
+			dto.setAS(value);
+			break;
+		case OfsConstants.BE:
+			dto.setBE(value);
+			break;
+		case OfsConstants.BI:
+			dto.setBI(value);
+			break;
+		case OfsConstants.B_ELEMENT:
+			dto.setB(value);
+			break;
+		case OfsConstants.CD:
+			dto.setCD(value);
+			break;
+		case OfsConstants.CA:
+			dto.setCA(value);
+			break;
+		case OfsConstants.C_ELEMENT:
+			dto.setC(value);
+			break;
+		case OfsConstants.CE:
+			dto.setCE(value);
+			break;
+		case OfsConstants.CR:
+			dto.setCR(value);
+			break;
+		case OfsConstants.CO:
+			dto.setCO(value);
+			break;
+		case OfsConstants.NB:
+			dto.setNB(value);
+			break;
+		case OfsConstants.CU:
+			dto.setCU(value);
+			break;
+		case OfsConstants.GA:
+			dto.setGA(value);
+			break;
+		case OfsConstants.GE:
+			dto.setGE(value);
+			break;
+		case OfsConstants.H:
+			dto.setH(value);
+			break;
+		case OfsConstants.FE:
+			dto.setFE(value);
+			break;
+		case OfsConstants.PB:
+			dto.setPB(value);
+			break;
+		case OfsConstants.LI:
+			dto.setLI(value);
+			break;
+		case OfsConstants.MG:
+			dto.setMG(value);
+			break;
+		case OfsConstants.MN:
+			dto.setMN(value);
+			break;
+		case OfsConstants.MO:
+			dto.setMO(value);
+			break;
+		case OfsConstants.NI:
+			dto.setNI(value);
+			break;
+		case OfsConstants.N2:
+			dto.setN2(value);
+			break;
+		case OfsConstants.O:
+			dto.setO(value);
+			break;
+		case OfsConstants.P:
+			dto.setP(value);
+			break;
+		case OfsConstants.RE:
+			dto.setRE(value);
+			break;
+		case OfsConstants.SE:
+			dto.setSE(value);
+			break;
+		case OfsConstants.SI:
+			dto.setSI(value);
+			break;
+		case OfsConstants.NA:
+			dto.setNA(value);
+			break;
+		case OfsConstants.S:
+			dto.setS(value);
+			break;
+		case OfsConstants.TA:
+			dto.setTA(value);
+			break;
+		case OfsConstants.TE:
+			dto.setTE(value);
+			break;
+		case OfsConstants.SN:
+			dto.setSN(value);
+			break;
+		case OfsConstants.TI:
+			dto.setTI(value);
+			break;
+		case OfsConstants.W:
+			dto.setW(value);
+			break;
+		case OfsConstants.V:
+			dto.setV(value);
+			break;
+		case OfsConstants.ZR:
+			dto.setZR(value);
+			break;
+		case OfsConstants.ZI:
+			dto.setZI(value);
+			break;
+		default:
+			break;
+		}
+	}
+
+	private void coilDetailsChemcialElements(CoilDetailsDto dto) {
+		LOGGER.info(" handleFilterOrSort paginatedResult coilDetailsChemcialElements : ---------{} ", dto);
+		if (dto.getSampleId() != null) {
+			Optional<SpecimenQualityTransactionEntity> chemData = specimenQualityTransactionRepository
+					.getDetailsBySampleIdAndTestMethod(dto.getSampleId().trim(), OfsConstants.SPECTRO_TEST);
+			if (chemData.isPresent()) {
+				SpecimenQualityTransactionEntity chemSpecimen = chemData.get();
+				LOGGER.info(" handleFilterOrSort chemData specimen : ---------{} ", chemSpecimen);
+				List<ChemrsltQt> chemistry = chemrsltRepository.findBySpecimenId(chemSpecimen.getSpecimenId());
+				LOGGER.info(" handleFilterOrSort paginatedResult chemistry : ---------{} ", chemistry);
+				for (ChemrsltQt chem : chemistry) {
+					setElements(dto, chem, null);
+				}
+			} else {
+				LOGGER.info(" handleFilterOrSort ladleChemistry else coilid   : --------- ",dto.getSlabid());
+				List<PpChemEntity> ladleChemistry = ppChemRepository.findAllByPpid(dto.getSlabid());
+				LOGGER.info(" handleFilterOrSort ladleChemistry else  dto : ---------{} ", ladleChemistry);
+				for (PpChemEntity chem : ladleChemistry) {
+					setElements(dto, null, chem);
+				}
+			}
+		}
+	}
+
+	public String filterQueryUsingFilterList(List<String> filterList, String query) {
+		StringBuilder queryBuilder = new StringBuilder(query);
+		queryBuilder.append(" AND (");
+
+		List<String> columnNames = DevExtGridFilterUtils.getAllFields(CoilDetailsDto.class);
+		IntStream.range(0, filterList.size()).filter(i -> OfsConstants.SHIFT_ID.equals(filterList.get(i)))
+				.forEach(i -> {
+					int findIndex = i + 2; // Locate the index for the replacement
+					if (findIndex < filterList.size()) { // Ensure index is within bounds
+						String forSearch = filterList.get(findIndex);
+						String updatedValue = switch (forSearch) {
+						case OfsConstants.A -> OfsConstants.M;
+						case OfsConstants.B -> OfsConstants.A;
+						case OfsConstants.C -> OfsConstants.N;
+						default -> forSearch; // No change for other values
+						};
+						filterList.set(findIndex, updatedValue);
+					}
+				});
+
+		Map<String, String> columnDataTypesKeyValuePair = DevExtGridFilterUtils
+				.getAllFieldsWithTypes(CoilDetailsDto.class);
+		Map<String, String> columnAlise = checkClassAleas();
+		boolean isClobObject = false;
+		boolean isStringObject = false;
+		boolean isDateObject = false;
+		boolean isContains = false;
+		boolean isNotContains = false;
+		boolean isStartWith = false;
+		boolean isEndWith = false;
+
+		for (int i = 0; i < filterList.size(); i++) {
+			String item = filterList.get(i);
+			if (columnNames.contains(item)) {
+				if ("CLOB".equals(columnDataTypesKeyValuePair.get(item))) {
+					queryBuilder.append("DBMS_LOB.INSTR(").append(columnAlise.get(item)).append(",");
+					isClobObject = true;
+				} else if ("DATE".equals(columnDataTypesKeyValuePair.get(item))) {
+					queryBuilder.append(" TO_CHAR(").append(columnAlise.get(item)).append(", 'YYYY-MM-DD')");
+					isDateObject = true;
+				} else if ("VARCHAR2".equals(columnDataTypesKeyValuePair.get(item))) {
+					queryBuilder.append(columnAlise.get(item));
+					isStringObject = true;
+				} else {
+					queryBuilder.append(columnAlise.get(item));
+				}
+			} else if (DevExtremePaginationConstant.CONTAINS.equals(item)
+					|| DevExtremePaginationConstant.NOTCONTAINS.equals(item)
+					|| DevExtremePaginationConstant.STARTSWITH.equals(item)
+					|| DevExtremePaginationConstant.ENDSWITH.equals(item)) {
+				if (isClobObject) {
+					// Logic for CLOB objects (if any)
+				} else if (isDateObject) {
+					queryBuilder.append(DevExtremePaginationConstant.LIKE);
+				} else {
+					if (DevExtremePaginationConstant.CONTAINS.equals(item)) {
+						queryBuilder.append(DevExtremePaginationConstant.LIKE);
+						isContains = true;
+					} else if (DevExtremePaginationConstant.NOTCONTAINS.equals(item)) {
+						queryBuilder.append(DevExtremePaginationConstant.NOT_LIKE);
+						isNotContains = true;
+					} else if (DevExtremePaginationConstant.STARTSWITH.equals(item)) {
+						queryBuilder.append(DevExtremePaginationConstant.LIKE);
+						isStartWith = true;
+					} else if (DevExtremePaginationConstant.ENDSWITH.equals(item)) {
+						queryBuilder.append(DevExtremePaginationConstant.LIKE);
+						isEndWith = true;
+					} else {
+						queryBuilder.append(" = ");
+					}
+				}
+			} else if ("or".equals(item) || "and".equals(item)) {
+				queryBuilder.append(" ").append(item).append(" ");
+			} else if ("=".equals(item) || "<>".equals(item) || ">=".equals(item) || "<".equals(item)
+					|| ">".equals(item)) {
+				queryBuilder.append(" ").append(item);
+			} else {
+				if (isClobObject) {
+					queryBuilder.append("'").append(item).append("') > 0");
+					isClobObject = false;
+				} else if (isStringObject) {
+					if (isContains) {
+						queryBuilder.append(" '%").append(item).append("%'");
+						isContains = false;
+					} else if (isNotContains) {
+						queryBuilder.append(" '%").append(item).append("%'");
+						isNotContains = false;
+					} else if (isStartWith) {
+						queryBuilder.append(" '").append(item).append("%'");
+						isStartWith = false;
+					} else if (isEndWith) {
+						queryBuilder.append(" '%").append(item).append("'");
+						isEndWith = false;
+					} else {
+						queryBuilder.append(" '").append(item).append("'");
+					}
+					isStringObject = false;
+				} else if (isDateObject) {
+					DateTimeFormatter formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+					OffsetDateTime dateTime = OffsetDateTime.parse(item, formatter);
+					String dateOnly = dateTime.toLocalDate().toString();
+					queryBuilder.append(" '").append(dateOnly).append("'");
+					isDateObject = false;
+				} else {
+					queryBuilder.append(" ").append(item);
+				}
+			}
+		}
+
+		queryBuilder.append(")");
+
+		return queryBuilder.toString();
+	}
+
+	public String processSqlQuery(String sql) {
+		if (sql.trim().endsWith("or")) {
+			sql = sql.substring(0, sql.length() - 2);
+			sql = sql.trim().substring(0, sql.length() - 2).trim();
+		} else if (sql.trim().endsWith(" or")) {
+			sql = sql.substring(0, sql.length() - 2);
+			sql = sql.trim().substring(0, sql.length() - 3).trim();
+		}
+
+		sql = sql.replaceAll("h\\.isactv\\s*=\\s*'Active'", "h.isactv = 1");
+
+		sql = sql.replaceAll("h\\.isactv\\s*=\\s*'Inactive'", "h.isactv = 0");
+
+		return sql;
+	}
+
+	private Map<String, String> checkClassAleasWithNoStop() {
+		Map<String, String> columnAliasMap = new HashMap<>();
+		columnAliasMap.put(OfsConstants.HEAT_ID, "ql.heatId");
+		columnAliasMap.put(OfsConstants.COILID, "ql.ppId");
+		columnAliasMap.put(OfsConstants.SAMPLE_ID, "ppp.mapSampleId");
+		columnAliasMap.put(OfsConstants.PR_ID, "ppp.prid");
+		columnAliasMap.put(OfsConstants.PROD_DATE, "ql.createdDate");
+		columnAliasMap.put(OfsConstants.SHIFT_ID, "ph.shiftid");
+		columnAliasMap.put(OfsConstants.SLAB_ID, "ql.slabid");
+		columnAliasMap.put(OfsConstants.INTERNAL_GRADE, "ql.internalGradeId");
+		columnAliasMap.put(OfsConstants.EXTERNAL_GRADE, "ql.externalGradeName");
+		columnAliasMap.put(OfsConstants.SO_ID, "ql.orderItemId");
+		columnAliasMap.put(OfsConstants.CUSTOMER_NAME, "ql.customerName");
+		columnAliasMap.put(OfsConstants.COIL_TDC_ID, "ql.tdcId");
+		columnAliasMap.put(OfsConstants.PROD_TYPE, "ql.opprdid");
+
+		columnAliasMap.put(OfsConstants.COIL_CLEARANCE, "ph.udsts");
+		columnAliasMap.put(OfsConstants.COIL_THICKNESS, "ph.thk");
+		columnAliasMap.put(OfsConstants.COIL_WIDTH, "ph.wdt");
+		columnAliasMap.put(OfsConstants.COIL_WEIGHT, "ph.wgt");
+		columnAliasMap.put(OfsConstants.COIL_INNER_DIA, "ph.idia");
+		columnAliasMap.put(OfsConstants.COIL_OUTER_DIA, "ph.odia");
+
+		columnAliasMap.put(OfsConstants.ORDERITEML_ID, "ql." + OfsConstants.ORDERITEML_ID + ")");
+		columnAliasMap.put(OfsConstants.ORDERITEMLIST_ID, "ql." + OfsConstants.ORDERITEMLIST_ID + ")");
+		// Tensile Test
+		columnAliasMap.put(OfsConstants.YS, "t.ys");
+		columnAliasMap.put(OfsConstants.UTS, "t.uts");
+		columnAliasMap.put(OfsConstants.YS_UTS, "t.ysuts");
+		columnAliasMap.put(OfsConstants.ELONGATION_GL_565, "t.elongationGL565");
+		columnAliasMap.put(OfsConstants.ELONGATION_GL_50, "t.elongationGL50");
+		columnAliasMap.put(OfsConstants.ELONGATION_GL_80, "t.elongationGL80");
+		columnAliasMap.put(OfsConstants.ELONGATION_GL_200, "t.elongationGL200");
+
+		// Impact Test
+		columnAliasMap.put(OfsConstants.IMPACT_TEMP, "impact.temperature");
+		columnAliasMap.put(OfsConstants.IMPACT_ENERGY_INDEX, "i.energyIndex");
+		columnAliasMap.put(OfsConstants.IMPACT_ENERGY_AVG, "i.energyAverage");
+		columnAliasMap.put(OfsConstants.IMPACT_SA_INDEX, "i.saIndex");
+		columnAliasMap.put(OfsConstants.IMPACT_SA_AVG, "i.saAverage");
+		columnAliasMap.put(OfsConstants.IMPACT_DIRECTION, "impact.direction");
+
+		// Bend Test
+		columnAliasMap.put(OfsConstants.BEND_DEGREE, "bend.degrees");
+		columnAliasMap.put(OfsConstants.BEND_MANDREL, "bend.mandrel");
+		columnAliasMap.put(OfsConstants.BEND_VALUE, "b.bendval");
+		columnAliasMap.put(OfsConstants.BEND_DIRECTION, "bend.direction");
+
+		// Hardness Test
+		columnAliasMap.put(OfsConstants.HARDNESS_HRB_III, "h.hardness");
+
+		// High Temp Tensile Test
+		columnAliasMap.put(OfsConstants.HT_TT_TEMP, "http.temperature");
+		columnAliasMap.put(OfsConstants.HT_TT_MIN_PROOF_STRENGTH, "ht.proofstrength");
+		columnAliasMap.put(OfsConstants.HT_TT_DIRECTION, "http.direction");
+
+		// Z Test
+		columnAliasMap.put(OfsConstants.Z_TEST_REDUCTION_AREA, "z.reductionArea");
+		columnAliasMap.put(OfsConstants.Z_TEST_SPECIFICATION, "ztest.specification");
+
+		// DWTT Test
+		columnAliasMap.put(OfsConstants.DWTT_TEMP, "dwtt.temperature");
+		columnAliasMap.put(OfsConstants.DWTT_SA_INDEX, "d.saIndex");
+		columnAliasMap.put(OfsConstants.DWTT_SA_AVG, "d.saAverage");
+		columnAliasMap.put(OfsConstants.DWTT_DIRECTION, "dwtt.direction");
+
+		// Inclusion Rating
+		columnAliasMap.put(OfsConstants.TY_A_THIN, "ir.tyAThin");
+		columnAliasMap.put(OfsConstants.TY_A_THICK, "ir.tyAThick");
+		columnAliasMap.put(OfsConstants.TY_B_THIN, "ir.tyBThin");
+		columnAliasMap.put(OfsConstants.TY_B_THICK, "ir.tyBThick");
+		columnAliasMap.put(OfsConstants.TY_C_THIN, "ir.tyCThin");
+		columnAliasMap.put(OfsConstants.TY_C_THICK, "ir.tyCThick");
+		columnAliasMap.put(OfsConstants.TY_D_THIN, "ir.tyDThin");
+		columnAliasMap.put(OfsConstants.TY_D_THICK, "ir.tyDThick");
+
+		// Other Testing
+		columnAliasMap.put(OfsConstants.GRAIN_SIZE, "grainSize.testResult");
+		columnAliasMap.put(OfsConstants.BALLISTIC_TEST, "ballisticTest.testResult");
+		columnAliasMap.put(OfsConstants.CTOD, "ctod.testResult");
+		columnAliasMap.put(OfsConstants.FRACTURE_TEST, "fractureTest.testResult");
+		columnAliasMap.put(OfsConstants.NACE_HIC, "naceHIC.testResult");
+		columnAliasMap.put(OfsConstants.WBBT, "wbbt.testResult");
+		columnAliasMap.put(OfsConstants.WELDABILITY_TEST2, "weldabilityTest2.testResult");
+		columnAliasMap.put(OfsConstants.NACE_SCC, "naceSCC.testResult");
+		columnAliasMap.put(OfsConstants.MICROSTRUCTURE, "microstructure.testResult");
+		columnAliasMap.put(OfsConstants.STRAIN_AGING, "strainAging.testResult");
+		columnAliasMap.put(OfsConstants.ERICHSEN_CUPPING, "erichsenCupping.testResult");
+		columnAliasMap.put(OfsConstants.HOLE_EXPANSION_TEST, "holeExpansionTest.testResult");
+
+		columnAliasMap.put(OfsConstants.AL, "ai.elementval");
+		columnAliasMap.put(OfsConstants.SB, "sb.elementval");
+		columnAliasMap.put(OfsConstants.AS, "as.elementval");
+		columnAliasMap.put(OfsConstants.BE, "be.elementval");
+		columnAliasMap.put(OfsConstants.BI, "bi.elementval");
+		columnAliasMap.put(OfsConstants.B_ELEMENT, "btest.elementval");
+		columnAliasMap.put(OfsConstants.CD, "cd.elementval");
+		columnAliasMap.put(OfsConstants.CA, "ca.elementval");
+		columnAliasMap.put(OfsConstants.C_ELEMENT, "ctest.elementval");
+		columnAliasMap.put(OfsConstants.CE, "ce.elementval");
+		columnAliasMap.put(OfsConstants.CR, "cr.elementval");
+		columnAliasMap.put(OfsConstants.CO, "co.elementval");
+		columnAliasMap.put(OfsConstants.NB, "nb.elementval");
+		columnAliasMap.put(OfsConstants.CU, "cu.elementval");
+		columnAliasMap.put(OfsConstants.GA, "ga.elementval");
+		columnAliasMap.put(OfsConstants.GE, "ge.elementval");
+		columnAliasMap.put(OfsConstants.H, "htest.elementval");
+		columnAliasMap.put(OfsConstants.FE, "fe.elementval");
+		columnAliasMap.put(OfsConstants.PB, "pb.elementval");
+		columnAliasMap.put(OfsConstants.LI, "li.elementval");
+		columnAliasMap.put(OfsConstants.MG, "mg.elementval");
+		columnAliasMap.put(OfsConstants.MN, "mn.elementval");
+		columnAliasMap.put(OfsConstants.MO, "mo.elementval");
+		columnAliasMap.put(OfsConstants.NI, "ni.elementval");
+		columnAliasMap.put(OfsConstants.N2, "n2.elementval");
+		columnAliasMap.put(OfsConstants.O, "otest.elementval");
+		columnAliasMap.put(OfsConstants.P, "ptest.elementval");
+		columnAliasMap.put(OfsConstants.RE, "re.elementval");
+		columnAliasMap.put(OfsConstants.SE, "se.elementval");
+		columnAliasMap.put(OfsConstants.SI, "si.elementval");
+		columnAliasMap.put(OfsConstants.NA, "na.elementval");
+		columnAliasMap.put(OfsConstants.S, "stest.elementval");
+		columnAliasMap.put(OfsConstants.TA, "ta.elementval");
+		columnAliasMap.put(OfsConstants.TE, "te.elementval");
+		columnAliasMap.put(OfsConstants.SN, "sn.elementval");
+		columnAliasMap.put(OfsConstants.TI, "ti.elementval");
+		columnAliasMap.put(OfsConstants.W, "wtest.elementval");
+		columnAliasMap.put(OfsConstants.V, "vtest.elementval");
+		columnAliasMap.put(OfsConstants.ZR, "zr.elementval");
+		columnAliasMap.put(OfsConstants.ZI, "zi.elementval");
+		columnAliasMap.put(OfsConstants.HOLDREASON, "ppp.holdReason");
+		columnAliasMap.put(OfsConstants.DIVERTREASON, "ppp.divertReason");
+
+		return columnAliasMap;
+	}
+
+	public Map<String, String> checkClassAleas() {
+		Map<String, String> fieldTypes = new HashMap<>();
+
+		fieldTypes.put(OfsConstants.HEAT_ID, "ql.heatId");
+		fieldTypes.put(OfsConstants.COILID, "ql.ppId");
+		fieldTypes.put(OfsConstants.SAMPLE_ID, "ppp.mapSampleId");
+		fieldTypes.put(OfsConstants.PR_ID, "ppp.prid");
+		fieldTypes.put(OfsConstants.PROD_DATE, "ql.createdDate");
+		fieldTypes.put(OfsConstants.SHIFT_ID, "ph.shiftid");
+		fieldTypes.put(OfsConstants.SLAB_ID, "ql.slabid");
+		fieldTypes.put(OfsConstants.INTERNAL_GRADE, "ql.internalGradeId");
+		fieldTypes.put(OfsConstants.EXTERNAL_GRADE, "ql.externalGradeName");
+		fieldTypes.put(OfsConstants.SO_ID, "ql.orderItemId");
+		fieldTypes.put(OfsConstants.CUSTOMER_NAME, "ql.customerName");
+		fieldTypes.put(OfsConstants.COIL_TDC_ID, "ql.tdcId");
+		fieldTypes.put(OfsConstants.PROD_TYPE, "ql.opprdid");
+
+		fieldTypes.put(OfsConstants.COIL_CLEARANCE, "ph.udsts");
+		fieldTypes.put(OfsConstants.COIL_THICKNESS, "ph.thk");
+		fieldTypes.put(OfsConstants.COIL_WIDTH, "ph.wdt");
+		fieldTypes.put(OfsConstants.COIL_WEIGHT, "ph.wgt");
+		fieldTypes.put(OfsConstants.COIL_INNER_DIA, "ph.idia");
+		fieldTypes.put(OfsConstants.COIL_OUTER_DIA, "ph.odia");
+
+		fieldTypes.put(OfsConstants.ORDERITEML_ID, "ql." + OfsConstants.ORDERITEML_ID + ")");
+		fieldTypes.put(OfsConstants.ORDERITEMLIST_ID, "ql." + OfsConstants.ORDERITEMLIST_ID + ")");
+		// Tensile Test
+		fieldTypes.put(OfsConstants.YS, "t.ys");
+		fieldTypes.put(OfsConstants.UTS, "t.uts");
+		fieldTypes.put(OfsConstants.YS_UTS, "t.ysuts");
+		fieldTypes.put(OfsConstants.ELONGATION_GL_565, "t.elongationGL565");
+		fieldTypes.put(OfsConstants.ELONGATION_GL_50, "t.elongationGL50");
+		fieldTypes.put(OfsConstants.ELONGATION_GL_80, "t.elongationGL80");
+		fieldTypes.put(OfsConstants.ELONGATION_GL_200, "t.elongationGL200");
+
+		// Impact Test
+		fieldTypes.put(OfsConstants.IMPACT_TEMP, "impact.temperature");
+		fieldTypes.put(OfsConstants.IMPACT_ENERGY_INDEX, "i.energyIndex");
+		fieldTypes.put(OfsConstants.IMPACT_ENERGY_AVG, "i.energyAverage");
+		fieldTypes.put(OfsConstants.IMPACT_SA_INDEX, "i.saIndex");
+		fieldTypes.put(OfsConstants.IMPACT_SA_AVG, "i.saAverage");
+		fieldTypes.put(OfsConstants.IMPACT_DIRECTION, "impact.direction");
+
+		// Bend Test
+		fieldTypes.put(OfsConstants.BEND_DEGREE, "bend.degrees");
+		fieldTypes.put(OfsConstants.BEND_MANDREL, "bend.mandrel");
+		fieldTypes.put(OfsConstants.BEND_VALUE, "b.bendval");
+		fieldTypes.put(OfsConstants.BEND_DIRECTION, "bend.direction");
+
+		// Hardness Test
+		fieldTypes.put(OfsConstants.HARDNESS_HRB_III, "h.hardness");
+
+		// High Temp Tensile Test
+		fieldTypes.put(OfsConstants.HT_TT_TEMP, "http.temperature");
+		fieldTypes.put(OfsConstants.HT_TT_MIN_PROOF_STRENGTH, "ht.proofstrength");
+		fieldTypes.put(OfsConstants.HT_TT_DIRECTION, "http.direction");
+
+		// Z Test
+		fieldTypes.put(OfsConstants.Z_TEST_REDUCTION_AREA, "z.reductionArea");
+		fieldTypes.put(OfsConstants.Z_TEST_SPECIFICATION, "ztest.specification");
+
+		// DWTT Test
+		fieldTypes.put(OfsConstants.DWTT_TEMP, "dwtt.temperature");
+		fieldTypes.put(OfsConstants.DWTT_SA_INDEX, "d.saIndex");
+		fieldTypes.put(OfsConstants.DWTT_SA_AVG, "d.saAverage");
+		fieldTypes.put(OfsConstants.DWTT_DIRECTION, "dwtt.direction");
+
+		// Inclusion Rating
+		fieldTypes.put(OfsConstants.TY_A_THIN, "ir.tyathin");
+		fieldTypes.put(OfsConstants.TY_A_THICK, "ir.tyathick");
+		fieldTypes.put(OfsConstants.TY_B_THIN, "ir.tybthin");
+		fieldTypes.put(OfsConstants.TY_B_THICK, "ir.tybthick");
+		fieldTypes.put(OfsConstants.TY_C_THIN, "ir.tycthin");
+		fieldTypes.put(OfsConstants.TY_C_THICK, "ir.tycthick");
+		fieldTypes.put(OfsConstants.TY_D_THIN, "ir.tydthin");
+		fieldTypes.put(OfsConstants.TY_D_THICK, "ir.tydthick");
+
+		// Other Testing
+		fieldTypes.put(OfsConstants.GRAIN_SIZE, "grainSize.testResult");
+		fieldTypes.put(OfsConstants.BALLISTIC_TEST, "ballisticTest.testResult");
+		fieldTypes.put(OfsConstants.CTOD, "ctod.testResult");
+		fieldTypes.put(OfsConstants.FRACTURE_TEST, "fractureTest.testResult");
+		fieldTypes.put(OfsConstants.NACE_HIC, "naceHIC.testResult");
+		fieldTypes.put(OfsConstants.WBBT, "wbbt.testResult");
+		fieldTypes.put(OfsConstants.WELDABILITY_TEST2, "weldabilityTest2.testResult");
+		fieldTypes.put(OfsConstants.NACE_SCC, "naceSCC.testResult");
+		fieldTypes.put(OfsConstants.MICROSTRUCTURE, "microstructure.testResult");
+		fieldTypes.put(OfsConstants.STRAIN_AGING, "strainAging.testResult");
+		fieldTypes.put(OfsConstants.ERICHSEN_CUPPING, "erichsenCupping.testResult");
+		fieldTypes.put(OfsConstants.HOLE_EXPANSION_TEST, "holeExpansionTest.testResult");
+
+		fieldTypes.put(OfsConstants.AL, "ai.elementval");
+		fieldTypes.put(OfsConstants.SB, "sb.elementval");
+		fieldTypes.put(OfsConstants.AS, "as.elementval");
+		fieldTypes.put(OfsConstants.BE, "be.elementval");
+		fieldTypes.put(OfsConstants.BI, "bi.elementval");
+		fieldTypes.put(OfsConstants.B_ELEMENT, "btest.elementval");
+		fieldTypes.put(OfsConstants.CD, "cd.elementval");
+		fieldTypes.put(OfsConstants.CA, "ca.elementval");
+		fieldTypes.put(OfsConstants.C_ELEMENT, "ctest.elementval");
+		fieldTypes.put(OfsConstants.CE, "ce.elementval");
+		fieldTypes.put(OfsConstants.CR, "cr.elementval");
+		fieldTypes.put(OfsConstants.CO, "co.elementval");
+		fieldTypes.put(OfsConstants.NB, "nb.elementval");
+		fieldTypes.put(OfsConstants.CU, "cu.elementval");
+		fieldTypes.put(OfsConstants.GA, "ga.elementval");
+		fieldTypes.put(OfsConstants.GE, "ge.elementval");
+		fieldTypes.put(OfsConstants.H, "htest.elementval");
+		fieldTypes.put(OfsConstants.FE, "fe.elementval");
+		fieldTypes.put(OfsConstants.PB, "pb.elementval");
+		fieldTypes.put(OfsConstants.LI, "li.elementval");
+		fieldTypes.put(OfsConstants.MG, "mg.elementval");
+		fieldTypes.put(OfsConstants.MN, "mn.elementval");
+		fieldTypes.put(OfsConstants.MO, "mo.elementval");
+		fieldTypes.put(OfsConstants.NI, "ni.elementval");
+		fieldTypes.put(OfsConstants.N2, "n2.elementval");
+		fieldTypes.put(OfsConstants.O, "otest.elementval");
+		fieldTypes.put(OfsConstants.P, "ptest.elementval");
+		fieldTypes.put(OfsConstants.RE, "re.elementval");
+		fieldTypes.put(OfsConstants.SE, "se.elementval");
+		fieldTypes.put(OfsConstants.SI, "si.elementval");
+		fieldTypes.put(OfsConstants.NA, "na.elementval");
+		fieldTypes.put(OfsConstants.S, "stest.elementval");
+		fieldTypes.put(OfsConstants.TA, "ta.elementval");
+		fieldTypes.put(OfsConstants.TE, "te.elementval");
+		fieldTypes.put(OfsConstants.SN, "sn.elementval");
+		fieldTypes.put(OfsConstants.TI, "ti.elementval");
+		fieldTypes.put(OfsConstants.W, "wtest.elementval");
+		fieldTypes.put(OfsConstants.V, "vtest.elementval");
+		fieldTypes.put(OfsConstants.ZR, "zr.elementval");
+		fieldTypes.put(OfsConstants.ZI, "zi.elementval");
+		fieldTypes.put(OfsConstants.HOLDREASON, "ppp.holdReason");
+		fieldTypes.put(OfsConstants.DIVERTREASON, "ppp.divertReason");
+
+		return fieldTypes;
+	}
+
+	@Override
+	public List<CoilDetailsDto> getAllCoilData(CoilDetailsFilterRequestDto coilDetailsFilterRequestDto) {
+		return coilDetailsCustRepository.getAllCoilData(coilDetailsFilterRequestDto);
+	}
+
+	@Override
+	public List<Object> getCoilDetailsByAllDatafields(ReportRequestDto request) {
+		List<GroupedColumnDto> groupedDtoList = request.getGroupedDto();
+		List<FeatureDto> featuredDtoList = request.getFeaturedDto();
+
+		StringBuilder queryBuilder = new StringBuilder(OfsConstants.SELECT + " ");
+
+		groupedDtoList.forEach(groupedDto -> {
+			String dataField = getRealName(groupedDto.getDatafield());
+			queryBuilder.append(dataField).append(", ");
+		});
+		for (FeatureDto featureDto : featuredDtoList) {
+			String dataField = getRealName(featureDto.getDatafield());
+
+			if (OfsConstants.AVERAGE.equalsIgnoreCase(featureDto.getFeature())) {
+				queryBuilder.append("AVG").append("(").append(dataField).append(")");
+			} else {
+				queryBuilder.append(featureDto.getFeature().toUpperCase()).append("(").append(dataField).append(")");
+			}
+			if (!featuredDtoList.get(featuredDtoList.size() - 1).getDatafield()
+					.equalsIgnoreCase(featureDto.getDatafield())) {
+				queryBuilder.append(",");
+			}
+
+		}
+
+		queryBuilder.append(OfsConstants.COIL_DETAILS_GENERATE_REPORT_DYNAMIC_QUERY_FROM_CLAUSE);
+		if (!groupedDtoList.isEmpty()) {
+			queryBuilder.append(" " + OfsConstants.GROUP_BY + " ");
+			groupedDtoList.forEach(groupedDto -> {
+				String dataField = getRealName(groupedDto.getDatafield());
+				queryBuilder.append(dataField);
+				if (!groupedDtoList.get(groupedDtoList.size() - 1).getDatafield()
+						.equalsIgnoreCase(groupedDto.getDatafield())) {
+					queryBuilder.append(", ");
+				}
+
+			});
+
+		}
+
+		// Add ORDER BY clause here
+		queryBuilder.append(" ORDER BY ");
+		if (!groupedDtoList.isEmpty()) {
+			String orderByField = getRealName(groupedDtoList.get(0).getDatafield());
+			queryBuilder.append(orderByField).append(" DESC");
+		}
+
+		String sqlQuery1 = queryBuilder.toString();
+		return coilDetailsCustRepository.getCoilDetailsByAllDatafields(sqlQuery1);
+	}
+
+	public String getRealName(String alias) {
+		Map<String, String> fieldTypes = checkClassAleas();
+		return fieldTypes.getOrDefault(alias.trim(), "Alias not found");
+	}
+
+	public boolean isNumber(String str) {
+		return str.matches("^[+-]?\\d*(\\.\\d+)?([eE][+-]?\\d+)?$");
+	}
+
+}

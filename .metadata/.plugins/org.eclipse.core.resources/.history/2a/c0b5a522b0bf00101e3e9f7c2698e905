@@ -1,0 +1,52 @@
+package in.net.usit.yip.core.auditing;
+
+
+import java.util.Date;
+
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.Temporal;
+import jakarta.persistence.TemporalType;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.Setter;
+
+@MappedSuperclass
+@EntityListeners({AuditingEntityListener.class, AuditableEntityListener.class})
+@Getter(AccessLevel.PUBLIC)
+@Setter(AccessLevel.PROTECTED)
+public abstract class Auditable<U> {
+
+	@CreatedBy
+	@Column(name="CR_BY",nullable = false, updatable = false)
+	protected String createdBy;
+
+	@CreatedDate
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column(name="CR_DT",nullable = false, updatable = false)
+	protected Date createdDate;
+
+	@LastModifiedBy
+	@Column(name="MO_BY")
+	protected U modifiedBy;
+
+	@LastModifiedDate
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column(name="MO_DT")
+	protected Date modifiedDate;
+	
+    @Column(name="CR_MAC_ADDR", nullable = false, updatable = false)
+    protected String createdMacAddrs;
+
+    @Column(name="MO_MAC_ADDR")
+    protected String modifyMacAddrs;
+	
+
+}

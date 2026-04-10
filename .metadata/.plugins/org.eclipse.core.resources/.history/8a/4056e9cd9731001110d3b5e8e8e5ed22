@@ -1,0 +1,74 @@
+package com.hindindustec.fluenta.hsm.masters.customrepository;
+
+import java.util.Date;
+import java.util.List;
+
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.masters.dto.TransferBarThicknessMasterDto;
+import com.hindindustec.fluenta.hsm.masters.dto.TransferBarThicknessMasterRequest;
+import com.hindindustec.fluenta.hsm.masters.entities.HsmtrnbarCm;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+
+@Repository
+public class TransferBarThicknessMasterCustRepository {
+
+	private final EntityManager entityManager;
+	   private final DBSessionService dbSessionService;
+
+    public TransferBarThicknessMasterCustRepository(EntityManager entityManager) {
+        this.entityManager = entityManager;
+    }
+	
+	public List<TransferBarThicknessMasterDto> getTransferBarThicknessMasterDetails(TransferBarThicknessMasterRequest request) {
+		
+		TypedQuery<TransferBarThicknessMasterDto> q = entityManager
+				.createQuery(OfsConstants.TRANSFER_BAR_THICKNESS_MASTER_DTO+"("
+						  +"hsmTBCm.id.plid,"
+						  +"hsmTBCm.id.hrthkmin,"
+						  +"hsmTBCm.id.hrwdtmin,"
+						  +"hsmTBCm.hrthkmax,"
+						  +"hsmTBCm.hrwdtmax,"
+						  +"hsmTBCm.isactv,"
+						  +"hsmTBCm.trnbarthk,"
+						  +"hsmTBCm.crDt"
+						+ ")"
+						+ " FROM HsmtrnbarCm hsmTBCm "
+						+ " WHERE (:selectedProductionLine is null or hsmTBCm.id.plid = :selectedProductionLine)"
+						+ " ORDER BY hsmTBCm.crDt DESC"
+						, TransferBarThicknessMasterDto.class);
+
+		           q.setParameter("selectedProductionLine", request.getProductionLine());
+			       return q.getResultList();
+	} 
+	
+	public List<String> getProductionLine() {
+	    TypedQuery<String> q = entityManager.createQuery(
+	        "SELECT DISTINCT p.plid FROM  PlCm p "
+	        , String.class);
+	    return q.getResultList();
+	}
+
+	   @Transactional(rollbackFor = Exception.class)
+    private void updateCrdtAndModt(HsmtrnbarCm entity, Date modifiedDate, String modifiedBy, String modifiedMacAddr, Date date, String client, String clientIpAddress) {
+        dbSessionService.setSessionInfo(this.getClass().getName());
+        jakarta.persistence.Query q = entityManager
+                .createQuery("UPDATE HsmtrnbarCm SET crDt= :currentDate,crBy= :client,crMacAddr= :clientIpAddress,moDt= :modifiedDate,moBy= :modifiedBy,moMacAddr= :modifiedMacAddr" + " WHERE id.plid = :plid" + " AND id.hrthkmin = :thkmin"
+                        + " AND id.hrwdtmin = :wdtmin");
+        q.setParameter("plid", entity.getId().getPlid());
+        q.setParameter("thkmin", entity.getId().getHrthkmin());
+        q.setParameter("wdtmin", entity.getId().getHrwdtmin());
+        q.setParameter("modifiedDate", modifiedDate);
+        q.setParameter("modifiedBy", modifiedBy);
+        q.setParameter("modifiedMacAddr", modifiedMacAddr);
+        q.setParameter("currentDate", date);
+        q.setParameter("client", client);
+        q.setParameter("clientIpAddress", clientIpAddress);
+        q.executeUpdate();
+    }
+}

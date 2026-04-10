@@ -1,0 +1,39 @@
+# ------------------------
+# Stage 1: Build the JAR
+# ------------------------
+FROM maven:3.8.4-openjdk-17 AS build
+LABEL maintainer="Hind Industec"
+
+# Copy source and build application
+WORKDIR /app
+COPY . .
+RUN mvn clean package -DskipTests
+
+# ------------------------
+# Stage 2: Minimal runtime image
+# ------------------------
+FROM eclipse-temurin:17-jre-alpine
+LABEL maintainer="Hind Industec"
+
+# Build arguments and environment variables
+ARG JAR_FILE=fluenta-service-discovery.jar
+ARG SPRING_PROFILE=development
+ARG SERVER_PORT=8761
+
+ENV APP_DIR=/home/hilpc-xrdp/Fluenta/Fluenta-HSM/ \
+    JAR_FILE_NAME=${JAR_FILE} \
+    SPRING_PROFILE=${SPRING_PROFILE} \
+    SERVER_PORT=${SERVER_PORT} \
+    JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:MinRAMPercentage=50.0  -Xms256m -Xmx512m -XX:+UseG1GC -XX:+UseStringDeduplication"
+
+# Create app directory
+RUN mkdir -p ${APP_DIR}
+
+# Copy JAR from build stage
+COPY --from=build /app/target/${JAR_FILE} ${APP_DIR}/${JAR_FILE}
+
+# Expose port
+EXPOSE ${SERVER_PORT}
+
+# Run application with optimized JVM flags
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dspring.profiles.active=${SPRING_PROFILE} -Dserver.port=${SERVER_PORT} -jar ${APP_DIR}/${JAR_FILE_NAME}"]

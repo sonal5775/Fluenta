@@ -1,0 +1,109 @@
+package com.hindindustec.fluenta.hsm.masters.serviceimpl;
+
+import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import com.hindindustec.fluenta.hsm.masters.entities.AtrlCs;
+import com.hindindustec.fluenta.hsm.masters.repository.TdcElementMasterRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.common.config.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.masters.customrepository.InternalSpecChemistryCustRepo;
+import com.hindindustec.fluenta.hsm.masters.dto.AtrlcsTableDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ChemistryTableDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ChemistryTableRepoDto;
+import com.hindindustec.fluenta.hsm.masters.dto.InternalspecChemistryRequestDto;
+import com.hindindustec.fluenta.hsm.masters.entities.GrdchemistryCm;
+import com.hindindustec.fluenta.hsm.masters.entities.GrdchemistryCmPK;
+import com.hindindustec.fluenta.hsm.masters.repository.InternalSpecChemistryMasterRepository;
+import com.hindindustec.fluenta.hsm.masters.service.InternalSpecChemistryService;
+
+@Service
+public class InternalSpecChemistryServiceImple implements InternalSpecChemistryService{
+	
+	private InternalSpecChemistryCustRepo custrepo;
+	private InternalSpecChemistryMasterRepository masterrepo;
+	private DBSessionService dbSessionService;
+	private TdcElementMasterRepository elementMastrepository;
+	
+	public InternalSpecChemistryServiceImple(InternalSpecChemistryCustRepo custrepo,
+			InternalSpecChemistryMasterRepository masterrepo,DBSessionService dbSessionService, TdcElementMasterRepository elementMastrepository) {
+		this.custrepo = custrepo;
+		this.masterrepo = masterrepo;
+		this.dbSessionService = dbSessionService;
+		this.elementMastrepository = elementMastrepository;
+	}
+
+	@Override
+	public List<String> getAllElement() {
+		return custrepo.getAllChemElement();
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<ChemistryTableDto> saveChemistry(InternalspecChemistryRequestDto request) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		for (ChemistryTableDto singlerowdata : request.getTdata()) {
+
+			if (singlerowdata.getChemFormula() != null) {
+				Optional<AtrlCs> existingMasterElement = elementMastrepository.findByAtrid(singlerowdata.getAtrid());
+				if(existingMasterElement.isPresent()){
+					AtrlCs entity = existingMasterElement.get();
+					entity.setChemFormula(singlerowdata.getChemFormula());
+					elementMastrepository.save(entity);
+				}
+			}
+
+			long maxCounter = masterrepo.getMaxCounter(request.getGrdid(), singlerowdata.getAtrid());
+
+
+				GrdchemistryCm entity = new GrdchemistryCm();
+				GrdchemistryCmPK pk = new GrdchemistryCmPK();
+				pk.setGrdid(request.getGrdid());
+				pk.setElement(singlerowdata.getAtrid());
+				pk.setElementctr(singlerowdata.getElementctr()!=null?singlerowdata.getElementctr():-1l);
+				Optional<GrdchemistryCm> optional = masterrepo.findById(pk);
+				if(optional.isPresent()) {
+					entity = optional.get();
+					entity.setMoBy(ClientIpUtils.getClient());
+					entity.setMoDt(new Date());
+					entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+				}else {
+					pk.setElementctr(maxCounter + 1);
+					entity.setId(pk);
+					entity.setIsactv(BigDecimal.ONE);
+					entity.setCrBy(ClientIpUtils.getClient());
+					entity.setCrDt(new Date());
+					entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+				}
+				entity.setElementvalaim(singlerowdata.getElementvalaim());
+				entity.setElementvalmax(singlerowdata.getElementvalmax());
+				entity.setElementvalmin(singlerowdata.getElementvalmin());
+				entity.setMaxopr(singlerowdata.getMaxopr());
+				entity.setMinopr(singlerowdata.getMinopr());
+				entity.setThkmax(singlerowdata.getThkmax());
+				entity.setThkmin(singlerowdata.getThkmin());
+				entity.setDerivationFlag(singlerowdata.isDerivationFlag()?"Y":"N");
+				masterrepo.save(entity);
+			
+			}
+//		}
+		return Collections.emptyList();
+	}
+
+	@Override
+	public List<ChemistryTableRepoDto> getAllChemistry(InternalspecChemistryRequestDto request) {
+		return custrepo.getAllChemistry(request);
+	}
+
+	@Override
+	public List<AtrlcsTableDto> getElementAndDisnameAndTest(String element) {
+		return custrepo.getElementAndDisnameAndTest(element);
+	}
+
+}

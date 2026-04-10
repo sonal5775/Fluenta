@@ -1,0 +1,80 @@
+package com.hindindustec.fluenta.sales.dto;
+
+import jakarta.persistence.Lob;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.util.Date;
+
+@Getter
+@Setter 
+@NoArgsConstructor
+@AllArgsConstructor
+@ToString
+public class TdcGeneralRequestDto {
+	
+	private String tdcid; 
+	private long revid;
+	private String prdid; 
+	private String extgrdnm;
+	private String enduse;
+	private String prrtid; 
+	private String tdcty; 
+	private String tdctempid; 
+	private String initiatedBy; 
+	private String initiatoremail; 
+	private String initiatorcontact; 
+	public TdcGeneralRequestDto(String tdcid, long revid, String prdid, String extgrdnm, String enduse, String prrtid,
+                                String tdcty, String tdctempid, String initiatedBy, String initiatoremail, String initiatorcontact,
+                                String projectnm, String custid, String seidref, Date enqDt, String custnm, String custemail,
+                                String custcontact, String normid, String tdcsts, BigDecimal isactv, String crBy, Date crDt, byte[] refdoc,
+                                String refdocnm) {
+		super();
+		this.tdcid = tdcid;
+		this.revid = revid;
+		this.prdid = prdid;
+		this.extgrdnm = extgrdnm;
+		this.enduse = enduse;
+		this.prrtid = prrtid;
+		this.tdcty = tdcty;
+		this.tdctempid = tdctempid;
+		this.initiatedBy = initiatedBy;
+		this.initiatoremail = initiatoremail;
+		this.initiatorcontact = initiatorcontact;
+		this.projectnm = projectnm;
+		this.custid = custid;
+		this.seidref = seidref;
+		this.enqDt = enqDt;
+		this.custnm = custnm;
+		this.custemail = custemail;
+		this.custcontact = custcontact;
+		this.normid = normid;
+		this.tdcsts = tdcsts;
+		this.isactv = isactv;
+		this.crBy = crBy;
+		this.crDt = crDt;
+		this.refdoc = refdoc;
+		this.refdocnm = refdocnm;
+	}
+	private String projectnm; 
+	private String custid;
+	private String seidref; 
+	private Date enqDt; 
+	private String custnm; 
+	private String custemail; 
+	private String custcontact;
+	private String normid;
+	private String tdcsts; 
+	private BigDecimal isactv;
+	private String crBy;
+	private Date crDt;
+	@Lob
+	private byte[] refdoc; 
+	private String refdocnm;
+	private String fileData;
+	
+	
+	
+	
+	
+}

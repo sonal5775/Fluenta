@@ -1,0 +1,54 @@
+package com.hindindustec.fluenta.hsm.masters.dto;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.Date;
+
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class ExtgrdJmDTO implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Size(max = 20, message = "EGID cannot exceed 20 characters")
+    private String egid;
+    private String catalogId;
+	private String grd;
+	private String spec;
+	private String subqlty;
+    private String extgrdnm;
+    private String normid;
+    private String extgrdsts;
+    private String ismultistd;
+    private String releasedBy;
+    private Date releasedDt;
+    private String crBy;
+    private Date crDt;
+    private String prevExtGrdNm;
+    
+	public ExtgrdJmDTO(@Size(max = 20, message = "EGID cannot exceed 20 characters") String egid, String catalogId,
+			String grd, String spec, String subqlty, String extgrdnm, String normid, String extgrdsts,
+			String ismultistd, String releasedBy, Date releasedDt, String crBy, Date crDt) {
+		super();
+		this.egid = egid;
+		this.catalogId = catalogId;
+		this.grd = grd;
+		this.spec = spec;
+		this.subqlty = subqlty;
+		this.extgrdnm = extgrdnm;
+		this.normid = normid;
+		this.extgrdsts = extgrdsts;
+		this.ismultistd = ismultistd;
+		this.releasedBy = releasedBy;
+		this.releasedDt = releasedDt;
+		this.crBy = crBy;
+		this.crDt = crDt;
+	}
+    
+    
+}

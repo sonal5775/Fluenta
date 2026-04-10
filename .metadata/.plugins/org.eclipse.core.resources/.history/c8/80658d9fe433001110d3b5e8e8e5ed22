@@ -1,0 +1,96 @@
+package com.hindindustec.fluenta.sales.dto;
+
+import java.math.BigDecimal;
+import java.util.Date;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class ImpactDto {
+
+	public ImpactDto(BigDecimal temperature, BigDecimal energyindmin, BigDecimal energyindmax, BigDecimal energyavgmin,
+			BigDecimal energyavgmax, BigDecimal saindmin, BigDecimal saindmax, BigDecimal saavgmin, BigDecimal saavgmax,
+			String direction) {
+		super();
+		this.temperature = temperature;
+		this.energyindmin = energyindmin;
+		this.energyindmax = energyindmax;
+		this.energyavgmin = energyavgmin;
+		this.energyavgmax = energyavgmax;
+		this.saindmin = saindmin;
+		this.saindmax = saindmax;
+		this.saavgmin = saavgmin;
+		this.saavgmax = saavgmax;
+		this.direction = direction;
+	}
+
+	private String seid;
+
+	private long selid;
+	
+	private String condition;
+
+	private String crBy;
+
+	private Date crDt;
+
+	private String crMacAddr;
+
+	private String degrees;
+
+	private String direction;
+
+	private BigDecimal energyavgmax;
+
+	private BigDecimal energyavgmin;
+
+	private BigDecimal energyindmax;
+
+	private BigDecimal energyindmin;
+
+	private BigDecimal isactv;
+
+	private String location;
+
+	private BigDecimal lotsize;
+
+	private String mandrel;
+
+	private String moBy;
+
+	private Date moDt;
+
+	private String moMacAddr;
+
+	private String position;
+
+	private String reserve01;
+
+	private String reserve02;
+
+	private String reserve03;
+
+	private String reserve04;
+
+	private String reserve05;
+
+	private BigDecimal saavgmax;
+
+	private BigDecimal saavgmin;
+
+	private BigDecimal saindmax;
+
+	private BigDecimal saindmin;
+
+	private String specification;
+
+	private String specimenfreq;
+
+	private BigDecimal temperature;
+
+	private String teststd;
+}

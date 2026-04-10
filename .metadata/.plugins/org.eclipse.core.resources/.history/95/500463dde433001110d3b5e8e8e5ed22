@@ -1,0 +1,127 @@
+package com.hindindustec.fluenta.sales.dto;
+
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class SalesEnquiryDto {
+
+	private String seid;
+	
+	private String btcustnm;
+	
+	private Date seDt;
+	
+	private Date seconfDt;
+	
+	private String custcntno;
+	
+	private String sests;
+
+	private String brn;
+
+	private String btcustid;
+
+	private String crBy;
+
+	private Date crDt;
+
+	private String crMacAddr;
+
+	private String custcntprsn;
+
+	private String custty;
+
+	private String custzone;
+
+	private String dischannel;
+
+	private String dispseid;
+
+	private String entrprise;
+
+	private String hdrrmks;
+
+	private String intsalesagnt;
+
+	private BigDecimal isactv;
+
+	private String kamid;
+
+	private String moBy;
+
+	private Date moDt;
+
+	private String moMacAddr;
+
+	private String mrktseg;
+
+	private Date poDt;
+
+	private String prdid;
+
+	private String projty;
+
+	private String refpuroid;
+
+	private String salesgrp;
+
+	private String sety;
+
+	private String stid;
+		
+	private BigDecimal quantity;
+	
+	private Date tdcreqdt;
+		
+	private List<SalesEnquiryItemDto> salesEnquiryItem;
+	public SalesEnquiryDto(String seid, String btcustnm, Date seDt, Date seconfDt, String custcntno, String sests,
+			String brn, String btcustid, String crBy, Date crDt, String crMacAddr, String custcntprsn, String custty,
+			String custzone, String dischannel, String dispseid, String entrprise, String hdrrmks, String intsalesagnt,
+			BigDecimal isactv, String kamid, String moBy, Date moDt, String moMacAddr, String mrktseg, Date poDt,
+			String prdid, String projty, String refpuroid, String salesgrp, String sety, String stid,
+			BigDecimal quantity) {
+		super();
+		this.seid = seid;
+		this.btcustnm = btcustnm;
+		this.seDt = seDt;
+		this.seconfDt = seconfDt;
+		this.custcntno = custcntno;
+		this.sests = sests;
+		this.brn = brn;
+		this.btcustid = btcustid;
+		this.crBy = crBy;
+		this.crDt = crDt;
+		this.crMacAddr = crMacAddr;
+		this.custcntprsn = custcntprsn;
+		this.custty = custty;
+		this.custzone = custzone;
+		this.dischannel = dischannel;
+		this.dispseid = dispseid;
+		this.entrprise = entrprise;
+		this.hdrrmks = hdrrmks;
+		this.intsalesagnt = intsalesagnt;
+		this.isactv = isactv;
+		this.kamid = kamid;
+		this.moBy = moBy;
+		this.moDt = moDt;
+		this.moMacAddr = moMacAddr;
+		this.mrktseg = mrktseg;
+		this.poDt = poDt;
+		this.prdid = prdid;
+		this.projty = projty;
+		this.refpuroid = refpuroid;
+		this.salesgrp = salesgrp;
+		this.sety = sety;
+		this.stid = stid;
+		this.quantity = quantity;
+	}
+	
+}

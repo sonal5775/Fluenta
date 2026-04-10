@@ -1,0 +1,11 @@
+package com.hindindustec.fluenta.sales.dto;
+
+import lombok.Data;
+
+
+@Data
+public class UserIdUserNmDto {
+
+	private String userid;
+	private String usernm;
+}

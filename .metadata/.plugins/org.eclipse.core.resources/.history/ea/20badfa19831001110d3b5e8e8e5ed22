@@ -1,0 +1,366 @@
+package com.hindindustec.fluenta.hsm.masters.serviceimpl;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import com.hindindustec.fluenta.hsm.masters.dto.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.masters.common.OfsStatusConstants;
+import com.hindindustec.fluenta.hsm.masters.common.config.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.masters.common.exception.CustomException;
+import com.hindindustec.fluenta.hsm.masters.customrepository.HsmPdiGradeCustRepository;
+import com.hindindustec.fluenta.hsm.masters.customrepository.HsmPdiTempCustRepo;
+import com.hindindustec.fluenta.hsm.masters.customrepository.InternalSpecChemistryCustRepo;
+import com.hindindustec.fluenta.hsm.masters.customrepository.InternalSpecCustRepository;
+import com.hindindustec.fluenta.hsm.masters.customrepository.ProductCodeCustRepository;
+import com.hindindustec.fluenta.hsm.masters.customrepository.RhfPdiCustRepository;
+import com.hindindustec.fluenta.hsm.masters.entities.GrdCm;
+import com.hindindustec.fluenta.hsm.masters.entities.WfexestepsJmEntity;
+import com.hindindustec.fluenta.hsm.masters.repository.HsmPdiTempMasterRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.HsmpdiCmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.InternalSpecChemistryMasterRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.InternalSpecJpaRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ProductCodeRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.RhfPdiGrdMastRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.WfapprovalJmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.WfexestepsJmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.WfhierarchyJmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.WfmastJmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.WfroleJmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.WfroleactionsJmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.WfusermapJmRepository;
+import com.hindindustec.fluenta.hsm.masters.service.InternalSpecService;
+
+@Service
+public class InternalSpecServiceImpl implements InternalSpecService {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(InternalSpecServiceImpl.class);
+
+	private final InternalSpecChemistryCustRepo custrepo;
+
+	private final ProductCodeCustRepository prdCodeCustRepo;
+
+	private final HsmPdiGradeCustRepository hsmPdiCustRepo;
+
+	private final RhfPdiCustRepository rhfPdiCustRepo;
+
+	private final HsmPdiTempCustRepo hsmPdiTempCustRepo;
+
+	private final InternalSpecCustRepository internalSpecCustRepository;
+
+	private final InternalSpecJpaRepository internalSpecJpaRepository;
+
+	private final DBSessionService dbSessionService;
+
+	private final InternalSpecChemistryMasterRepository internalSpecChemistryMasterRepository;
+
+	private final HsmPdiTempMasterRepository hsmPdiTempMasterRepository;
+
+	private final ProductCodeRepository productCodeRepository;
+
+	private final HsmpdiCmRepository hsmpdiCmRepository;
+
+	private final RhfPdiGrdMastRepository rhfPdiGrdMastRepository;
+
+	private WfusermapJmRepository wfusermapJmRepository;
+
+	private WfapprovalJmRepository wfapprovalJmRepository;
+
+	private WfexestepsJmRepository wfexestepsJmRepository;
+
+	private WfroleJmRepository wfroleJmRepository;
+
+	WfhierarchyJmRepository wfhierarchyJmRepository;
+
+	WfmastJmRepository wfmastJmRepository;
+
+	WfroleactionsJmRepository wfroleactionsJmRepository;
+
+	public InternalSpecServiceImpl(InternalSpecChemistryCustRepo custrepo, ProductCodeCustRepository prdCodeCustRepo,
+			HsmPdiGradeCustRepository hsmPdiCustRepo, RhfPdiCustRepository rhfPdiCustRepo,
+			HsmPdiTempCustRepo hsmPdiTempCustRepo, InternalSpecCustRepository internalSpecCustRepository,
+			InternalSpecJpaRepository internalSpecJpaRepository, DBSessionService dbSessionService,
+			InternalSpecChemistryMasterRepository internalSpecChemistryMasterRepository,
+			HsmPdiTempMasterRepository hsmPdiTempMasterRepository, ProductCodeRepository productCodeRepository,
+			HsmpdiCmRepository hsmpdiCmRepository, RhfPdiGrdMastRepository rhfPdiGrdMastRepository,
+			WfhierarchyJmRepository wfhierarchyJmRepository, WfmastJmRepository wfmastJmRepository,
+			WfroleJmRepository wfroleJmRepository, WfroleactionsJmRepository wfroleactionsJmRepository,
+			WfapprovalJmRepository wfapprovalJmRepository, WfexestepsJmRepository wfexestepsJmRepository,
+			WfusermapJmRepository wfusermapJmRepository) {
+		super();
+		this.custrepo = custrepo;
+		this.prdCodeCustRepo = prdCodeCustRepo;
+		this.hsmPdiCustRepo = hsmPdiCustRepo;
+		this.rhfPdiCustRepo = rhfPdiCustRepo;
+		this.hsmPdiTempCustRepo = hsmPdiTempCustRepo;
+		this.internalSpecCustRepository = internalSpecCustRepository;
+		this.internalSpecJpaRepository = internalSpecJpaRepository;
+		this.dbSessionService = dbSessionService;
+		this.internalSpecChemistryMasterRepository = internalSpecChemistryMasterRepository;
+		this.hsmPdiTempMasterRepository = hsmPdiTempMasterRepository;
+		this.productCodeRepository = productCodeRepository;
+		this.hsmpdiCmRepository = hsmpdiCmRepository;
+		this.rhfPdiGrdMastRepository = rhfPdiGrdMastRepository;
+		this.wfhierarchyJmRepository = wfhierarchyJmRepository;
+		this.wfmastJmRepository = wfmastJmRepository;
+		this.wfroleJmRepository = wfroleJmRepository;
+		this.wfroleactionsJmRepository = wfroleactionsJmRepository;
+		this.wfapprovalJmRepository = wfapprovalJmRepository;
+		this.wfexestepsJmRepository = wfexestepsJmRepository;
+		this.wfusermapJmRepository = wfusermapJmRepository;
+	}
+
+	@Override
+	public List<InternalSpecDto> getAllInternalGradeDetails() {
+		return internalSpecCustRepository.getAllInternalGradeDetails();
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<InternalSpecDto> saveInternalGradeDetails(List<InternalSpecDto> list) {
+		try {
+			dbSessionService.setSessionInfo(this.getClass().getName());
+
+			for (InternalSpecDto dto : list) {
+				if (dto.getGrdid() != null && !dto.getGrdid().trim().isEmpty()) {
+					Optional<GrdCm> internalGrade = internalSpecJpaRepository.findById(dto.getGrdid().trim());
+					GrdCm entity = new GrdCm();
+					if (internalGrade.isPresent()) {
+						entity = internalGrade.get();
+						entity.setMoBy(ClientIpUtils.getClient());
+						entity.setMoDt(new Date());
+						entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+					} else {
+
+						entity.setGrdid(dto.getGrdid().trim());
+						entity.setCrBy(ClientIpUtils.getClient());
+						entity.setCrDt(new Date());
+						entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+					}
+					entity.setGrddesc(dto.getGrddesc());
+					entity.setGrdnm(dto.getGrdnm());
+					entity.setGrdgrp(dto.getGrdgrp());
+					entity.setGrdty(dto.getGrdty());
+					entity.setEnduse(dto.getEnduse());
+					entity.setIsactv(BigDecimal.ONE);
+					entity.setGrdsts(dto.getGrdsts());
+					entity.setTdcrefid(dto.getTdcrefid());
+					entity.setReqBy(dto.getReqBy());
+					entity.setReqDt(dto.getReqDt());
+					internalSpecJpaRepository.save(entity);
+				}
+			}
+
+			return list;
+		} catch (Exception e) {
+			throw new CustomException("Error while saving internal grade details");
+		}
+
+	}
+
+	@Override
+	public List<InternalSpecDto> getStatusRelatedInternalSpec(String status) {
+		return internalSpecCustRepository.getStatusRelatedInternalSpec(status);
+	}
+
+	@Override
+	public ValidateInternalSpecDto validateInterspec(ReleaseRequestDto dto) {
+		ValidateInternalSpecDto validatedto = new ValidateInternalSpecDto();
+
+		// for chemistry
+		InternalspecChemistryRequestDto chemdto = new InternalspecChemistryRequestDto(dto.getGrdid(), null);
+		validatedto.setChemtabledata(custrepo.getAllChemistry(chemdto));
+
+		// for product code
+		ProductCodeRequest prdcdreq = new ProductCodeRequest(null, dto.getGrdid(), null);
+		validatedto.setProductcodetabledata(prdCodeCustRepo.validateProductCode(prdcdreq));
+
+		// for hsm pdi grade
+		InternalSpecHsmPdiGradeMasterRequest pdigrdreq = new InternalSpecHsmPdiGradeMasterRequest(dto.getGrdid(), null, "HSM1", null);
+		validatedto.setHsmpdigrade(hsmPdiCustRepo.getHsmPdiGradeMasterDetails(pdigrdreq));
+
+		// for rhf pdi
+		InternalSpecRhfPdiGrdMastRequest rhfpdigrdmaster = new InternalSpecRhfPdiGrdMastRequest(dto.getGrdid(), "HSM1");
+		validatedto.setRhfpdigrade(rhfPdiCustRepo.getRhfPdiDetails(rhfpdigrdmaster));
+
+		// for pdi temp
+		InternalSpecHsmPdiTempSearchReqDto temppdimaster = new InternalSpecHsmPdiTempSearchReqDto("HSM1", dto.getGrdid(), null, null);
+		validatedto.setTemppdigrade(hsmPdiTempCustRepo.getHsmDataOnSearch(temppdimaster));
+
+		return validatedto;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public boolean releaseInternalSpecData(ReleaseRequestDto dto) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		long chemistryCount = internalSpecChemistryMasterRepository.findCountById(dto.getGrdid());
+		long hsmPdiTempMasterCount = hsmPdiTempMasterRepository.findCountById(dto.getGrdid());
+		long productCodeCount = productCodeRepository.findCountById(dto.getGrdid());
+		long hsmPdiGradeMasterCount = hsmpdiCmRepository.findCountById(dto.getGrdid());
+		long rhfPdiGradeMasterCount = rhfPdiGrdMastRepository.findCountById(dto.getGrdid());
+		if (chemistryCount > 0 && hsmPdiTempMasterCount > 0 && productCodeCount > 0 && hsmPdiGradeMasterCount > 0
+				&& rhfPdiGradeMasterCount > 0) {
+			GrdCm grdCm = null;
+			Optional<GrdCm> optional = internalSpecJpaRepository.findByGrdid(dto.getGrdid());
+			if (optional.isPresent()) {
+				grdCm = optional.get();
+				grdCm.setMoBy(ClientIpUtils.getClient());
+				grdCm.setMoDt(new Date());
+				grdCm.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+			} else {
+				LOGGER.info("InternalSpecServiceImpl:ReleaseInternalSpecData:Entity Not Found");
+				return false;
+			}
+			grdCm.setApprBy(dto.getReleasedby());
+			grdCm.setApprDt(dto.getReleaseddate());
+			grdCm.setGrdsts(OfsStatusConstants.IS_STATUS_RELEASED);
+			internalSpecJpaRepository.save(grdCm);
+			LOGGER.info("InternalSpecServiceImpl:ReleaseInternalSpecData:GradeStatusUpdatedSuccessfully");
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	@Override
+	@Transactional
+	public void validateWithInternalSpecAndChangeStatus(ReleaseRequestDto dto) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<InternalSpecDto> specList = dto.getInternalSpecList();
+		InternalSpecDto specDto = specList.get(0);
+		Optional<GrdCm> internalGrade = internalSpecJpaRepository.findByGrdid(specDto.getGrdid());
+		GrdCm grdCm = null;
+		if(internalGrade.isPresent()) {
+			grdCm = internalGrade.get();
+			if(OfsStatusConstants.IS_WF_STATUS_APPROVAL.equals(grdCm.getGrdsts())) {
+				return;
+			}
+		}
+		long chemistryCount = internalSpecChemistryMasterRepository.findCountById(specDto.getGrdid());
+		long hsmPdiTempMasterCount = hsmPdiTempMasterRepository.findCountById(specDto.getGrdid());
+		long productCodeCount = productCodeRepository.findCountById(specDto.getGrdid());
+		long hsmPdiGradeMasterCount = hsmpdiCmRepository.findCountById(specDto.getGrdid());
+		long rhfPdiGradeMasterCount = rhfPdiGrdMastRepository.findCountById(specDto.getGrdid());
+		LOGGER.info("data found chemistryCount {}>>"+chemistryCount+ "hsmPdiTempMasterCount {}>>>>"+hsmPdiTempMasterCount+
+		"productCodeCount{}>>>"+productCodeCount+"hsmPdiGradeMasterCount{}>>>>"+hsmPdiGradeMasterCount+"rhfPdiGradeMasterCount {}>>" +
+				rhfPdiGradeMasterCount);
+
+		if (chemistryCount > 0 || productCodeCount > 0 || hsmPdiGradeMasterCount > 0
+				|| rhfPdiGradeMasterCount > 0 || hsmPdiTempMasterCount > 0) {
+			for (InternalSpecDto item : dto.getInternalSpecList()) {
+				if(grdCm !=null && (grdCm.getGrdsts() ==null || OfsStatusConstants.TDC_STATUS_NEW_REQUEST.equals(grdCm.getGrdsts()))) {
+					item.setGrdsts(OfsStatusConstants.IN_PROGRESS);
+					saveInternalGradeDetails(dto.getInternalSpecList());
+				}
+			}
+		}
+
+		if (hsmPdiTempMasterCount > 0 && chemistryCount > 0) {
+			for (InternalSpecDto item : dto.getInternalSpecList()) {
+				if(grdCm !=null && OfsStatusConstants.IN_PROGRESS.equals(grdCm.getGrdsts())) {
+					item.setGrdsts(OfsStatusConstants.TDC_WF_STATUS_PENDING);
+					saveInternalGradeDetails(dto.getInternalSpecList());
+				}
+			}
+		}
+	}
+
+	@Override
+	public DashboardKpiDto getKpiCount() {
+		return internalSpecCustRepository.getKpiCount();
+	}
+
+	@Override
+	public EligibilityDto isElligible(String userid, String grdid) {
+		EligibilityDto eligibilityDto = new EligibilityDto();
+		eligibilityDto.setIsUserElligible(false);
+		Long roleId = wfusermapJmRepository.findRoleIdByUserIdAndWorkFlowId(OfsConstants.INT_SPEC_WF_ID, userid);
+		LOGGER.info("role id>>{}", roleId);
+		String roleName = wfroleJmRepository.findRoleNameByWorkFlowIdAndRoleId(OfsConstants.INT_SPEC_WF_ID, roleId);
+		LOGGER.info("role name>>{}", roleName);
+		String exeId = wfapprovalJmRepository.getExecutionIdByWfidAndGrdId(OfsConstants.INT_SPEC_WF_ID, grdid);
+		LOGGER.info("exe id>>{}", exeId);
+		List<WfexestepsJmEntity> listOfSteps = wfexestepsJmRepository.findLastStepByExecutionId(exeId);
+		LOGGER.info("steps>>{}", listOfSteps);
+		if (!listOfSteps.isEmpty()) {
+			WfexestepsJmEntity entity = listOfSteps.get(0);
+			if (entity != null) {
+				if (entity.getNextwfroleid().longValue() == roleId) {
+					eligibilityDto.setIsUserElligible(true);
+					eligibilityDto.setPrevComment(entity.getStepmsgbody());
+					eligibilityDto.setCrBy(entity.getCrBy());
+					eligibilityDto.setCrDt(entity.getCrDt());
+					eligibilityDto.setMoBy(entity.getMoBy());
+					eligibilityDto.setMoDt(entity.getMoDt());
+					eligibilityDto.setRoleName(roleName);
+				} else {
+					eligibilityDto.setIsUserElligible(false);
+					eligibilityDto.setPrevComment(entity.getStepmsgbody());
+					eligibilityDto.setCrBy(entity.getCrBy());
+					eligibilityDto.setCrDt(entity.getCrDt());
+					eligibilityDto.setMoBy(entity.getMoBy());
+					eligibilityDto.setMoDt(entity.getMoDt());
+					eligibilityDto.setRoleName(roleName);
+				}
+			}
+		} else {
+			if (OfsConstants.INITIATOR.equals(roleName)) {
+				eligibilityDto.setIsUserElligible(true);
+			}
+		}
+		if (exeId == null && (OfsConstants.INITIATOR.equals(roleName))) {
+				eligibilityDto.setIsUserElligible(true);
+			
+		}
+
+		LOGGER.info("Elligible>>{}", eligibilityDto);
+		return eligibilityDto;
+	}
+
+	@Override
+	public List<IsApprovalFlowRemarksDto> getPreviusMessages(InternalSpecDto dto) {
+		List<IsApprovalFlowRemarksDto> remarksList = new ArrayList<>();
+		String exeId = wfapprovalJmRepository.getExecutionIdByWfidAndGrdId(OfsConstants.INT_SPEC_WF_ID, dto.getGrdid());
+		List<WfexestepsJmEntity> steps = wfexestepsJmRepository.findLastStepByExecutionId(exeId);
+		for (WfexestepsJmEntity entity : steps) {
+			IsApprovalFlowRemarksDto remarksDto = new IsApprovalFlowRemarksDto();
+			remarksDto.setCrBy(entity.getCrBy());
+			remarksDto.setCrDt(entity.getCrDt());
+			remarksDto.setStepmsgbody(entity.getStepmsgbody());
+			BigDecimal nextwfroleid = entity.getNextwfroleid();
+			String roleName = this.wfroleJmRepository.findRoleNameByWorkFlowIdAndRoleId(OfsConstants.INT_SPEC_WF_ID,
+					nextwfroleid.longValue());
+			remarksDto.setNextDept(roleName);
+			remarksList.add(remarksDto);
+		}
+		return remarksList;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public void updateIsStatus(InternalSpecDto dto) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		if (dto.getGrdid() != null) {
+			GrdCm entity = null;
+			Optional<GrdCm> internalGrade = internalSpecJpaRepository.findById(dto.getGrdid().trim());
+			if (internalGrade.isPresent()) {
+				entity = internalGrade.get();
+				entity.setGrdsts(dto.getGrdsts());
+				internalSpecJpaRepository.save(entity);
+			} else {
+				LOGGER.info("IS-SERVICEIMPL>>345 {}", "Entity not found");
+			}
+		}
+	}
+
+}

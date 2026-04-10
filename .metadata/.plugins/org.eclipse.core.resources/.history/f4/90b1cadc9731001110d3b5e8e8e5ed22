@@ -1,0 +1,138 @@
+package com.hindindustec.fluenta.hsm.masters.serviceimpl;
+
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.common.config.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.masters.customrepository.TransferBarThicknessMasterCustRepository;
+import com.hindindustec.fluenta.hsm.masters.dto.TransferBarThicknessMasterDto;
+import com.hindindustec.fluenta.hsm.masters.dto.TransferBarThicknessMasterRequest;
+import com.hindindustec.fluenta.hsm.masters.entities.HsmtrnbarCm;
+import com.hindindustec.fluenta.hsm.masters.entities.HsmtrnbarCmPK;
+import com.hindindustec.fluenta.hsm.masters.repository.HsmtrnbarCmRespository;
+import com.hindindustec.fluenta.hsm.masters.service.TransferBarThicknessMasterService;
+
+import jakarta.persistence.EntityManager;
+
+@Service
+public class TransferBarThicknessMasterServiceImpl implements TransferBarThicknessMasterService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(TransferBarThicknessMasterServiceImpl.class);
+
+    private final TransferBarThicknessMasterCustRepository transferBarThicknessMasterCustRepository;
+
+    private final DBSessionService dbSessionService;
+
+    private final HsmtrnbarCmRespository hsmtrnbarCmRespository;
+
+    private EntityManager entityManager;
+
+    public TransferBarThicknessMasterServiceImpl(
+            TransferBarThicknessMasterCustRepository transferBarThicknessMasterCustRepository,
+            DBSessionService dbSessionService, HsmtrnbarCmRespository hsmtrnbarCmRespository, EntityManager entityManager) {
+        super();
+        this.transferBarThicknessMasterCustRepository = transferBarThicknessMasterCustRepository;
+        this.dbSessionService = dbSessionService;
+        this.hsmtrnbarCmRespository = hsmtrnbarCmRespository;
+        this.entityManager = entityManager;
+    }
+
+    public List<TransferBarThicknessMasterDto> getTransferBarThicknessMasterDetails(TransferBarThicknessMasterRequest request) {
+        LOGGER.info("Fetching Transfer Bar Thickness Master details based on selected productionLine: {}", request);
+        return transferBarThicknessMasterCustRepository.getTransferBarThicknessMasterDetails(request);
+    }
+
+    @Override
+    public List<String> getProductionLine() {
+        LOGGER.info("Fetching ProductionLine list");
+        return transferBarThicknessMasterCustRepository.getProductionLine();
+    }
+
+    @Override
+    @Transactional()
+    public List<TransferBarThicknessMasterDto> saveOrUpdateTransferBarThikMaster(TransferBarThicknessMasterRequest request) {
+        dbSessionService.setSessionInfo(this.getClass().getName());
+        LOGGER.info("Starting saveOrUpdateTransferBarThikMaster with request.getTransferBarThkCurr: {}", request);
+        if (request != null) {
+            //deleting previous row
+            Date modifiedDate = null;
+            String modifiedBy = null;
+            String modifiedMacAddr = null;
+            Date createdDate = null;
+            String createdBy = null;
+            String createdMacAddr = null;
+            if (request.getTrasferBarThkPrev() != null) {
+                HsmtrnbarCmPK pkPrev = new HsmtrnbarCmPK();
+                pkPrev.setPlid(request.getTrasferBarThkPrev().getPlid());
+                pkPrev.setHrthkmin(request.getTrasferBarThkPrev().getHrthkmin());
+                pkPrev.setHrwdtmin(request.getTrasferBarThkPrev().getHrwdtmin());
+                Optional<HsmtrnbarCm> byId = hsmtrnbarCmRespository.findById(pkPrev);
+                if (byId.isPresent()) {
+					modifiedDate = new Date();
+					modifiedBy = ClientIpUtils.getClient();
+					modifiedMacAddr = ClientIpUtils.getClientIpAddress();
+					createdDate = byId.get().getCrDt();
+					createdBy = byId.get().getCrBy();
+					createdMacAddr = byId.get().getCrMacAddr();
+                    hsmtrnbarCmRespository.deleteById(pkPrev);
+                }
+            }
+
+            HsmtrnbarCmPK pkCurr = new HsmtrnbarCmPK();
+            HsmtrnbarCm entity = new HsmtrnbarCm();
+            Optional<HsmtrnbarCm> res = hsmtrnbarCmRespository.findById(pkCurr);
+            if (res.isPresent()) {
+                entity = res.get();
+                entity.setMoBy(ClientIpUtils.getClient());
+                entity.setMoDt(new Date());
+                entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+            } else {
+                pkCurr.setPlid(request.getTransferBarThkCurr().getPlid());
+                pkCurr.setHrthkmin(request.getTransferBarThkCurr().getHrthkmin());
+                pkCurr.setHrwdtmin(request.getTransferBarThkCurr().getHrwdtmin());
+                entity.setId(pkCurr);
+            }
+            entity.setHrthkmax(request.getTransferBarThkCurr().getHrthkmax());
+            entity.setHrwdtmax(request.getTransferBarThkCurr().getHrwdtmax());
+            entity.setTrnbarthk(request.getTransferBarThkCurr().getTrnbarthk());
+            entity.setIsactv(request.getTransferBarThkCurr().getIsactv());
+            createdDate = createdDate == null ? new Date() : createdDate;
+            createdBy = createdBy == null ? ClientIpUtils.getClient() : createdBy;
+            createdMacAddr = createdMacAddr == null ? ClientIpUtils.getClientIpAddress() : createdMacAddr;
+            modifiedDate = modifiedDate != null ? modifiedDate : null;
+            modifiedBy = modifiedBy != null ? modifiedBy : null;
+            modifiedMacAddr = modifiedMacAddr != null ? modifiedMacAddr : null;
+
+            hsmtrnbarCmRespository.save(entity);
+            transferBarThicknessMasterCustRepository.updateCrdtAndModt(entity, modifiedDate, modifiedBy, modifiedMacAddr, createdDate, createdBy, createdMacAddr);
+            return request.getTrasferBarThkList();
+        }
+        return Collections.emptyList();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    private void updateCrdtAndModt(HsmtrnbarCm entity, Date modifiedDate, String modifiedBy, String modifiedMacAddr, Date date, String client, String clientIpAddress) {
+        dbSessionService.setSessionInfo(this.getClass().getName());
+        jakarta.persistence.Query q = entityManager
+                .createQuery("UPDATE HsmtrnbarCm SET crDt= :currentDate,crBy= :client,crMacAddr= :clientIpAddress,moDt= :modifiedDate,moBy= :modifiedBy,moMacAddr= :modifiedMacAddr" + " WHERE id.plid = :plid" + " AND id.hrthkmin = :thkmin"
+                        + " AND id.hrwdtmin = :wdtmin");
+        q.setParameter("plid", entity.getId().getPlid());
+        q.setParameter("thkmin", entity.getId().getHrthkmin());
+        q.setParameter("wdtmin", entity.getId().getHrwdtmin());
+        q.setParameter("modifiedDate", modifiedDate);
+        q.setParameter("modifiedBy", modifiedBy);
+        q.setParameter("modifiedMacAddr", modifiedMacAddr);
+        q.setParameter("currentDate", date);
+        q.setParameter("client", client);
+        q.setParameter("clientIpAddress", clientIpAddress);
+        q.executeUpdate();
+    }
+}

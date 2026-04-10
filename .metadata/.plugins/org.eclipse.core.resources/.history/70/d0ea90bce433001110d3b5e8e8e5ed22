@@ -1,0 +1,119 @@
+package com.hindindustec.fluenta.sales.dto;
+
+import java.math.BigDecimal;
+import java.util.Date;
+
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Setter
+@Getter
+@NoArgsConstructor
+public class OrderBookViewDto {
+	private String soid;
+	private long solid;
+	private String prdid;
+	private BigDecimal soqty;
+	private BigDecimal soqtymax;
+	private BigDecimal poPrQty;
+	private String tdcid;
+	private String stcustnm;
+	private String prdcdeid;
+	private Date sorelDt;
+	private String docty;
+	private String erpsosts;
+	private BigDecimal solmodctr;
+	private Date sopromDt;
+	private Date custreqDt;
+	private String incoterm;
+	private String frtterm;
+	private String markinstn;
+	private String packinstn;
+	private String loadinstn;
+	private String eqSpec;
+	private String eqSpecGroup;
+	private String eqSpecSubGroup;
+	private Date lcexpDt;
+	private String sosegmt;
+	// SOLBOMD_ST
+	private BigDecimal thkaim;
+	private BigDecimal wdtaim;
+	private BigDecimal lenaim;
+	private String grdid;
+	// SOH_ST
+	private String btcustid;
+	private String erpStid;
+	// StCs
+	private String stid;
+	// solst
+	private String sosts;
+	private BigDecimal dispatchWgt;
+	private BigDecimal stockWgt;
+	private BigDecimal scheduledQty;
+	private BigDecimal availableWgt;
+	private BigDecimal rfdWgt;
+	private BigDecimal btd;
+	private BigDecimal btp;
+	private BigDecimal btrQty;
+	private String delshdl;
+	private String externalGrade;
+	private String closerem;
+
+	private BigDecimal calBtr;
+	private BigDecimal balBill;
+
+	public OrderBookViewDto(String soid, long solid, String prdid, BigDecimal soqty, BigDecimal soqtymax,
+			BigDecimal poPrQty, String tdcid, String stcustnm, String prdcdeid, Date sorelDt, String docty,
+			String erpsosts, BigDecimal solmodctr, Date sopromDt, Date custreqDt, String incoterm, String frtterm,
+			String markinstn, String packinstn, String loadinstn, String eqSpec, String eqSpecGroup,
+			String eqSpecSubGroup, Date lcexpDt, String sosegmt, BigDecimal thkaim, BigDecimal wdtaim,
+			BigDecimal lenaim, String grdid, String btcustid, String erpStid, String stid, String sosts,
+			BigDecimal dispatchWgt, BigDecimal stockWgt, BigDecimal scheduledQty, BigDecimal availableWgt,
+			BigDecimal rfdWgt, String delshdl, String externalGrade, String closerem
+	) {
+		super();
+		this.soid = soid;
+		this.solid = solid;
+		this.prdid = prdid;
+		this.soqty = soqty;
+		this.soqtymax = soqtymax;
+		this.poPrQty = poPrQty;
+		this.tdcid = tdcid;
+		this.stcustnm = stcustnm;
+		this.prdcdeid = prdcdeid;
+		this.sorelDt = sorelDt;
+		this.docty = docty;
+		this.erpsosts = erpsosts;
+		this.solmodctr = solmodctr;
+		this.sopromDt = sopromDt;
+		this.custreqDt = custreqDt;
+		this.incoterm = incoterm;
+		this.frtterm = frtterm;
+		this.markinstn = markinstn;
+		this.packinstn = packinstn;
+		this.loadinstn = loadinstn;
+		this.eqSpec = eqSpec;
+		this.eqSpecGroup = eqSpecGroup;
+		this.eqSpecSubGroup = eqSpecSubGroup;
+		this.lcexpDt = lcexpDt;
+		this.sosegmt = sosegmt;
+		this.thkaim = thkaim;
+		this.wdtaim = wdtaim;
+		this.lenaim = lenaim;
+		this.grdid = grdid;
+		this.btcustid = btcustid;
+		this.erpStid = erpStid;
+		this.stid = stid;
+		this.sosts = sosts;
+		this.dispatchWgt = dispatchWgt;
+		this.stockWgt = stockWgt;
+		this.scheduledQty = scheduledQty;
+		this.availableWgt = availableWgt;
+		this.rfdWgt = rfdWgt;
+		this.delshdl = delshdl;
+		this.externalGrade = externalGrade;
+		this.closerem = closerem;
+	}
+
+}

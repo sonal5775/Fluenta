@@ -1,0 +1,27 @@
+api.env = Development
+#DEV
+spring.datasource.url = jdbc:oracle:thin:@45.114.142.57:1522:OFSDV
+spring.datasource.username = ENC(MTYrTYysCZxmuIYC9s4oZvIGmB3h0S6n8c5HyP3U2sj0p/TepaLAvCNo4yIfndEz)
+spring.datasource.password = ENC(MTYrTYysCZxmuIYC9s4oZvIGmB3h0S6n8c5HyP3U2sj0p/TepaLAvCNo4yIfndEz)
+
+sap.int.url = http://115.243.51.138:50000/RESTAdapter
+sap.int.username = ENC(O1M8rbWM0rc1lRaOFqjfjdqjARr85e7jD65fPQT9A9OYnBp0gogxeFrRVH15jwKO)
+sap.int.password = ENC(Fq/bQz+/3G/tvIvmC8BRxTQh2bRUm5Lg4s3hcaDHiD5PJTYCTVPZG5fzR9hVxwMO)
+
+sap.utility.url = http://115.243.51.138:50000/RESTAdapter
+sap.quality.url = http://115.243.51.138:50000/RESTAdapter
+
+spring.datasource.driver-class-name = oracle.jdbc.driver.OracleDriver
+
+logging.level.org.springframework.data.jpa=DEBUG
+
+logging.level.root=INFO
+
+#Spring Boot Admin Config
+spring.boot.admin.client.instance.service-base-url = http://45.114.142.57:8494
+spring.boot.admin.client.url = http://45.114.142.57:8444
+
+#Eureka Config
+eureka.client.service-url.defaultZone=http://45.114.142.57:8761/serviceregistry/eureka/
+
+api.auth.service.url = http://45.114.142.57:8484/auth/validate

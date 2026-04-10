@@ -1,0 +1,69 @@
+package com.hindindustec.fluenta.hsm.masters.dto;
+
+import java.math.BigDecimal;
+import java.util.Date;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
+@Setter
+@ToString
+public class HsmPdiTempMasterDto {
+	private String grdid; // internal grade
+	private BigDecimal hrthkmin; //HR Thickness Range(mm) min
+	private BigDecimal inIthrthkmin;
+	private BigDecimal hrthkmax; //HR Thickness Range(mm) max
+	private BigDecimal hrwdtmin; //HR Width Range(mm) min
+	private BigDecimal inIthrwdtmin;
+	private BigDecimal hrwdtmax; //HR Width Range(mm) max
+	private BigDecimal furextemp; //Fur Exit Deg C
+	private BigDecimal rmextemp; // RM Exit Deg C
+	private BigDecimal fmextemp; // FM Exit Deg C
+	private BigDecimal fmentemp; //FM Entry Deg C
+	private BigDecimal fmtemptgt; //FM Temp Target Deg C
+	private BigDecimal fmalttemptgt; //FM Alt Temp Target Deg C
+	private BigDecimal midtemp; // Mid Temp Target Deg C
+	private BigDecimal fmextemppvetol; // FM Exit +Ve Tol. Deg C
+	private BigDecimal fmextempnvetol; //FM Exit -Ve Tol. Deg C
+	private BigDecimal coilalttemptgt; //Coiling Alt. Temp Target Deg C
+
+	private BigDecimal coiltemppvetol; //Coiling T Tol. +Ve Tol. Deg C
+	private BigDecimal coiltempnvetol; // Coiling T Tol. -Ve Tol. Deg C
+	private BigDecimal coiltemp; //Coiling Temp Target Deg C
+	private BigDecimal isactv;
+	private Date crDt;
+
+	public HsmPdiTempMasterDto(String grdid, BigDecimal hrthkmin, BigDecimal hrthkmax, BigDecimal hrwdtmin,
+							   BigDecimal hrwdtmax, BigDecimal furextemp, BigDecimal rmextemp, BigDecimal fmextemp, BigDecimal fmentemp,
+							   BigDecimal fmtemptgt, BigDecimal fmalttemptgt, BigDecimal midtemp, BigDecimal fmextemppvetol,
+							   BigDecimal fmextempnvetol, BigDecimal coilalttemptgt, BigDecimal coiltemppvetol, BigDecimal coiltempnvetol,
+							   BigDecimal coiltemp, BigDecimal isactv,Date crDt) {
+		super();
+		this.grdid = grdid;
+		this.hrthkmin = hrthkmin;
+		this.hrthkmax = hrthkmax;
+		this.hrwdtmin = hrwdtmin;
+		this.hrwdtmax = hrwdtmax;
+		this.furextemp = furextemp;
+		this.rmextemp = rmextemp;
+		this.fmextemp = fmextemp;
+		this.fmentemp = fmentemp;
+		this.fmtemptgt = fmtemptgt;
+		this.fmalttemptgt = fmalttemptgt;
+		this.midtemp = midtemp;
+		this.fmextemppvetol = fmextemppvetol;
+		this.fmextempnvetol = fmextempnvetol;
+		this.coilalttemptgt = coilalttemptgt;
+		this.coiltemppvetol = coiltemppvetol;
+		this.coiltempnvetol = coiltempnvetol;
+		this.coiltemp = coiltemp;
+		this.isactv = isactv;
+		this.crDt = crDt;
+	}
+}

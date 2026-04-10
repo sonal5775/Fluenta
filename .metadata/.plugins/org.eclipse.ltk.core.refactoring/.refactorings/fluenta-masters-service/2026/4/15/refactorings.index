@@ -1,0 +1,7 @@
+1775453565551	Extract method 'extractedIfExtGrdNmPresent'
+1775453646050	Extract method 'extractedExtMultiStdGrade'
+1775460742485	Extract method 'extractedIfExternalGrdPresent'
+1775460796003	Extract method 'extractedIfMasterElementPresent'
+1775460856439	Extract method 'extractedIfExtdGrdNormChemPresent'
+1775466169017	Extract method 'extractedThickWdtTolerance'
+1775468542767	Extract method 'extractedIfRequest'

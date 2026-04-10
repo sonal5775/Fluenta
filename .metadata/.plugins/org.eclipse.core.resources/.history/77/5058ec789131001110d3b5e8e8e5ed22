@@ -1,0 +1,195 @@
+package com.hindindustec.fluenta.hsm.masters.serviceimpl;
+
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.common.config.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.masters.customrepository.HsmPdiTempMasterCustRepo;
+import com.hindindustec.fluenta.hsm.masters.customrepository.ProdLineRepo;
+import com.hindindustec.fluenta.hsm.masters.dto.HsmPdiTempMasterDto;
+import com.hindindustec.fluenta.hsm.masters.dto.HsmPdiTempSearchReqDto;
+import com.hindindustec.fluenta.hsm.masters.entities.HsmtempCm;
+import com.hindindustec.fluenta.hsm.masters.entities.HsmtempCmPK;
+import com.hindindustec.fluenta.hsm.masters.repository.GradecmRepo;
+import com.hindindustec.fluenta.hsm.masters.repository.HsmPdiTempMasterRepository;
+import com.hindindustec.fluenta.hsm.masters.service.HsmPdiTempMasterService;
+
+import jakarta.persistence.EntityManager;
+
+@Service
+public class HsmPdiTempMasterServiceImpl implements HsmPdiTempMasterService {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(HsmPdiTempMasterServiceImpl.class);
+
+	private HsmPdiTempMasterRepository hsmPdiTempMasterRepository;
+
+	private DBSessionService dbSessionService;
+
+	private ProdLineRepo prodLineRepo;
+
+	private GradecmRepo gradecmRepo;
+
+	private HsmPdiTempMasterCustRepo hsmPdiTempMasterCustRepo;
+
+	private EntityManager entityManager;
+
+	public HsmPdiTempMasterServiceImpl(HsmPdiTempMasterRepository hsmPdiTempMasterRepository, DBSessionService dbSessionService,
+			ProdLineRepo prodLineRepo, GradecmRepo gradecmRepo, HsmPdiTempMasterCustRepo hsmPdiTempMasterCustRepo,
+			EntityManager entityManager) {
+		super();
+		this.hsmPdiTempMasterRepository = hsmPdiTempMasterRepository;
+		this.dbSessionService = dbSessionService;
+		this.prodLineRepo = prodLineRepo;
+		this.gradecmRepo = gradecmRepo;
+		this.hsmPdiTempMasterCustRepo = hsmPdiTempMasterCustRepo;
+		this.entityManager = entityManager;
+	}
+
+	@Override
+	public List<String> getAllHsm() {
+		LOGGER.info("Fetching All hsm name details");
+		return prodLineRepo.getAllHsmName();
+	}
+
+	@Override
+	public List<String> getAllGrdid() {
+		LOGGER.info("Fetching All grade name details");
+		Optional<List<String>> allGrdid = gradecmRepo.getAllGrdid();
+		if(allGrdid.isPresent()) {
+			return allGrdid.get();
+			
+		}
+		return Collections.emptyList();
+	}
+
+	@Override
+	public List<HsmPdiTempMasterDto> onSearchGetHsmTempData(String hsmName) {
+		LOGGER.info("Retriving all the data of hsm pdi temp code: {}", hsmName);
+		return hsmPdiTempMasterCustRepo.getHsmDataOnSearch(hsmName);
+	}
+
+	HsmPdiTempMasterDto mapToDto(HsmtempCm e) {
+		LOGGER.info("Starting mapToDto with entity: {}", e);
+		HsmPdiTempMasterDto dto = new HsmPdiTempMasterDto();
+		dto.setGrdid(e.getId().getGrdid());
+		dto.setHrthkmin(e.getId().getHrthkmin());
+		dto.setHrthkmax(e.getHrthkmax());
+		dto.setHrwdtmin(e.getId().getHrwdtmin());
+		dto.setHrwdtmax(e.getHrwdtmax());
+		dto.setFurextemp(e.getFurextemp());
+		dto.setRmextemp(e.getRmextemp());
+		dto.setFmextemp(e.getFmextemp());
+		dto.setFmentemp(e.getFmentemp());
+		dto.setFmtemptgt(e.getFmtemptgt());
+		dto.setFmalttemptgt(e.getFmalttemptgt());
+		dto.setMidtemp(e.getMidtemp());
+		dto.setFmextemppvetol(e.getFmextemppvetol());
+		dto.setFmextempnvetol(e.getFmextempnvetol());
+		dto.setCoilalttemptgt(e.getCoilalttemptgt());
+		dto.setCoiltemppvetol(e.getCoiltemppvetol());
+		dto.setCoiltempnvetol(e.getCoiltempnvetol());
+		dto.setCoiltemp(e.getCoiltemp());
+		dto.setIsactv(e.getIsactv());
+		return dto;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	@SuppressWarnings("java:S1854)
+	public HsmtempCm updateHsmPdiTempGrdMast(HsmPdiTempSearchReqDto request) {
+		LOGGER.info("Starting updateHsmPdiTempGrdMast with dto: {}", request);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		HsmtempCm save = null;
+
+		for (HsmPdiTempMasterDto dto : request.getRowData()) {
+			HsmtempCmPK pk = new HsmtempCmPK();
+			pk.setGrdid(dto.getGrdid());
+			pk.setPlid(request.getHsmName());
+			pk.setHrthkmin(dto.getInIthrthkmin());
+			pk.setHrwdtmin(dto.getInIthrwdtmin());
+			Optional<HsmtempCm> optional = hsmPdiTempMasterRepository.findById(pk);
+			String createdBy = null;
+			Date createdDt = null;
+			String createdMacAddress = null;
+			String modifiedBy = null;
+			Date modifiedDt = null;
+			String modifiedMacAddress = null;
+
+			if (optional.isPresent()) {
+				HsmtempCm hsmtempCm = optional.get();
+				createdDt = hsmtempCm.getCrDt();
+				createdBy = hsmtempCm.getCrBy();
+				createdMacAddress = hsmtempCm.getCrMacAddr();
+				modifiedBy = ClientIpUtils.getClient();
+				modifiedDt = new Date();
+				modifiedMacAddress = ClientIpUtils.getClientIpAddress();
+				hsmPdiTempMasterRepository.deleteById(pk);
+			}else{
+				// If no existing record, use new values
+				createdBy = ClientIpUtils.getClient();
+				createdDt = new Date();
+				createdMacAddress = ClientIpUtils.getClientIpAddress();
+			}
+			pk = new HsmtempCmPK();
+			pk.setGrdid(dto.getGrdid());
+			pk.setPlid(request.getHsmName());
+			pk.setHrthkmin(dto.getHrthkmin());
+			pk.setHrwdtmin(dto.getHrwdtmin());
+
+			HsmtempCm entity = new HsmtempCm();
+			entity.setId(pk);
+			entity.setHrthkmax(dto.getHrthkmax());
+			entity.setHrwdtmax(dto.getHrwdtmax());
+			entity.setFurextemp(dto.getFurextemp());
+			entity.setRmextemp(dto.getRmextemp());
+			entity.setFmextemp(dto.getFmextemp());
+			entity.setFmentemp(dto.getFmentemp());
+			entity.setFmtemptgt(dto.getFmtemptgt());
+			entity.setFmalttemptgt(dto.getFmalttemptgt());
+			entity.setMidtemp(dto.getMidtemp());
+			entity.setFmextemppvetol(dto.getFmextemppvetol());
+			entity.setFmextempnvetol(dto.getFmextempnvetol());
+			entity.setCoilalttemptgt(dto.getCoilalttemptgt());
+			entity.setCoiltemppvetol(dto.getCoiltemppvetol());
+			entity.setCoiltempnvetol(dto.getCoiltempnvetol());
+			entity.setCoiltemp(dto.getCoiltemp());
+			entity.setIsactv(dto.getIsactv());
+			entity.setCrBy(createdBy);
+			entity.setCrDt(createdDt);
+			entity.setCrMacAddr(createdMacAddress);
+			entity.setMoBy(modifiedBy);
+			entity.setMoDt(modifiedDt);
+			entity.setMoMacAddr(modifiedMacAddress);
+			save = hsmPdiTempMasterRepository.save(entity);
+			hsmPdiTempMasterRepository.flush();
+			entity.setCrBy(createdBy);
+			entity.setCrDt(createdDt);
+			entity.setCrMacAddr(createdMacAddress);
+			save = hsmPdiTempMasterRepository.save(entity);
+		}
+		return save;
+	}
+
+	@Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateStatusZero(HsmtempCm dto) {
+        LOGGER.info("Starting updateStatusZero with dto: {}", dto);
+        dbSessionService.setSessionInfo(this.getClass().getName());
+        jakarta.persistence.Query q = entityManager
+                .createQuery("UPDATE HsmtempCm SET isactv=0" + " WHERE id.grdid = :gradeid" + " AND id.plid = :hsm"
+                        + " AND id.hrthkmin = :thkmin" + " AND id.hrwdtmin = :wdtmin");
+        q.setParameter("gradeid", dto.getId().getGrdid());
+        q.setParameter("hsm", dto.getId().getPlid());
+        q.setParameter("thkmin", dto.getId().getHrthkmin());
+        q.setParameter("wdtmin", dto.getId().getHrwdtmin());
+        q.executeUpdate();
+    }
+}

@@ -1,0 +1,8 @@
+1762942412370	Copy compilation units
+1762942417933	Delete element
+1762942438254	Rename package 'com.hindindustec.fluenta.hsm.quality.core.audit'
+1762942818959	Delete element
+1763094487034	Extract method 'extractedNormTestIsPresent'
+1763094527527	Extract method 'extractedValidImpact'
+1763094625554	Extract method 'extractedDwdtIspresent'
+1763094691348	Extract method 'extractedZNormTestIspresent'

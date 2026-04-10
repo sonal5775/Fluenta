@@ -1,0 +1,380 @@
+package com.hindindustec.fluenta.hsm.masters.serviceimpl;
+
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.masters.common.OfsStatusConstants;
+import com.hindindustec.fluenta.hsm.masters.common.config.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.masters.common.exception.CustomException;
+import com.hindindustec.fluenta.hsm.masters.customrepository.ExternalGradeCustRepository;
+import com.hindindustec.fluenta.hsm.masters.dto.EgmultigrdlistJmDTO;
+import com.hindindustec.fluenta.hsm.masters.dto.ExternalGradeKpiDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ExternalGradeRequest;
+import com.hindindustec.fluenta.hsm.masters.dto.ExtgrdJmDTO;
+import com.hindindustec.fluenta.hsm.masters.entities.EgmultigrdlistJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.EgmultigrdlistJmEntityPK;
+import com.hindindustec.fluenta.hsm.masters.entities.ExtGrdJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormmastJmEntity;
+import com.hindindustec.fluenta.hsm.masters.repository.EgmultigrdlistJmEntityRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExtGrdJmEntityRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormBendRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormDwttRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormHardnessRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormHtttRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormImpactRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormInclusionRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormOthrtestRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormShtRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormTensileRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormZtestRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.NormmastJmEntityRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ProdCatalogueJmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.TdcElementMasterRepository;
+import com.hindindustec.fluenta.hsm.masters.service.ExternalGradeService;
+
+import jakarta.persistence.EntityManager;
+import jakarta.validation.Valid;
+
+@Service
+@Validated
+public class ExternalGradeServiceImpl implements ExternalGradeService {
+
+	private static final Logger logger = LoggerFactory.getLogger(ExternalGradeServiceImpl.class);
+
+	private ExternalGradeCustRepository externalGradeCustRepository;
+
+	private EgmultigrdlistJmEntityRepository egMultiStdRepository;
+
+	private ExtGrdJmEntityRepository extGrdRepository;
+
+	private NormmastJmEntityRepository normMastRepository;
+
+	private DBSessionService dbSessionService;
+
+	private TdcElementMasterRepository elementMastrepository;
+
+	private ExternalGradeNormTensileRepository tensileRepository;
+
+	private ExternalGradeNormBendRepository bendRepository;
+
+	private ExternalGradeNormDwttRepository dwttRepository;
+
+	private ExternalGradeNormHardnessRepository hardnessRepository;
+
+	private ExternalGradeNormHtttRepository htttRepository;
+
+	private ExternalGradeNormImpactRepository impactRepository;
+
+	private ExternalGradeNormInclusionRepository inclusionRepository;
+
+	private ExternalGradeNormShtRepository shtRepository;
+
+	private ExternalGradeNormZtestRepository ztestRepository;
+
+	private ExternalGradeNormOthrtestRepository othrtestRepository;
+
+	private ProdCatalogueJmRepository prodCatalogJmRepository;
+
+	private EntityManager entityManager;
+
+	public ExternalGradeServiceImpl(ExternalGradeCustRepository externalGradeCustRepository,
+			EgmultigrdlistJmEntityRepository egMultiStdRepository, ExtGrdJmEntityRepository extGrdRepository,
+			NormmastJmEntityRepository normMastRepository, DBSessionService dbSessionService,
+			TdcElementMasterRepository elementMastrepository, ExternalGradeNormTensileRepository tensileRepository,
+			ExternalGradeNormBendRepository bendRepository, ExternalGradeNormDwttRepository dwttRepository,
+			ExternalGradeNormHardnessRepository hardnessRepository, ExternalGradeNormHtttRepository htttRepository,
+			ExternalGradeNormImpactRepository impactRepository,
+			ExternalGradeNormInclusionRepository inclusionRepository, ExternalGradeNormShtRepository shtRepository,
+			ExternalGradeNormZtestRepository ztestRepository, ExternalGradeNormOthrtestRepository othrtestRepository,
+			ProdCatalogueJmRepository prodCatalogJmRepository, EntityManager entityManager) {
+		this.externalGradeCustRepository = externalGradeCustRepository;
+		this.egMultiStdRepository = egMultiStdRepository;
+		this.extGrdRepository = extGrdRepository;
+		this.normMastRepository = normMastRepository;
+		this.dbSessionService = dbSessionService;
+		this.elementMastrepository = elementMastrepository;
+		this.tensileRepository = tensileRepository;
+		this.bendRepository = bendRepository;
+		this.dwttRepository = dwttRepository;
+		this.hardnessRepository = hardnessRepository;
+		this.htttRepository = htttRepository;
+		this.impactRepository = impactRepository;
+		this.inclusionRepository = inclusionRepository;
+		this.shtRepository = shtRepository;
+		this.ztestRepository = ztestRepository;
+		this.othrtestRepository = othrtestRepository;
+		this.prodCatalogJmRepository = prodCatalogJmRepository;
+		this.entityManager = entityManager;
+	}
+
+	@Override
+	public List<ExtgrdJmDTO> getExternalGrades() {
+		logger.info("Fetching all external grades");
+		return externalGradeCustRepository.getExternalGrades();
+	}
+
+	@Override
+	public List<EgmultigrdlistJmDTO> getMultiStdGradeData(String extGrdName) {
+		try {
+			logger.info("Fetching multi standard grade data for: {}", extGrdName);
+			return externalGradeCustRepository.getMultiStdGradeData(extGrdName);
+		} catch (Exception e) {
+			throw new CustomException("Error fetching multi standard grade data");
+		}
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public String saveExternalGrades(@Valid ExternalGradeRequest request) {
+		logger.info("Saving external grades");
+		dbSessionService.setSessionInfo(this.getClass().getName());
+
+		if (request.getExtGradeList() != null && !request.getExtGradeList().isEmpty()) {
+			for (ExtgrdJmDTO item : request.getExtGradeList()) {
+				ExtGrdJmEntity entity;
+				BigDecimal maxEgId;
+				Optional<ExtGrdJmEntity> existingRecord;
+				if(item.getPrevExtGrdNm()!=null && !item.getPrevExtGrdNm().equals(item.getExtgrdnm())
+						&& request.getExtMultiStdGradeList() != null && request.getExtMultiStdGradeList().isEmpty()) {
+					extGrdRepository.updatePrimaryKey(item.getExtgrdnm(), item.getPrevExtGrdNm(),ClientIpUtils.getClient(),ClientIpUtils.getClientIpAddress(),new Date(),item.getSpec(),item.getSubqlty(),item.getGrd(),item.getIsmultistd());
+					return "Success";
+				}
+				existingRecord = extGrdRepository.findByExtGrdNm(item.getPrevExtGrdNm()!=null?item.getPrevExtGrdNm():" ");
+				if (existingRecord.isEmpty()) {
+					maxEgId = extGrdRepository.countTotalRecords();
+					entity = new ExtGrdJmEntity();
+					entity.setCrBy(ClientIpUtils.getClient());
+					entity.setCrDt(new Date());
+					entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+					entity.setExtgrdnm(item.getExtgrdnm().trim());
+					entity.setEgid(String.valueOf(maxEgId.intValue() + 1));	
+					NormmastJmEntity normmastJmEntity = null;
+						Optional<NormmastJmEntity> optional = normMastRepository.findById(item.getNormid()!=null?item.getNormid():" ");
+						if (optional.isPresent()) {
+							normmastJmEntity = optional.get();
+							normmastJmEntity.setMoBy(ClientIpUtils.getClient());
+							normmastJmEntity.setMoDt(new Date());
+							normmastJmEntity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+						} else {
+						normmastJmEntity = new NormmastJmEntity();
+						String maxCount = normMastRepository.generateNormId();
+						long newId = Long.parseLong(maxCount) + 1;
+						normmastJmEntity.setNormid(Long.toString(newId));
+						normmastJmEntity.setNormty("EG");
+						normmastJmEntity = normMastRepository.save(normmastJmEntity);
+						entityManager.flush();
+						}
+					entity.setNormid(normmastJmEntity.getNormid());
+					entity.setIsmultistd(item.getIsmultistd());
+					entity.setSpec((item.getSpec() != null ? item.getSpec() : "").trim());
+					entity.setGrd((item.getGrd() != null ? item.getGrd() : "").trim());
+					entity.setSubqlty((item.getSubqlty() != null ? item.getSubqlty() : "").trim());
+					extGrdRepository.save(entity);
+				}
+			}
+		}
+
+		if (request.getExtMultiStdGradeList() != null && !request.getExtMultiStdGradeList().isEmpty()) {
+			for (EgmultigrdlistJmDTO dto : request.getExtMultiStdGradeList()) {
+				long ctr = 0;
+				EgmultigrdlistJmEntity entity;
+				EgmultigrdlistJmEntityPK pk = new EgmultigrdlistJmEntityPK();
+				pk.setExtgrdnm(dto.getExtgrdnm());
+				pk.setEgctr(dto.getEgctr());
+				Optional<EgmultigrdlistJmEntity> existingRecord = egMultiStdRepository.findById(pk);
+				if (existingRecord.isPresent()) {
+					entity = existingRecord.get();
+				} else {
+					entity = new EgmultigrdlistJmEntity();
+					ctr = egMultiStdRepository.getMaxEgCtr(dto.getExtgrdnm());
+					pk.setEgctr(++ctr);
+					entity.setId(pk);
+				}
+				entity.setMapextgrdnm(dto.getMapextgrdnm().trim());
+				entity.setIsprimarygrd(dto.getIsprimarygrd().trim());
+				egMultiStdRepository.save(entity);
+			}
+		}
+
+		return "Success";
+	}
+
+@Override
+	@Transactional(rollbackFor = Exception.class)
+	public String saveReleaseExternalGrades(@Valid ExternalGradeRequest request) {
+		logger.info("Release external grades");
+		dbSessionService.setSessionInfo(this.getClass().getName());
+	
+		if (request.getExtGradeList() != null && !request.getExtGradeList().isEmpty()) {
+			for (ExtgrdJmDTO item : request.getExtGradeList()) {			
+				Optional<ExtGrdJmEntity> existingRecord = extGrdRepository.findByExtGrdNm(
+				    item.getExtgrdnm() != null ? item.getExtgrdnm() : " "
+				);
+				if (existingRecord.isPresent()) {
+					 ExtGrdJmEntity entity = existingRecord.get();
+				    entity.setMoBy(ClientIpUtils.getClient());
+				    entity.setMoDt(new Date());
+				    entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+				 entity.setExtgrdsts(item.getExtgrdsts().trim());
+				extGrdRepository.save(entity);
+				}
+			}
+		}
+		
+ 
+		return "Success";
+	}
+ 
+
+	@Override
+	public List<String> getExternalGradeList() {
+		try {
+			logger.info("Fetching external grade list");
+			return extGrdRepository.getExternalGradeList();
+		} catch (Exception e) {
+			throw new CustomException("Error fetching external grade list");
+		}
+	}
+
+	@Override
+	public List<ExtgrdJmDTO> getStatusRelatedExternalGrade(String status) {
+		logger.info("Fetching StatusRelatedExternalGrade for status:{}", status);
+
+		return externalGradeCustRepository.getStatusRelatedExternalGrade(status);
+	}
+
+	@Override
+	@Transactional
+	public boolean validateExternalGrade(ExternalGradeRequest request) {
+		logger.info("validating external grade for request:{}", request);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		if (request.getExtGrdName() != null) {
+			boolean validateChemistry = isValidateChemistry(request.getExtGradeList().get(0).getExtgrdnm());
+			boolean validateMechanical = isValidateMechanical(request.getExtGradeList().get(0).getExtgrdnm());
+			boolean validateCatalog = isValidateCatalog(request.getExtGrdName());
+			if (validateChemistry && validateMechanical && validateCatalog) {
+				if (request.getExtGradeList() != null) {
+					for (ExtgrdJmDTO item : request.getExtGradeList()) {
+						if (!Objects.equals(item.getExtgrdsts(), OfsStatusConstants.TDC_STATUS_RELEASED)
+								&& !Objects.equals(item.getExtgrdsts(), OfsStatusConstants.TDC_WF_STATUS_PENDING)) {
+							Optional<ExtGrdJmEntity> optional = extGrdRepository.findById(request.getExtGradeList().get(0).getExtgrdnm());
+							if(optional.isPresent()) {
+								ExtGrdJmEntity extGrdJmEntity = optional.get();
+								extGrdJmEntity.setExtgrdsts(OfsStatusConstants.TDC_WF_STATUS_PENDING);
+							}
+						}
+						
+					}
+				}
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public boolean isValidateChemistry(String extgrdnm) {
+		String normId = null;
+		if(extgrdnm!=null) {
+			Optional<ExtGrdJmEntity> extgrd =  extGrdRepository.findByExtGrdNm(extgrdnm);
+			if(extgrd.isPresent()) {
+				normId = extgrd.get().getNormid();
+			}
+		}
+		if (normId != null) {
+			long chemistry = elementMastrepository.findCountById(normId);
+			if (chemistry > 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public boolean isValidateMechanical(String extgrdnm) {
+		String normId = null;
+		if(extgrdnm!=null) {
+			Optional<ExtGrdJmEntity> extgrd =  extGrdRepository.findByExtGrdNm(extgrdnm);
+			if(extgrd.isPresent()) {
+				normId = extgrd.get().getNormid();
+			}
+		}
+		if (normId != null) {
+			long tensileCount = tensileRepository.findCountById(normId);
+			long bendCount = bendRepository.findCountById(normId);
+			long dwttCount = dwttRepository.findCountById(normId);
+			long hardnessCount = hardnessRepository.findCountById(normId);
+			long htttCount = htttRepository.findCountById(normId);
+			long impactCount = impactRepository.findCountById(normId);
+			long inclusionCount = inclusionRepository.findCountById(normId);
+			long shtCount = shtRepository.findCountById(normId);
+			long zTestCount = ztestRepository.findCountById(normId);
+			long grainSizeCount = othrtestRepository.findCountById(normId, OfsConstants.GRAIN_SIZE);
+			long microStructureCount = othrtestRepository.findCountById(normId, OfsConstants.MICROSTRUCTURE);
+			long naceSccCount = othrtestRepository.findCountById(normId, OfsConstants.NACE_SCC);
+			long naceHicCount = othrtestRepository.findCountById(normId, OfsConstants.NACE_HIC);
+			long wbbtCount = othrtestRepository.findCountById(normId, OfsConstants.WBBT);
+			long strainAgingCount = othrtestRepository.findCountById(normId, OfsConstants.STRAIN_AGING);
+			long ballisticCount = othrtestRepository.findCountById(normId, OfsConstants.BALLISTIC_TEST);
+			long weldabilityCount = othrtestRepository.findCountById(normId, OfsConstants.WELDABILITY_TEST);
+
+			if (tensileCount > 0 || bendCount > 0 || dwttCount > 0 || hardnessCount > 0 || htttCount > 0
+					|| impactCount > 0 || inclusionCount > 0 || shtCount > 0 || zTestCount > 0 || grainSizeCount > 0
+					|| microStructureCount > 0 || naceSccCount > 0 || naceHicCount > 0 || wbbtCount > 0
+					|| strainAgingCount > 0 || ballisticCount > 0 || weldabilityCount > 0) {
+				return true;
+			}
+		}
+		return false;
+
+	}
+
+	public boolean isValidateCatalog(String extgrd) {
+		if (extgrd != null) {
+			long prodCatalog = prodCatalogJmRepository.findCountById(extgrd);
+			if (prodCatalog > 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	@Override
+	@Transactional
+	public boolean modifyStatusToInProgress(ExternalGradeRequest request) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		boolean validateChemistry = isValidateChemistry(request.getExtGradeList().get(0).getExtgrdnm());
+		boolean validateMechanical = isValidateMechanical(request.getExtGradeList().get(0).getExtgrdnm());
+		boolean validateCatalog = isValidateCatalog(request.getExtGrdName());
+		if (request.getExtGradeList() != null && validateChemistry || validateMechanical || validateCatalog) {
+			for (ExtgrdJmDTO item : request.getExtGradeList()) {
+				if ((!Objects.equals(item.getExtgrdsts(), OfsStatusConstants.TDC_STATUS_RELEASED)
+						&& !Objects.equals(item.getExtgrdsts(), OfsStatusConstants.IN_PROGRESS)
+						&& !Objects.equals(item.getExtgrdsts(), OfsStatusConstants.TDC_WF_STATUS_PENDING)) || item.getExtgrdsts()==null) {
+					Optional<ExtGrdJmEntity> optional = extGrdRepository.findById(request.getExtGradeList().get(0).getExtgrdnm());
+					if(optional.isPresent()) {
+						ExtGrdJmEntity extGrdJmEntity = optional.get();
+						extGrdJmEntity.setExtgrdsts(OfsStatusConstants.IN_PROGRESS);
+					}
+				}
+			}
+			return true;
+		}
+		return false;
+	}
+
+	@Override
+	public ExternalGradeKpiDto getKpiCount() {
+		return externalGradeCustRepository.getKpiCount();
+	}
+
+}

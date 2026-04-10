@@ -1,0 +1,795 @@
+package com.hindindustec.fluenta.sales.repository;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Repository;
+
+import com.hindindustec.fluenta.sales.common.ClientIpUtils;
+import com.hindindustec.fluenta.sales.common.OfsConstants;
+import com.hindindustec.fluenta.sales.common.OfsLoggerNameConstants;
+import com.hindindustec.fluenta.sales.common.OfsStatusConstants;
+import com.hindindustec.fluenta.sales.dto.AttachedStatusDto;
+import com.hindindustec.fluenta.sales.dto.ConfirmedStatusDto;
+import com.hindindustec.fluenta.sales.dto.CustomerDto;
+import com.hindindustec.fluenta.sales.dto.HeaderDateRequestDto;
+import com.hindindustec.fluenta.sales.dto.InProgressStatusDto;
+import com.hindindustec.fluenta.sales.dto.RemarksDto;
+import com.hindindustec.fluenta.sales.dto.RequestedStatusDto;
+import com.hindindustec.fluenta.sales.dto.SalesEnquiryDto;
+import com.hindindustec.fluenta.sales.dto.SalesEnquiryItemDto;
+import com.hindindustec.fluenta.sales.dto.StatusRequest;
+import com.hindindustec.fluenta.sales.dto.TdcGeneralRequestDto;
+import com.hindindustec.fluenta.sales.dto.TdcMainRequest;
+import com.hindindustec.fluenta.sales.model.SehStEntity;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
+import jakarta.persistence.TemporalType;
+import jakarta.persistence.TypedQuery;
+
+@Repository
+public class SalesEnquiryRepository {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(OfsLoggerNameConstants.SALES_ENQUIRY_LOG);
+	public static final List<String> EXTERNAL_GRADE_STATUSES = List.of("IN PROGRESS", "PENDING", "RELEASED");
+
+	EntityManager entityManager;
+
+	public SalesEnquiryRepository(EntityManager entityManager) {
+		super();
+		this.entityManager = entityManager;
+	}
+	/**
+	 * Query to fetch sales enquiry details 
+	 * @Author - Sonal patil 
+	 */
+	public static final String SALES_ENQUIRY_QUERY = 
+			  "SELECT new com.hindindustec.fluenta.sales.dto.SalesEnquiryDto(" 
+					    + "sehSt.seid, sehSt.btcustnm, sehSt.seDt, sehSt.seconfDt, sehSt.custcntno, "
+					    + "sehSt.sests, sehSt.brn, sehSt.btcustid, sehSt.crBy, sehSt.crDt, "
+					    + "sehSt.crMacAddr, sehSt.custcntprsn, sehSt.custty, sehSt.custzone, "
+					    + "sehSt.dischannel, sehSt.dispseid, sehSt.entrprise, sehSt.hdrrmks, "
+					    + "sehSt.intsalesagnt, sehSt.isactv, sehSt.kamid, sehSt.moBy, sehSt.moDt, "
+					    + "sehSt.moMacAddr, sehSt.mrktseg, sehSt.poDt, sehSt.prdid, sehSt.projty, "
+					    + "sehSt.refpuroid, sehSt.salesgrp, sehSt.sety, sehSt.stid, "
+					    + "(SELECT SUM(selSt.seqty) FROM SelStEntity selSt WHERE sehSt.seid = selSt.id.seid AND selSt.isactv = 1) "
+					    + ") "
+			;
+	
+	
+	public static final String SALES_ENQUIRY_CONDITION;
+	
+	static {
+	StringBuilder queryBuilder = new StringBuilder();
+	
+	queryBuilder.append(" FROM SehStEntity sehSt ")
+       ;
+	
+	SALES_ENQUIRY_CONDITION = queryBuilder.toString();
+	}
+	
+	public static final String SALES_ENQUIRY_WHERE_CONDITION;
+	
+	static {
+	StringBuilder queryBuilder = new StringBuilder();
+	queryBuilder.append(" WHERE ")
+     .append("  (:statusFlag IS NULL OR sehSt.sests IN (:status))")
+  
+     ;
+	SALES_ENQUIRY_WHERE_CONDITION = queryBuilder.toString();
+	}
+
+	/**
+	 * This method returns all sales enquiry details
+	 *
+	 * @author Pinaki Samal
+	 * @param request - status data
+	 */
+	public Page<SalesEnquiryDto> getAllPaginatedSalesEnquiryDetails(StatusRequest request,
+	        Integer page, Integer size, String query, String countQuery) {
+		
+		List<String> statusList = request.getStatus();
+		String statusFlag = null;
+		if (request.getStatus() != null && !request.getStatus().isEmpty()) {
+			statusFlag = OfsStatusConstants.AVAILABLE;
+		}
+		
+	    // Count Query
+	    Query queryCount = entityManager.createQuery(countQuery);
+	    queryCount.setParameter(OfsConstants.STATUS_FLAG, statusFlag);
+		queryCount.setParameter(OfsConstants.STATUS, statusList);
+
+	    // Get total count
+	    Number resultNumber = (Number) queryCount.getSingleResult();
+	    int totalRows = resultNumber.intValue();
+
+	    // Pageable
+	    Pageable pageable = PageRequest.of(page, size);
+
+	    // Data Query
+	    TypedQuery<SalesEnquiryDto> q = entityManager.createQuery(query, SalesEnquiryDto.class);
+	    q.setFirstResult(pageable.getPageNumber() * pageable.getPageSize());
+	    q.setMaxResults(pageable.getPageSize());
+	    q.setParameter(OfsConstants.STATUS_FLAG, statusFlag);
+		q.setParameter(OfsConstants.STATUS, statusList);
+
+	    // Execute query and get the result list
+	    List<SalesEnquiryDto> resultList = q.getResultList();
+
+	    // Return paginated result
+	    return new PageImpl<>(resultList, pageable, totalRows);
+	}
+
+	public List<SalesEnquiryDto> getAllSalesEnquiryDetails(StatusRequest request) {
+		LOGGER.info("Inside SalesEnquiryRepository:: getAllSalesEnquiryDetails ");
+		List<String> statusList = request.getStatus();
+		String statusFlag = null;
+		if (request.getStatus() != null && !request.getStatus().isEmpty()) {
+			statusFlag = OfsStatusConstants.AVAILABLE;
+		}
+		TypedQuery<SehStEntity> q = entityManager.createQuery("SELECT DISTINCT sSte FROM SehStEntity sSte "
+				+ "LEFT JOIN FETCH sSte.salesEnquiryItem selSt "
+				+ "WHERE (:statusFlag IS NULL OR sSte.sests IN (:status)) "
+				+ "AND (selSt.tdcid IS NULL AND selSt.isactv = 1 OR selSt IS NULL) "
+				+ " AND (:fromDate IS NULL OR sSte.crDt >= :fromDate)"
+				+ " AND (:toDate IS NULL OR sSte.crDt <= :toDate ) " + "ORDER BY sSte.seDt DESC",
+				SehStEntity.class);
+		
+		q.setParameter("statusFlag", statusFlag);
+		q.setParameter(OfsConstants.STATUS, statusList);
+		q.setParameter(OfsConstants.FROM_DATE, request.getFromDate());
+		q.setParameter(OfsConstants.TO_DATE, request.getToDate());
+
+		List<SehStEntity> resultList = q.getResultList();
+
+		List<SalesEnquiryDto> salesEnquiryList = new ArrayList<>();
+
+		for (SehStEntity sehStEntity : resultList) {
+			SalesEnquiryDto salesEnquiry = new SalesEnquiryDto();
+			salesEnquiry.setSeid(sehStEntity.getSeid());
+			salesEnquiry.setBtcustnm(sehStEntity.getBtcustnm());
+			salesEnquiry.setSeDt(sehStEntity.getSeDt());
+			salesEnquiry.setSeconfDt(sehStEntity.getSeconfDt());
+			salesEnquiry.setCustcntno(sehStEntity.getCustcntno());
+			salesEnquiry.setSests(sehStEntity.getSests());
+			salesEnquiry.setBrn(sehStEntity.getBrn());
+			salesEnquiry.setBtcustid(sehStEntity.getBtcustid());
+			salesEnquiry.setCrBy(ClientIpUtils.getClient());
+			salesEnquiry.setCrDt(sehStEntity.getCrDt());
+			salesEnquiry.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+			salesEnquiry.setCustcntprsn(sehStEntity.getCustcntprsn());
+			salesEnquiry.setCustty(sehStEntity.getCustty());
+			salesEnquiry.setCustzone(sehStEntity.getCustzone());
+			salesEnquiry.setDischannel(sehStEntity.getDischannel());
+			salesEnquiry.setDispseid(sehStEntity.getDispseid());
+			salesEnquiry.setEntrprise(sehStEntity.getEntrprise());
+			salesEnquiry.setHdrrmks(sehStEntity.getHdrrmks());
+			salesEnquiry.setIntsalesagnt(sehStEntity.getIntsalesagnt());
+			salesEnquiry.setIsactv(sehStEntity.getIsactv());
+			salesEnquiry.setKamid(sehStEntity.getKamid());
+			salesEnquiry.setMoBy(sehStEntity.getMoBy());
+			salesEnquiry.setMoDt(sehStEntity.getMoDt());
+			salesEnquiry.setMoMacAddr(sehStEntity.getMoMacAddr());
+			salesEnquiry.setMrktseg(sehStEntity.getMrktseg());
+			salesEnquiry.setPoDt(sehStEntity.getPoDt());
+			salesEnquiry.setPrdid(sehStEntity.getPrdid());
+			salesEnquiry.setProjty(sehStEntity.getProjty());
+			salesEnquiry.setRefpuroid(sehStEntity.getRefpuroid());
+			salesEnquiry.setSalesgrp(sehStEntity.getSalesgrp());
+			salesEnquiry.setSety(sehStEntity.getSety());
+			salesEnquiry.setStid(sehStEntity.getStid());
+			salesEnquiry.setTdcreqdt(sehStEntity.getTdcreqdt());
+
+			List<SalesEnquiryItemDto> items = sehStEntity.getSalesEnquiryItem().stream().map(selStEntity -> {
+				SalesEnquiryItemDto itemDto = new SalesEnquiryItemDto();
+				itemDto.setSeid(selStEntity.getId().getSeid());
+				itemDto.setSelid(selStEntity.getId().getSelid());
+				itemDto.setCrBy(selStEntity.getCrBy());
+				itemDto.setCrDt(selStEntity.getCrDt());
+				itemDto.setCrMacAddr(selStEntity.getCrMacAddr());
+				itemDto.setCreditty(selStEntity.getCreditty());
+				itemDto.setCustid(selStEntity.getCustid());
+				itemDto.setCustreqDt(selStEntity.getCustreqDt());
+				itemDto.setDiaaim(selStEntity.getDiaaim());
+				itemDto.setDiamax(selStEntity.getDiamax());
+				itemDto.setDiamin(selStEntity.getDiamin());
+				itemDto.setDocty(selStEntity.getDocty());
+				itemDto.setDstn(selStEntity.getDstn());
+				itemDto.setEdgecond(selStEntity.getEdgecond());
+				itemDto.setEnduse(selStEntity.getEnduse());
+				itemDto.setEntrprise(selStEntity.getEntrprise());
+				itemDto.setEqSpec(selStEntity.getEqSpec());
+				itemDto.setEqSpecGroup(selStEntity.getEqSpecGroup());
+				itemDto.setEqSpecSubGroup(selStEntity.getEqSpecSubGroup());
+				itemDto.setExtgrdnm(selStEntity.getExtgrdnm());
+				itemDto.setGrdid(selStEntity.getGrdid());
+				itemDto.setIdmax(selStEntity.getIdmax());
+				itemDto.setIdmin(selStEntity.getIdmin());
+				itemDto.setIsactv(selStEntity.getIsactv());
+				itemDto.setLenaim(selStEntity.getLenaim());
+				itemDto.setLenmax(selStEntity.getLenmax());
+				itemDto.setLenmin(selStEntity.getLenmin());
+				itemDto.setLentolstd(selStEntity.getLentolstd());
+				itemDto.setLoadcde(selStEntity.getLoadcde());
+				itemDto.setLoadinstn(selStEntity.getLoadinstn());
+				itemDto.setLogotyonlabl(selStEntity.getLogotyonlabl());
+				itemDto.setMarkcde(selStEntity.getMarkcde());
+				itemDto.setMarkinstn(selStEntity.getMarkinstn());
+				itemDto.setMoBy(selStEntity.getMoBy());
+				itemDto.setMoDt(selStEntity.getMoDt());
+				itemDto.setMoMacAddr(selStEntity.getMoMacAddr());
+				itemDto.setMot(selStEntity.getMot());
+				itemDto.setNoofpcs(selStEntity.getNoofpcs());
+				itemDto.setOdmax(selStEntity.getOdmax());
+				itemDto.setOdmin(selStEntity.getOdmin());
+				itemDto.setOrdcls(selStEntity.getOrdcls());
+				itemDto.setPackcde(selStEntity.getPackcde());
+				itemDto.setPackinstn(selStEntity.getPackinstn());
+				itemDto.setPaymethod(selStEntity.getPaymethod());
+				itemDto.setPayterm(selStEntity.getPayterm());
+				itemDto.setPrdcdeid(selStEntity.getPrdcdeid());
+				itemDto.setPrdid(selStEntity.getPrdid());
+				itemDto.setReserve01(selStEntity.getReserve01());
+				itemDto.setReserve02(selStEntity.getReserve02());
+				itemDto.setReserve03(selStEntity.getReserve03());
+				itemDto.setReserve04(selStEntity.getReserve04());
+				itemDto.setReserve05(selStEntity.getReserve05());
+				itemDto.setRevid(selStEntity.getRevid());
+				itemDto.setSeqclvl(selStEntity.getSeqclvl());
+				itemDto.setSeqty(selStEntity.getSeqty());
+				itemDto.setSeqtymax(selStEntity.getSeqtymax());
+				itemDto.setSeqtymin(selStEntity.getSeqtymin());
+				itemDto.setSerelDt(selStEntity.getSerelDt());
+				itemDto.setSests(selStEntity.getSests());
+				itemDto.setSety(selStEntity.getSety());
+				itemDto.setSevaluptoDt(selStEntity.getSevaluptoDt());
+				itemDto.setSpecialreq(selStEntity.getSpecialreq());
+				itemDto.setStdid(selStEntity.getStdid());
+				itemDto.setSuppcon(selStEntity.getSuppcon());
+				itemDto.setTcty(selStEntity.getTcty());
+				itemDto.setTdcid(selStEntity.getTdcid());
+				itemDto.setTdcty(selStEntity.getTdcty());
+				itemDto.setThkaim(selStEntity.getThkaim());
+				itemDto.setThkmax(selStEntity.getThkmax());
+				itemDto.setThkmin(selStEntity.getThkmin());
+				itemDto.setThktolstd(selStEntity.getThktolstd());
+				itemDto.setTpiinstn(selStEntity.getTpiinstn());
+				itemDto.setTpinspflag(selStEntity.getTpinspflag());
+				itemDto.setUom(selStEntity.getUom());
+				itemDto.setUtlevel(selStEntity.getUtlevel());
+				itemDto.setVdflag(selStEntity.getVdflag());
+				itemDto.setWdtaim(selStEntity.getWdtaim());
+				itemDto.setWdtmax(selStEntity.getWdtmax());
+				itemDto.setWdtmin(selStEntity.getWdtmin());
+				itemDto.setWdttolstd(selStEntity.getWdttolstd());
+				itemDto.setWgtmax(selStEntity.getWgtmax());
+				itemDto.setWgtmin(selStEntity.getWgtmin());
+				itemDto.setOverdeltol(selStEntity.getOverdeltol());
+				return itemDto;
+			}).toList();
+
+			salesEnquiry.setSalesEnquiryItem(items);
+
+			BigDecimal totalQuantity = items.stream()
+					.map(item -> item.getSeqty() != null ? item.getSeqty() : BigDecimal.ZERO)
+					.reduce(BigDecimal.ZERO, BigDecimal::add);
+			salesEnquiry.setQuantity(totalQuantity);
+
+			salesEnquiryList.add(salesEnquiry);
+		}
+
+		return salesEnquiryList;
+	}
+
+	/**
+	 * This method returns all sales enquiry item details
+	 *
+	 * @author Pinaki Samal
+	 * @param request - sales enquiry data
+	 */
+	public List<SalesEnquiryItemDto> getAllSalesEnquiryItemsDetails(SalesEnquiryDto request) {
+		LOGGER.info("Inside SalesEnquiryRepository:: getAllSalesEnquiryItemsDetails ");
+
+		TypedQuery<SalesEnquiryItemDto> q = entityManager.createQuery(
+				OfsConstants.SALES_ENQUIRY_ITEM_DTO+"("
+						+ "selSt.id.seid," + "selSt.id.selid," + "selSt.crBy," + "selSt.crDt," + "selSt.crMacAddr,"
+						+ "selSt.creditty," + "selSt.custid," + "selSt.custreqDt," + "selSt.diaaim," + "selSt.diamax,"
+						+ "selSt.diamin," + "selSt.docty," + "selSt.dstn," + "selSt.edgecond," + "selSt.enduse,"
+						+ "selSt.entrprise," + "selSt.eqSpec," + "selSt.eqSpecGroup," + "selSt.eqSpecSubGroup,"
+						+ "selSt.extgrdnm," + "selSt.grdid," + "selSt.idmax," + "selSt.idmin," + "selSt.isactv,"
+						+ "selSt.lenaim," + "selSt.lenmax," + "selSt.lenmin," + "selSt.lentolstd," + "selSt.loadcde,"
+						+ "selSt.loadinstn," + "selSt.logotyonlabl," + "selSt.markcde," + "selSt.markinstn,"
+						+ "selSt.moBy," + "selSt.moDt," + "selSt.moMacAddr," + "selSt.mot," + "selSt.noofpcs,"
+						+ "selSt.odmax," + "selSt.odmin," + "selSt.ordcls," + "selSt.packcde," + "selSt.packinstn,"
+						+ "selSt.paymethod," + "selSt.payterm," + "selSt.prdcdeid," + "selSt.prdid,"
+						+ "selSt.reserve01," + "selSt.reserve02," + "selSt.reserve03," + "selSt.reserve04,"
+						+ "selSt.reserve05," + "selSt.revid," + "selSt.seqclvl," + "selSt.seqty," + "selSt.seqtymax,"
+						+ "selSt.seqtymin," + "selSt.serelDt," + "selSt.sests," + "selSt.sety," + "selSt.sevaluptoDt,"
+						+ "selSt.specialreq," + "selSt.stdid," + "selSt.suppcon," + "selSt.tcty," + "selSt.tdcid,"
+						+ "selSt.tdcty," + "selSt.thkaim," + "selSt.thkmax," + "selSt.thkmin," + "selSt.thktolstd,"
+						+ "selSt.tpiinstn," + "selSt.tpinspflag," + "selSt.uom," + "selSt.utlevel," + "selSt.vdflag,"
+						+ "selSt.wdtaim," + "selSt.wdtmax," + "selSt.wdtmin," + "selSt.wdttolstd," + "selSt.wgtmax,"
+						+ "selSt.wgtmin," + "selSt.overdeltol" + ")" + " FROM SelStEntity selSt"
+						+ " WHERE selSt.id.seid = :seid" + " AND selSt.isactv = 1 "
+						+ "ORDER BY selSt.id.selid",
+				SalesEnquiryItemDto.class);
+
+		q.setParameter("seid", request.getSeid());
+
+		return q.getResultList();
+
+	}
+
+	/**
+	 * This method returns all sales enquiry highest
+	 *
+	 * @author Pinaki Samal
+	 */
+	public Long getSalesEnquiryHighest() {
+		LOGGER.info("Inside SalesEnquiryRepository:: getSalesEnquiryHighest ");
+
+		TypedQuery<Long> q = entityManager.createQuery("SELECT CAST(SUBSTRING(s.seid, LENGTH(s.seid) - 4, 5) AS long) "
+				+ "FROM SehStEntity s " + "ORDER BY CAST(SUBSTRING(s.seid, LENGTH(s.seid) - 4, 5) AS long) DESC",
+				Long.class);
+		q.setMaxResults(1);
+		List<Long> resultList = q.getResultList();
+		return resultList.isEmpty() ? 0L : resultList.get(0);
+	}
+
+	/**
+	 * This method returns all sales enquiry max details
+	 *
+	 * @author Pinaki Samal
+	 * @param seId - sales enquiry number
+	 */
+	public Long getSalesEnquiryItemMax(String seId) {
+		LOGGER.info("Inside SalesEnquiryRepository:: getSalesEnquiryItemMax ");
+
+		TypedQuery<Long> q = entityManager
+				.createQuery("SELECT MAX(s.id.selid)" + " FROM SelStEntity s" + " WHERE s.id.seid =:seId", Long.class);
+		q.setParameter("seId", seId);
+		return q.getSingleResult() == null ? 0L : q.getSingleResult();
+
+	}
+
+	/**
+	 * This method returns customer details
+	 *
+	 * @author Pinaki Samal
+	 */
+	public List<CustomerDto> getCustomers() {
+		LOGGER.info("Inside SalesEnquiryRepository:: getCustomers ");
+
+		TypedQuery<CustomerDto> q = entityManager
+				.createQuery(OfsConstants.CUSTOMER_DTO+"("
+						+ "c.custnm," + "c.custid" + ")" + " FROM CustCm c", CustomerDto.class);
+
+		return q.getResultList();
+	}
+
+	/**
+	 * This method returns product details
+	 *
+	 * @author Pinaki Samal
+	 */
+	public List<String> getProducts() {
+		LOGGER.info("Inside SalesEnquiryRepository:: getProducts ");
+
+		TypedQuery<String> q = entityManager
+				.createQuery("SELECT p.prdid" + " FROM PrdCs p" + " WHERE TRIM(p.prdty) =TRIM(:type)", String.class);
+
+		q.setParameter("type", OfsConstants.PRODUCT_TYPE);
+		return q.getResultList();
+	}
+
+	/**
+	 * This method returns sites details
+	 *
+	 * @author Pinaki Samal
+	 */
+	public List<String> getSites() {
+		LOGGER.info("Inside SalesEnquiryRepository:: getSites ");
+
+		TypedQuery<String> q = entityManager.createQuery("SELECT " + "s.stid" + " FROM StCs s", String.class);
+
+		return q.getResultList();
+	}
+
+	/**
+	 * This method returns in progress status details
+	 *
+	 * @author Pinaki Samal
+	 */
+	public List<InProgressStatusDto> getInProgressStatus() {
+		LOGGER.info("Inside SalesEnquiryRepository:: getInProgressStatus ");
+
+		TypedQuery<InProgressStatusDto> q = entityManager
+				.createQuery(OfsConstants.INPROGRESSSTATUS_DTO+"("
+						+ "seSt.sests," + "count(seSt.sests)" + ")" + " FROM SehStEntity seSt"
+						+ " WHERE seSt.sests = :status" + " GROUP BY seSt.sests", InProgressStatusDto.class);
+
+		q.setParameter(OfsConstants.STATUS, OfsStatusConstants.IN_PROGRESS);
+		return q.getResultList();
+
+	}
+
+	/**
+	 * This method returns request status details
+	 *
+	 * @author Pinaki Samal
+	 */
+	public List<RequestedStatusDto> getRequestedStatus() {
+		LOGGER.info("Inside SalesEnquiryRepository:: getRequestedStatus ");
+
+		TypedQuery<RequestedStatusDto> q = entityManager
+				.createQuery(OfsConstants.INPREQUESTSTATUS_DTO+"("
+						+ "shSt.sests," + "count(shSt.sests)" + ")" + " FROM SehStEntity shSt"
+						+ " WHERE shSt.sests = :status" + " GROUP BY shSt.sests", RequestedStatusDto.class);
+
+		q.setParameter(OfsConstants.STATUS, OfsStatusConstants.REQUESTED);
+
+		return q.getResultList();
+
+	}
+
+	/**
+	 * This method returns attached status details
+	 *
+	 * @author Pinaki Samal
+	 */
+	public List<AttachedStatusDto> getAttachedStatus() {
+		LOGGER.info("Inside SalesEnquiryRepository:: getAttachedStatus ");
+
+		TypedQuery<AttachedStatusDto> q = entityManager
+				.createQuery(OfsConstants.ATTACHEDSTATUS_DTO+"("
+						+ "ste.sests," + "count(ste.sests)" + ")" + " FROM SehStEntity ste"
+						+ " WHERE ste.sests = :status" + " GROUP BY ste.sests", AttachedStatusDto.class);
+
+		q.setParameter(OfsConstants.STATUS, OfsStatusConstants.ATTACHED);
+
+		return q.getResultList();
+
+	}
+
+	/**
+	 * This method returns confirmed status details
+	 *
+	 * @author Pinaki Samal
+	 */
+	public List<ConfirmedStatusDto> getConfirmedStatus() {
+		LOGGER.info("Inside SalesEnquiryRepository:: getConfirmedStatus ");
+
+		TypedQuery<ConfirmedStatusDto> q = entityManager
+				.createQuery(OfsConstants.CONFIRMEDSTATUS_DTO+"("
+						+ "s.sests," + "count(s.sests)" + ")" + " FROM SehStEntity s"
+						+ " WHERE s.sests = :status" + " GROUP BY s.sests", ConfirmedStatusDto.class);
+
+		q.setParameter(OfsConstants.STATUS, OfsStatusConstants.CONFIRMED);
+
+		return q.getResultList();
+
+	}
+
+	/**
+	 * This method returns created details
+	 *
+	 * @author Pinaki Samal
+	 * @param request - header data
+	 */
+	public Long getCreatedStatus(HeaderDateRequestDto request) {
+		LOGGER.info("Inside SalesEnquiryRepository:: getCreatedStatus ");
+
+		TypedQuery<Long> q = entityManager.createQuery("SELECT count(st)" + " FROM SehStEntity st"
+				+ " WHERE ((:fromDate is null ) or (st.seDt) >= (:fromDate))"
+				+ " AND ((:toDate is null ) or (st.seDt) <= (:toDate))", Long.class);
+		q.setParameter(OfsConstants.FROM_DATE, request.getFromDate(), TemporalType.DATE);
+		q.setParameter(OfsConstants.TO_DATE, request.getToDate(), TemporalType.DATE);
+		return q.getSingleResult();
+
+	}
+
+	/**
+	 * This method returns rejected details
+	 *
+	 * @author Pinaki Samal
+	 * @param request - header data
+	 */
+	public Long getRejectedStatus(HeaderDateRequestDto request) {
+		LOGGER.info("Inside SalesEnquiryRepository:: getRejectedStatus ");
+
+		TypedQuery<Long> q = entityManager.createQuery("SELECT count(sSt)" + " FROM SehStEntity sSt"
+				+ " WHERE sSt.sests = :rejectedstatus" + " AND ((:fromDate is null ) or (sSt.seDt) >= (:fromDate))"
+				+ " AND ((:toDate is null ) or (sSt.seDt) <= (:toDate))", Long.class);
+
+		q.setParameter("rejectedstatus", OfsStatusConstants.REJECTED);
+		q.setParameter(OfsConstants.FROM_DATE, request.getFromDate(), TemporalType.DATE);
+		q.setParameter(OfsConstants.TO_DATE, request.getToDate(), TemporalType.DATE);
+		return q.getSingleResult();
+
+	}
+
+	/**
+	 * This method returns external grade details
+	 *
+	 * @author Pinaki Samal
+	 */
+	public List<String> getExternalGrades() {
+		LOGGER.info("Inside SalesEnquiryRepository:: getExternalGrades ");
+
+		TypedQuery<String> q = entityManager.createQuery("SELECT " + "DISTINCT(TRIM(ext.extgrdnm))" + " FROM ExtGrdJmEntity ext WHERE ext.extgrdsts IN (:statuses) and ext.isactv = 1",
+				String.class);
+		q.setParameter("statuses", EXTERNAL_GRADE_STATUSES);
+		return q.getResultList();
+	}
+
+	/**
+	 * This method returns standard dim details
+	 *
+	 * @author Pinaki Samal
+	 * @param request - header data
+	 */
+	public List<String> getStandardDims() {
+		LOGGER.info("Inside SalesEnquiryRepository:: getStandardDims ");
+
+		TypedQuery<String> q = entityManager.createQuery("SELECT " + "std.stdid" + " FROM StdtolJm std", String.class);
+
+		return q.getResultList();
+	}
+
+	/**
+	 * This method returns tdc number details
+	 *
+	 * @author Pinaki Samal
+	 * @param request - header data
+	 */
+	public List<String> getTdcNos() {
+		LOGGER.info("Inside SalesEnquiryRepository:: getTdcNos ");
+
+		TypedQuery<String> q = entityManager.createQuery("SELECT " + "tdc.id.tdcid" + " FROM TdcJmEntity tdc",
+				String.class);
+
+		return q.getResultList();
+	}
+
+	/**
+	 * This method returns sales enquiry item remarks count
+	 *
+	 * @author Pinaki Samal
+	 * @param request - sales enquiry item data
+	 */
+	public Long getSalesEnquiryItemRemarksCount(SalesEnquiryItemDto salesItemDto) {
+		LOGGER.info("Inside SalesEnquiryRepository:: getSalesEnquiryItemRemarksCount ");
+
+		TypedQuery<Long> q = entityManager.createQuery("SELECT max(s.id.rmksctr)" + " FROM SelrmksStEntity s"
+				+ " WHERE s.id.seid =:saleId AND s.id.selid =:salesId", Long.class);
+
+		q.setParameter("saleId", salesItemDto.getSeid());
+		q.setParameter("salesId", salesItemDto.getSelid());
+		return q.getSingleResult();
+	}
+
+	/**
+	 * This method returns sales item remarks details
+	 *
+	 * @author Pinaki Samal
+	 * @param request - sales enquiry item data
+	 */
+	public List<RemarksDto> getAllSalesItemRemarks(SalesEnquiryItemDto dto) {
+		LOGGER.info("Inside SalesEnquiryRepository:: getAllSalesItemRemarks ");
+
+		TypedQuery<RemarksDto> q = entityManager
+				.createQuery(
+						OfsConstants.REMARKS_DTO+"(" + "rem.selrmks"
+								+ ")" + " FROM SelrmksStEntity rem"
+								+ " WHERE rem.id.seid =:seId AND rem.id.selid =:selId" + " ORDER BY rem.crDt DESC",
+						RemarksDto.class);
+		q.setParameter("seId", dto.getSeid());
+		q.setParameter("selId", dto.getSelid());
+		return q.getResultList();
+
+	}
+
+	/**
+	 * This method returns sales enquiry item details without tdc id
+	 *
+	 * @author Suman Kumar
+	 * @param request - sales enquiry data
+	 */
+	public List<SalesEnquiryItemDto> fetchSalesInqItemWithOutTdcId(SalesEnquiryDto request) {
+	    TypedQuery<SalesEnquiryItemDto> q = entityManager.createQuery(
+	          OfsConstants.SALES_ENQUIRY_ITEM_DTO+OfsConstants.getCommonFieldList() + 
+	        "FROM SelStEntity selSt WHERE selSt.id.seid = :seid AND selSt.tdcid IS NULL AND selSt.isactv = 1",
+	        SalesEnquiryItemDto.class);
+
+	    q.setParameter("seid", request.getSeid());
+
+	    return q.getResultList();
+	}
+	public Boolean getAllSalesEnquiryItemsDetailsWithApprovedTdc(SalesEnquiryDto request) {
+	    TypedQuery<SalesEnquiryItemDto> q = entityManager.createQuery(
+	    		OfsConstants.SALES_ENQUIRY_ITEM_DTO+OfsConstants.getCommonFieldList() +
+	        "FROM SelStEntity selSt WHERE selSt.id.seid = :seid AND selSt.isactv = 1",
+	        SalesEnquiryItemDto.class);
+
+	    q.setParameter("seid", request.getSeid());
+	    List<SalesEnquiryItemDto> resultList = q.getResultList();
+
+	    for (SalesEnquiryItemDto dto : resultList) {
+	        boolean isTdcApproved = isTdcApproved(dto);
+	        if (!isTdcApproved) {
+	            return false;
+	        }
+	    }
+	    return true;
+	}
+	private boolean isTdcApproved(SalesEnquiryItemDto dto) {
+	    TypedQuery<Boolean> query = entityManager.createQuery(
+	        "SELECT CASE WHEN (COUNT(selSt) > 0) THEN true ELSE false END " +
+	        "FROM SelStEntity selSt, TdcJmEntity tdc " +
+	        "WHERE selSt.id.seid = :seId AND selSt.id.selid = :selId AND selSt.tdcid = tdc.id.tdcid " +
+	        "AND tdc.tdcsts = :status AND selSt.isactv = 1", Boolean.class);
+
+	    query.setParameter("seId", dto.getSeid());
+	    query.setParameter("selId", dto.getSelid());
+	    query.setParameter("status", OfsStatusConstants.TDC_STATUS_APPROVED);
+
+	    return query.getSingleResult();
+	}
+	/**
+	 * This method returns sales enquiry item details by tdc id
+	 *
+	 * @author Pinaki Samal
+	 * @param request - tdc data
+	 */
+	public List<SalesEnquiryItemDto> getAllSalesEnquiryItemsDetailsByTdc(TdcGeneralRequestDto request) {
+	    TypedQuery<SalesEnquiryItemDto> q = entityManager.createQuery(
+	    		OfsConstants.SALES_ENQUIRY_ITEM_DTO+OfsConstants.getCommonFieldList() +
+	        " FROM SelStEntity selSt WHERE selSt.id.seid = :seId AND selSt.tdcid = :tdcId",
+	        SalesEnquiryItemDto.class);
+
+	    q.setParameter("seId", request.getSeidref());
+	    q.setParameter("tdcId", request.getTdcid());
+
+	    return q.getResultList();
+	}
+	
+	public List<TdcMainRequest> getTdcidAndRevidBySeid(String seid) {
+		LOGGER.info("Inside SalesEnquiryRepository:: getTdcidAndRevidBySeid");
+
+		TypedQuery<TdcMainRequest> q = entityManager
+				.createQuery(OfsConstants.TDC_MAIN_REQUEST_DTO
+						+"("
+						+ "sel.tdcid," 
+						+ "sel.revid " 
+						+ ")" 
+						+ " FROM SelStEntity sel" 
+						+ " WHERE sel.id.seid = :seid" 
+						+ " AND sel.isactv = :status"
+						, TdcMainRequest.class);
+
+		q.setParameter("seid", seid);
+		q.setParameter("status", OfsConstants.STS_ACTIVE);
+
+		return q.getResultList();
+
+	}
+	/**
+	 *  filtering, grouping,sorting in  sales enquiry details 
+	 * @Author - Sonal patil 
+	 */
+	public Long getSalesEnquiryDetailsQueryCount(StatusRequest request, String mainCountQuery
+			) {
+		List<String> statusList = request.getStatus();
+		String statusFlag = null;
+		if (request.getStatus() != null && !request.getStatus().isEmpty()) {
+			statusFlag = OfsStatusConstants.AVAILABLE;
+		}
+		
+	    // Count Query
+	    Query queryCount = entityManager.createQuery(mainCountQuery);
+	    queryCount.setParameter(OfsConstants.STATUS_FLAG, statusFlag);
+		queryCount.setParameter(OfsConstants.STATUS, statusList);
+		    return (Long) queryCount.getSingleResult();
+		}
+	/**
+	 *  filtering, grouping,sorting in  sales enquiry details 
+	 * @Author - Sonal patil 
+	 */
+	public Page<Object[]> getGroupingListDataSalesEnquiryDetails(String queryForGrouping, String queryForGroupingAndFilteringCount,
+			Integer page, Integer size, Integer skip, StatusRequest request) {
+		List<String> statusList = request.getStatus();
+		String statusFlag = null;
+		if (request.getStatus() != null && !request.getStatus().isEmpty()) {
+			statusFlag = OfsStatusConstants.AVAILABLE;
+		} 
+	    Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+	    queryCount.setParameter(OfsConstants.STATUS_FLAG, statusFlag);
+		queryCount.setParameter(OfsConstants.STATUS, statusList);
+	    Number resultNumber = (Number) queryCount.getSingleResult();
+	    int totalRows = resultNumber.intValue();
+	    int effectiveOffset = page * size;
+	    int effectivePageSize = size;
+
+	    if (skip != null && skip > 0) {
+	        if (skip >= size) {
+	            effectiveOffset += skip; 
+	            skip = 0;
+	        } else {
+	            effectiveOffset += skip;
+	            effectivePageSize -= skip; 
+	        }
+	    }
+	    Pageable pageable = PageRequest.of(page, size);
+	    TypedQuery<Object[]> query = entityManager.createQuery(queryForGrouping, Object[].class);
+	    query.setParameter(OfsConstants.STATUS_FLAG, statusFlag);
+	    query.setParameter(OfsConstants.STATUS, statusList);
+	    query.setFirstResult(effectiveOffset); // Correct OFFSET
+	    query.setMaxResults(effectivePageSize); // Adjusted PAGE SIZE
+	    List<Object[]> resultList = query.getResultList();
+	    return new PageImpl<>(resultList, pageable, totalRows);
+	}
+	/**
+	 *  filtering, grouping,sorting in  sales enquiry details 
+	 * @Author - Sonal patil 
+	 */
+	public Long groupCountQuerySalesEnquiryDetails(String groupCountQuery, StatusRequest request
+			) {
+		List<String> statusList = request.getStatus();
+		String statusFlag = null;
+		if (request.getStatus() != null && !request.getStatus().isEmpty()) {
+			statusFlag = OfsStatusConstants.AVAILABLE;
+		} 
+		Query queryCount = entityManager.createQuery(groupCountQuery);
+		 queryCount.setParameter(OfsConstants.STATUS_FLAG, statusFlag);
+		 queryCount.setParameter(OfsConstants.STATUS, statusList);
+		    Number resultNumber = (Number) queryCount.getSingleResult();
+		    return resultNumber.longValue();
+		}
+
+	/**
+	 *  filtering, grouping,sorting in  sales enquiry details 
+	 * @Author - Sonal patil 
+	 */
+	public Page<SalesEnquiryDto> getSalesEnquiryDetails(StatusRequest request, Integer page, Integer size,
+			String query, String countQueryParm, Integer skip) {
+		
+		List<String> statusList = request.getStatus();
+		String statusFlag = null;
+		if (request.getStatus() != null && !request.getStatus().isEmpty()) {
+			statusFlag = OfsStatusConstants.AVAILABLE;
+		} 
+	    int effectiveOffset = page * size;
+	    int effectivePageSize = size;
+
+	    if (skip != null && skip > 0) {
+	        if (skip >= size) {
+	            effectiveOffset += skip; 
+	            skip = 0; 
+	        } else {
+	            effectiveOffset += skip; 
+	            effectivePageSize -= skip; 
+	        }
+	    }
+	    TypedQuery<SalesEnquiryDto> q = entityManager.createQuery(query, SalesEnquiryDto.class);
+	    q.setParameter(OfsConstants.STATUS_FLAG, statusFlag);
+	  	q.setParameter(OfsConstants.STATUS, statusList);
+	    q.setFirstResult(effectiveOffset);
+	    q.setMaxResults(effectivePageSize);
+	    List<SalesEnquiryDto> resultList = q.getResultList();
+	    Query countQuery = entityManager.createQuery(countQueryParm);
+	    countQuery.setParameter(OfsConstants.STATUS_FLAG, statusFlag);
+	    countQuery.setParameter(OfsConstants.STATUS, statusList);
+	    Long totalRows = (Long) countQuery.getSingleResult();
+	    Pageable pageable = PageRequest.of(page, size);
+	    return new PageImpl<>(resultList, pageable, totalRows);
+	}
+
+}

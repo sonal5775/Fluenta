@@ -1,0 +1,24 @@
+api.env = UAT
+spring.datasource.url = jdbc:oracle:thin:@10.37.0.103:1521:OFSUATDB
+spring.datasource.username = ENC(MTYrTYysCZxmuIYC9s4oZvIGmB3h0S6n8c5HyP3U2sj0p/TepaLAvCNo4yIfndEz)
+spring.datasource.password = ENC(MTYrTYysCZxmuIYC9s4oZvIGmB3h0S6n8c5HyP3U2sj0p/TepaLAvCNo4yIfndEz)
+
+#sap.int.url = http://172.16.0.192:50000/RESTAdapter
+
+#sap.int.url = http://115.243.51.136:50000/RESTAdapter
+sap.int.url = https://115.243.51.136:8400/RESTAdapter
+sap.int.username = ENC(O1M8rbWM0rc1lRaOFqjfjdqjARr85e7jD65fPQT9A9OYnBp0gogxeFrRVH15jwKO)
+sap.int.password = ENC(Fq/bQz+/3G/tvIvmC8BRxTQh2bRUm5Lg4s3hcaDHiD5PJTYCTVPZG5fzR9hVxwMO)
+
+ sap.utility.url = http://115.243.51.136:50000/RESTAdapter
+#	sapUtilityQAURL = "https://jsplpoqas.jspl.com:8400/RESTAdapter";
+#	UTILITY_DATA_ENDPOINT = "/HSM_OFS_ColiAllocation";										
+sap.quality.url = http://115.243.51.136:50000/RESTAdapter
+#Spring Boot Admin Config
+spring.boot.admin.client.instance.service-base-url = http://10.37.0.103:8494
+spring.boot.admin.client.url = http://10.37.0.103:8444
+
+#Eureka Config
+eureka.client.service-url.defaultZone=http://10.37.0.103:8761/serviceregistry/eureka/
+
+api.auth.service.url = http://10.37.0.103:8484/auth/validate

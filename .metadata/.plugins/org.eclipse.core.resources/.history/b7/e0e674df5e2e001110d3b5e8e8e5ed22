@@ -1,0 +1,25 @@
+package com.hindindustec.fluenta.hsm.masters.service;
+
+import java.util.List;
+
+import com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceDimensionDto;
+import com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceDto;
+import com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceRequestDto;
+Unsupported @SuppressWarnings("java:S107")
+public interface FlatnessToleranceService {
+
+	List<String> fetchPgCode();
+
+	List<FlatnessToleranceDimensionDto> addOrUpdate(List<FlatnessToleranceDimensionDto> dtoList);
+
+	List<FlatnessToleranceDto> saveFlatnessTolerance(List<FlatnessToleranceDto> dtoList);
+
+	public <T> T fetchDimensionData(FlatnessToleranceRequestDto request, String status, int pageNumber, int pageSize,
+			String filter, String sort, String group, int skip, boolean requireTotalCount, boolean requireGroupCount,
+			String searchValue, Integer pageStore, Integer latestGroupCount);
+
+	public <T> T fetchFlatnessToleranceData(FlatnessToleranceRequestDto request, String status, int pageNumber,
+			int pageSize, String filter, String sort, String group, int skip, boolean requireTotalCount,
+			boolean requireGroupCount, String searchValue, Integer pageStore, Integer latestGroupCount);
+
+}

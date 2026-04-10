@@ -1,0 +1,88 @@
+package com.hindindustec.fluenta.hsm.quality.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.Date;
+
+/**
+ * The persistent class for the NORMSHT_JM database table.
+ * 
+ */
+@Entity
+@Getter
+@Setter
+@Table(name = "NORMSHT_JM", schema = "HITTRAN")
+@NamedQuery(name = "NormshtJmEntity.findAll", query = "SELECT n FROM NormshtJmEntity n")
+public class NormshtJmEntity implements Serializable {
+	private static final long serialVersionUID = 1L;
+
+	@Id
+	private String shtid;
+
+	private String normid;
+
+	private BigDecimal coolinginstillair;
+
+	@Column(name = "CR_BY")
+	private String crBy;
+
+	@Column(name = "CR_DT")
+	private Date crDt;
+
+	@Column(name = "CR_MAC_ADDR")
+	private String crMacAddr;
+
+	private BigDecimal isactv;
+
+	private BigDecimal loadingtempmax;
+
+	private BigDecimal loadingtempmin;
+
+	@Column(name = "MO_BY")
+	private String moBy;
+
+	@Column(name = "MO_DT")
+	private Date moDt;
+
+	@Column(name = "MO_MAC_ADDR")
+	private String moMacAddr;
+
+	private BigDecimal rateofcoolmax;
+
+	private BigDecimal rateofcoolmin;
+
+	private BigDecimal rateofheatingmax;
+
+	private BigDecimal rateofheatingmin;
+
+	private String reserve01;
+
+	private String reserve02;
+
+	private String reserve03;
+
+	private String reserve04;
+
+	private String reserve05;
+
+	private BigDecimal shtctr;
+
+	private String shtty;
+
+	private BigDecimal soakingdur;
+
+	private BigDecimal soakingtemp01;
+
+	private BigDecimal soakingtemp02;
+
+	private BigDecimal unloadingtempmax;
+
+	private BigDecimal unloadingtempmin;
+	
+	private String sokduruom;
+
+}

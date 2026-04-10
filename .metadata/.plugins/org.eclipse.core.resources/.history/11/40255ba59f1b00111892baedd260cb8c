@@ -1,0 +1,296 @@
+package com.hindindustec.fluenta.hsm.quality.service.impl;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.quality.client.SapServiceClient;
+import com.hindindustec.fluenta.hsm.quality.common.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.quality.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.quality.common.JsonUtil;
+import com.hindindustec.fluenta.hsm.quality.common.exception.ResourceNotFoundException;
+import com.hindindustec.fluenta.hsm.quality.common.response.FluentaApiResponse;
+import com.hindindustec.fluenta.hsm.quality.common.response.MessageType;
+import com.hindindustec.fluenta.hsm.quality.common.response.ResponseUtil;
+import com.hindindustec.fluenta.hsm.quality.constants.QualityConstants;
+import com.hindindustec.fluenta.hsm.quality.dto.AssociateCoilsDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HsmQualityChemicalDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HsmQualityMechanicalDto;
+import com.hindindustec.fluenta.hsm.quality.dto.JsonFormatMechSapDto;
+import com.hindindustec.fluenta.hsm.quality.dto.JsonFormatSapDto;
+import com.hindindustec.fluenta.hsm.quality.dto.MappedCoilRequest;
+import com.hindindustec.fluenta.hsm.quality.dto.MappedCoilsDto;
+import com.hindindustec.fluenta.hsm.quality.dto.SapUpdateRequestDto;
+import com.hindindustec.fluenta.hsm.quality.dto.TestedCoilRequest;
+import com.hindindustec.fluenta.hsm.quality.dto.TestedCoilsDto;
+import com.hindindustec.fluenta.hsm.quality.model.PostProdTaskMtEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PpspecimanmapQtEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PpspecimanmapQtPKEntity;
+import com.hindindustec.fluenta.hsm.quality.model.SapAckE2oEi;
+import com.hindindustec.fluenta.hsm.quality.model.TestOrderLineQualityListEntity;
+import com.hindindustec.fluenta.hsm.quality.model.TestOrderLineQualityListPkEntity;
+import com.hindindustec.fluenta.hsm.quality.repository.PostProdTaskMtRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PpspecimanMapQtRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.QcMtestBulkRecordCustRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.SapAckE2oEiRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.SpecimenQualityTransactionRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.TestordlQtRepository;
+import com.hindindustec.fluenta.hsm.quality.service.QcMtestBulkRecordService;
+import com.hindindustec.fluenta.hsm.quality.service.SapInterface;
+
+import jakarta.persistence.EntityManager;
+
+@Service
+public class QcMtestBulkRecordServiceImpl implements QcMtestBulkRecordService {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(QcMtestBulkRecordServiceImpl.class);
+
+	private QcMtestBulkRecordCustRepository bulkRecordCustRepository;
+	private DBSessionService dbSessionService;
+	private TestordlQtRepository lineQtRepository;
+	private PostProdTaskMtRepository postProdTaskMtRepository;
+	private SpecimenQualityTransactionRepository specimenQtRepository;
+	private PpspecimanMapQtRepository ppspecimanMapQtRepository;
+	private SapServiceClient sapServiceClient;
+	private SapInterface sapInterface;
+	private EntityManager entityManager;
+	private SapAckE2oEiRepository sapdataO2eEiRepository;
+
+
+	public QcMtestBulkRecordServiceImpl(QcMtestBulkRecordCustRepository bulkRecordCustRepository,
+			DBSessionService dbSessionService, TestordlQtRepository lineQtRepository,
+			PostProdTaskMtRepository postProdTaskMtRepository,
+			SpecimenQualityTransactionRepository specimenQtRepository,
+			PpspecimanMapQtRepository ppspecimanMapQtRepository, SapServiceClient sapServiceClient,
+			SapInterface sapInterface, EntityManager entityManager, SapAckE2oEiRepository sapdataO2eEiRepository) {
+		super();
+		this.bulkRecordCustRepository = bulkRecordCustRepository;
+		this.dbSessionService = dbSessionService;
+		this.lineQtRepository = lineQtRepository;
+		this.postProdTaskMtRepository = postProdTaskMtRepository;
+		this.specimenQtRepository = specimenQtRepository;
+		this.ppspecimanMapQtRepository = ppspecimanMapQtRepository;
+		this.sapServiceClient = sapServiceClient;
+		this.sapInterface = sapInterface;
+		this.entityManager = entityManager;
+		this.sapdataO2eEiRepository = sapdataO2eEiRepository;
+	}
+
+	@Override
+	public List<TestedCoilsDto> getMtestBulkRecords(TestedCoilRequest request) {
+		return bulkRecordCustRepository.getMtestBulkRecords(request);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<String>>> getHeatId() {
+		List<String> heatId = bulkRecordCustRepository.getHeatId();
+		return ResponseUtil.createResponse(heatId, "Fetching Heat Ids", true);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<MappedCoilsDto>>> getMappedCoils(MappedCoilRequest request) {
+		List<MappedCoilsDto> list = bulkRecordCustRepository.getMappedCoils(request);
+		  LOGGER.info("Featching mappedcoils data {}", list);
+		  return ResponseUtil.createResponse(list, "Fetching Mapped Coils", true);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<AssociateCoilsDto>>> getMappingPendingCoils(
+			MappedCoilRequest request) {
+		List<AssociateCoilsDto> list = bulkRecordCustRepository.getMappingPendingCoils(request);
+		 LOGGER.info("Featching pending coils data {}", list);
+		return ResponseUtil.createResponse(list, "Fetching Pending Mapped Coils", true);
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public ResponseEntity<FluentaApiResponse<List<AssociateCoilsDto>>> save(List<AssociateCoilsDto> request) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		ResponseEntity<FluentaApiResponse<List<AssociateCoilsDto>>> response = null;
+		List<HsmQualityChemicalDto> payload = new ArrayList<>();
+		List<HsmQualityMechanicalDto> mechpayload = new ArrayList<>();
+		for (AssociateCoilsDto dto : request) {
+			Optional<TestOrderLineQualityListEntity> testOrderEntities = lineQtRepository.findTestOrdIdByPpidAndTpiFlag(
+					dto.getTestedCoilPpId(), QualityConstants.HSM_LAB.equals(dto.getTpiRequired()) ? "N" : "Y");
+			 LOGGER.info("find testorder list {}", testOrderEntities);
+			if (!testOrderEntities.isEmpty()) {
+				TestOrderLineQualityListEntity existingEntity = testOrderEntities.get();
+				TestOrderLineQualityListEntity lineEntity = null;
+				Optional<TestOrderLineQualityListEntity> lineByTestOrdIdAndPpid = lineQtRepository.getLineByTestOrdIdAndPpid(existingEntity.getId().gettestOrderId(),dto.getCoilId());
+				if(lineByTestOrdIdAndPpid.isPresent()) {
+					lineEntity = lineByTestOrdIdAndPpid.get();
+					lineEntity.setModifiedBy(ClientIpUtils.getClient());
+					lineEntity.setModifiedDate(new Date());
+					lineEntity.setModifiedMacAddress(ClientIpUtils.getClientIpAddress());
+				}else {
+					lineEntity = new TestOrderLineQualityListEntity();
+					TestOrderLineQualityListPkEntity pk = new TestOrderLineQualityListPkEntity();
+					pk.settestOrderId(existingEntity.getId().gettestOrderId());
+					Long findMaxPpSlNo = lineQtRepository.findMaxPpSlNo(existingEntity.getId().gettestOrderId());
+					pk.setppslNo(findMaxPpSlNo + 1);
+					lineEntity.setId(pk);
+					lineEntity.setCreatedBy(ClientIpUtils.getClient());
+					lineEntity.setCreatedDate(new Date());
+					lineEntity.setCreatedMacAddress(ClientIpUtils.getClientIpAddress());
+				}
+				lineEntity.setPpId(dto.getCoilId());
+				lineEntity.setPpCtr(0l);
+				lineEntity.setSlabId(dto.getSlabId());
+				lineEntity.setPoid(existingEntity.getPoid());
+				lineEntity.setScheduleId(dto.getScheduleNo());
+				lineEntity.setScheduleSequenceId(dto.getSchdSeqId());
+				lineEntity.setSampleCutFlag("N");
+				lineEntity.setIsActive(BigDecimal.ONE);
+				lineEntity.setSampleId(existingEntity.getSampleId());
+				lineEntity.setOrderItemId(existingEntity.getOrderItemId());
+				lineEntity.setOrderItemListId(existingEntity.getOrderItemListId());
+				lineEntity.setTaskStepId(existingEntity.getTaskStepId());
+				lineEntity.setTestppSts(QualityConstants.STATUS_MAPPED);
+				lineQtRepository.save(lineEntity);
+				lineQtRepository.flush();
+				entityManager.flush();
+				Optional<PostProdTaskMtEntity> optional = postProdTaskMtRepository
+						.getTasksByPpidAndPrid(dto.getCoilId(), dto.getTpiRequired(),QualityConstants.INSP_FLAG_YES);
+				Optional<PostProdTaskMtEntity> testedCoilTaskOptional = postProdTaskMtRepository
+						.getTasksByPpidAndPrid(dto.getTestedCoilPpId(), dto.getTpiRequired(),QualityConstants.INSP_FLAG_YES);
+				if (optional.isPresent() && testedCoilTaskOptional.isPresent()) {
+					PostProdTaskMtEntity task = optional.get();
+					PostProdTaskMtEntity testedCoilTask = testedCoilTaskOptional.get();
+					task.setFinalResult(testedCoilTask.getFinalResult());
+					task.setManualDecision(testedCoilTask.getManualDecision());
+					task.setTaskStatus(testedCoilTask.getTaskStatus());
+					task.setMapSampleId(existingEntity.getSampleId());
+					task.setModifiedBy(ClientIpUtils.getClient());
+					task.setModifiedDate(new Date());
+					task.setModifiedMacAddress(ClientIpUtils.getClientIpAddress());
+					task.setIsActive(BigDecimal.ONE);
+					 LOGGER.info("post production save task {}", task);
+					postProdTaskMtRepository.save(task);
+				}
+
+				List<String> specimenList = specimenQtRepository.findSpecimenBySampleId(existingEntity.getSampleId(),
+						QualityConstants.STATUS_COMPLETE);
+				 LOGGER.info("specimenList {}", specimenList);
+				for (String list : specimenList) {
+					PpspecimanmapQtEntity ppspecimanmapQtEntity = new PpspecimanmapQtEntity();
+					PpspecimanmapQtPKEntity mapPk = new PpspecimanmapQtPKEntity();
+
+					mapPk.setppId(dto.getCoilId());
+					mapPk.setspecimanId(list);
+					mapPk.setppCounter(dto.getPpCtr());
+					ppspecimanmapQtEntity.setId(mapPk);
+					ppspecimanmapQtEntity.setPpMapStatus(QualityConstants.STATUS_MAPPED);
+					ppspecimanmapQtEntity.setTaskStepId(existingEntity.getTaskStepId());
+					ppspecimanmapQtEntity.setCreatedBy(ClientIpUtils.getClient());
+					ppspecimanmapQtEntity.setCreatedDate(new Date());
+					ppspecimanmapQtEntity.setCreatedMacAddress(ClientIpUtils.getClientIpAddress());
+					ppspecimanmapQtEntity.setIsActive(BigDecimal.ONE);
+					ppspecimanMapQtRepository.save(ppspecimanmapQtEntity);
+				}
+
+				response = ResponseUtil.createResponse(request, "Update Successful", false);
+			} else {
+				response = ResponseUtil.createErrorResponse(
+						new ResourceNotFoundException("QualitySchdlEntity", null, testOrderEntities), "Saving Failed",
+						LOGGER);
+			}
+		}
+		 LOGGER.info("response {}", response);
+		return response;
+	}
+ 
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public ResponseEntity<FluentaApiResponse<List<String>>> updateSAPData(List<SapUpdateRequestDto> request) {
+
+	    long methodStart = System.currentTimeMillis();
+	    LOGGER.info("Request SAP data: -------------------{}", request);
+	    dbSessionService.setSessionInfo(this.getClass().getName());
+	    FluentaApiResponse<List<String>> response = new FluentaApiResponse<>();
+	    if (request == null || request.isEmpty()) {
+	        response.setStatus(FluentaApiResponse.Status.FAILURE);
+	        response.addMessage(MessageType.ERROR, "Request list cannot be empty");
+	        return ResponseEntity.badRequest().body(response);
+	    }
+	    List<HsmQualityChemicalDto> payload = new ArrayList<>();
+		List<HsmQualityMechanicalDto> mechpayload = new ArrayList<>();
+	    List<String> processedRecords = new ArrayList<>();
+	    for (SapUpdateRequestDto  dto : request) {
+	    	   String requestPpId = dto.getPpId();
+	    	    Optional<SapAckE2oEi> ackOptional =sapdataO2eEiRepository.findTopByPpIdOrderByIdRecordNoDesc(requestPpId);
+	    	    if (ackOptional.isPresent()) {
+	    	        LOGGER.info("PPID already exists in SAPACK_E2O_EI table: {}", requestPpId);
+	    	        response.addMessage(MessageType.INFO,"PPID already processed: " + requestPpId);
+	    	        continue;  
+	    	    }
+	        long loopStart = System.currentTimeMillis();
+	        
+	    	HsmQualityMechanicalDto dtoMechDataSAP = new HsmQualityMechanicalDto();
+			HsmQualityMechanicalDto dtoMechData = sapInterface.buildHsmQualityMechanicalDto(dtoMechDataSAP,
+					dto.getPpId(), dto.getHeatId(), dto.getSampleId());
+			mechpayload.add(dtoMechData);
+
+			HsmQualityChemicalDto dtoDataSAP = new HsmQualityChemicalDto();
+			HsmQualityChemicalDto dtoData = sapInterface.buildHsmQualityChemicalDto(dtoDataSAP, dto.getPpId(),dto.getSlabId(),
+					dto.getHeatId(), dto.getSampleId());
+			LOGGER.info("dtoData: {}", dtoData);
+			payload.add(dtoData);
+
+
+	        processedRecords.add(dto.getPpId() + "-" + dto.getSampleId());
+
+	        LOGGER.info("Processed currentTimeMillis---------------------------- ms {} ",
+	                System.currentTimeMillis() - loopStart);
+	        LOGGER.info("Processed SAMPLEID ---------------------------- {} in {} ppid",
+	                dto.getSampleId(),dto.getPpId());
+	        
+	    }
+
+	    long sapStart = System.currentTimeMillis();
+
+	    extractedSapCalled(response, payload, mechpayload);
+
+	    LOGGER.info("SAP call time = {} ms", System.currentTimeMillis() - sapStart);
+	    LOGGER.info("Total time = {} ms for {} records",
+	            System.currentTimeMillis() - methodStart,
+	            request.size());
+
+	    response.setData(processedRecords);
+
+	    return ResponseEntity.ok(response);
+	}
+
+	private void extractedSapCalled(FluentaApiResponse<List<String>> response, List<HsmQualityChemicalDto> payload,
+			List<HsmQualityMechanicalDto> mechpayload) {
+		try {
+			  LOGGER.info(" sending SAP Mech payload Test Data{}", mechpayload);
+			  LOGGER.info(" sending SAP chem payload Test Data{}", payload);
+	    	JsonFormatMechSapDto jsonFormatMechSapDto = new JsonFormatMechSapDto();
+			jsonFormatMechSapDto.setMechDto(mechpayload);
+			String convertObjectToMechJson = JsonUtil.convertObjectToJson(jsonFormatMechSapDto);
+			sapServiceClient.sendHsmMechTestData(convertObjectToMechJson);
+
+			JsonFormatSapDto jsonFormatSapDto = new JsonFormatSapDto();
+			jsonFormatSapDto.setChemDto(payload);
+			String convertObjectToJson = JsonUtil.convertObjectToJson(jsonFormatSapDto);
+			sapServiceClient.sendHsmChemTestData(convertObjectToJson);
+
+	        response.setStatus(FluentaApiResponse.Status.SUCCESS);
+	        response.addMessage(MessageType.INFO, "SAP data sent successfully");
+
+	    } catch (Exception ex) {
+	        LOGGER.info("Error while sending SAP Mech/Chem Test Data{}", ex);
+	        response.setStatus(FluentaApiResponse.Status.PARTIAL_SUCCESS);
+	        response.addMessage(MessageType.ERROR, "Error while sending data to SAP");
+	    }
+	}
+
+}

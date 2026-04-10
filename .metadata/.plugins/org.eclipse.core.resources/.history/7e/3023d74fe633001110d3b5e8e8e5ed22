@@ -1,0 +1,14 @@
+package com.hindindustec.fluenta.sales.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+
+@Data
+public class UserIdUserNmDto {
+
+	private String userid;
+	private String usernm;
+}

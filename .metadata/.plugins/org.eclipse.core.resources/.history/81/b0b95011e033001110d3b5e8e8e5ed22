@@ -1,0 +1,180 @@
+package com.hindindustec.fluenta.sales.controller;
+
+import java.math.BigDecimal;
+import java.net.URLDecoder;
+import java.util.List;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.hindindustec.fluenta.hsm.masters.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.masters.common.exception.BadRequestException;
+import com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceRequestDto;
+import com.hindindustec.fluenta.sales.common.DevExtGridFilterUtils;
+import com.hindindustec.fluenta.sales.common.response.FluentaPaginatedResponse;
+import com.hindindustec.fluenta.sales.dto.OrderBookRequest;
+import com.hindindustec.fluenta.sales.dto.OrderBookViewDto;
+import com.hindindustec.fluenta.sales.dto.SegmentDto;
+import com.hindindustec.fluenta.sales.dto.StatusDto;
+import com.hindindustec.fluenta.sales.repository.SolStRepository;
+import com.hindindustec.fluenta.sales.service.OrderBookService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
+
+@RestController
+@RequestMapping("/sales/order-book")
+public class OrderBookController {
+
+	private OrderBookService salesOrderBookService;
+	private SolStRepository solStRepository;
+	
+	
+	public OrderBookController(OrderBookService salesOrderBookService, SolStRepository solStRepository) {
+		super();
+		this.salesOrderBookService = salesOrderBookService;
+		this.solStRepository = solStRepository;
+	}
+	
+
+	@Operation(
+            summary = "Get ORDER BOOK List",
+            description = "Retrieve Slab Stock List",
+            tags = { "ORDER BOOK List", "Post" }
+    )
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved ORDER BOOK list")
+    @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+	@PostMapping("/order-book-view")
+	@SuppressWarnings("unchecked")
+	public <T> T getProcessInventoryStatusDetails(
+			@RequestBody OrderBookRequest request,
+			@RequestParam(value = "pageStore") Integer pageStore,
+			@RequestParam(value = "latestGroupCount") Integer latestGroupCount,
+			@RequestParam(value = "status",required = false) String status,
+			@RequestParam(value = "skip",required = false) Integer skip,
+	        @RequestParam(value="take",required = false) Integer take,
+	        @RequestParam(value = "filter", required = false) String filter,
+	        @RequestParam(value = "sort", required = false) String sort,
+	        @RequestParam(value = "searchValue", required = false) String searchValue,
+	        @RequestParam(value = "group", required = false) String group,
+	        @RequestParam(value = "requireTotalCount",required = false) boolean requireTotalCount,
+	        @RequestParam(value = "requireGroupCount",required = false) boolean requireGroupCount,
+	        HttpServletRequest httpServletRequest) throws JsonProcessingException {
+		try {
+			// Decode filter, sort, and group strings (handling null cases)
+	        String filterPathString = DevExtGridFilterUtils.decodeFilter(filter, httpServletRequest.getQueryString());
+	        String groupString = DevExtGridFilterUtils.decodeGroup(group, httpServletRequest.getQueryString());
+	        String decodedSort = sort != null ? URLDecoder.decode(sort, "UTF-8") : null;
+	        
+	        int[] pageSizeArr = processPageAndSize(skip, take,pageStore);
+			skip = pageSizeArr[0];
+			take = pageSizeArr[1];
+		    return salesOrderBookService.getSlabStocks(request,status, skip, take, filterPathString, decodedSort,groupString,skip,requireTotalCount,requireGroupCount,searchValue,pageStore,latestGroupCount);
+
+		}catch(Exception e) {
+			e.printStackTrace();
+		}
+		return (T) new FluentaPaginatedResponse<OrderBookViewDto>();
+}	
+	
+	public <T> T getProcessInventoryStatusDetails(@RequestBody FlatnessToleranceRequestDto request,
+			@RequestParam(value = OfsConstants.GROUPING_PAGESTORE) Integer pageStore,
+			@RequestParam(value = OfsConstants.GROUPING_LATEST_GROUP_COUNT) Integer latestGroupCount,
+			@RequestParam(value = OfsConstants.GROUPING_STATUS, required = false) String status,
+			@RequestParam(value = OfsConstants.GROUPING_SKIP, required = false) Integer skip,
+			@RequestParam(value = OfsConstants.GROUPING_TAKE, required = false) Integer take,
+			@RequestParam(value = OfsConstants.GROUPING_FILTER, required = false) String filter,
+			@RequestParam(value = OfsConstants.GROUPING_SORT, required = false) String sort,
+			@RequestParam(value = OfsConstants.GROUPING_SEARCH_VALUE, required = false) String searchValue,
+			@RequestParam(value = OfsConstants.GROUPING_GROUP, required = false) String group,
+			@RequestParam(value = OfsConstants.GROUPING_REQUIRE_TOTAL_COUNT, required = false) boolean requireTotalCount,
+			@RequestParam(value = OfsConstants.GROUPING_REQUIRE_GROUP_COUNT, required = false) boolean requireGroupCount,
+			HttpServletRequest httpServletRequest) throws JsonProcessingException {
+		try {
+
+			String filterPathString = DevExtGridFilterUtils.decodeFilter(filter, httpServletRequest.getQueryString());
+			String groupString = DevExtGridFilterUtils.decodeGroup(group, httpServletRequest.getQueryString());
+			String decodedSort = sort != null ? URLDecoder.decode(sort, OfsConstants.UTF_8) : null;
+
+			int[] pageSizeArr = processPageAndSize(skip, take, pageStore);
+			skip = pageSizeArr[0];
+			take = pageSizeArr[1];
+			return salesOrderBookService.getSlabStocks(request,, status, skip, take, filterPathString, decodedSort, groupString,
+					skip, requireTotalCount, requireGroupCount, searchValue, pageStore, latestGroupCount);
+
+		} catch (Exception e) {
+			throw new BadRequestException("Unable to fetch flatness Dimension range data", e);
+		}
+
+	}
+	
+
+	
+	@PostMapping("/kpis")
+    public ResponseEntity<List<StatusDto>> geKpis(@RequestBody OrderBookRequest request) {
+        return ResponseEntity.ok(salesOrderBookService.getKpis(request));
+    }
+	@GetMapping("/sum-soqty")
+    public ResponseEntity<BigDecimal> getSumSoQty(@RequestParam String prdid) {
+        BigDecimal sum = solStRepository.sumSoQty(prdid);
+        return ResponseEntity.ok(sum);
+    }
+	
+	@GetMapping("/sum-billqty")
+    public ResponseEntity<BigDecimal> getSumBillQty(@RequestParam String prdid) {
+        BigDecimal sum = solStRepository.sumBillQty(prdid);
+        return ResponseEntity.ok(sum);
+    }
+	
+	@GetMapping("/sum-rfdqty")
+    public ResponseEntity<BigDecimal> getSumRfdQty(@RequestParam String prdid) {
+        BigDecimal sum = solStRepository.sumrfdQty(prdid);
+        return ResponseEntity.ok(sum);
+    }
+	
+	@GetMapping("/segments")
+	public List<SegmentDto> getSegments(@RequestParam("prdid") String prdid) {
+        return salesOrderBookService.getSegments(prdid);
+    }
+	
+	@GetMapping("/get-sosts")
+	public List<String> getSosts(){
+		return salesOrderBookService.getSosts();
+	}
+	
+	@GetMapping("/get-so")
+	public List<String> getSo() {
+		return salesOrderBookService.getSo();
+	}
+	
+	@GetMapping("/get-product")
+	public List<String> getProduct() {
+		return salesOrderBookService.getProduct();
+	}
+	
+	@GetMapping("/so-item")
+	public List<Long> getSoItem() {
+		return salesOrderBookService.getSoItem();
+	}
+	
+	private int[] processPageAndSize(Integer pageNumber, Integer pageSize, Integer pageStore) {
+	    if (pageNumber == null) {
+	    	pageNumber = 0;
+	    }
+	    if (pageSize == null) {
+	    	pageSize = pageStore;
+	    }
+	    return new int[]{pageNumber, pageSize};
+	}
+	
+	
+}
+

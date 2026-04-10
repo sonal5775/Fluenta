@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<qualifiedTypeNameHistroy>
+    <fullyQualifiedTypeName name="com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceDimensionDto"/>
+    <fullyQualifiedTypeName name="java.util.Objects"/>
+    <fullyQualifiedTypeName name="com.hindindustec.fluenta.reports.common.customexception.BadRequestException"/>
+    <fullyQualifiedTypeName name="com.hindindustec.fluenta.hsm.quality.service.impl.QualityControlLabTestResultServiceImpl"/>
+    <fullyQualifiedTypeName name="lombok.NoArgsConstructor"/>
+    <fullyQualifiedTypeName name="lombok.AllArgsConstructor"/>
+    <fullyQualifiedTypeName name="com.hindindustec.fluenta.hsm.quality.constants.OfsDatabseConstants"/>
+    <fullyQualifiedTypeName name="com.hindindustec.fluenta.hsm.quality.constants.QualityConstants"/>
+</qualifiedTypeNameHistroy>

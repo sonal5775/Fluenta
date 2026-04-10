@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<item key="hasShownOverlayPopupBefore" value="true"/>
+	<section name="java.lang.Class">
+		<item key="selection" value=""/>
+		<item key="wrap" value="true"/>
+		<item key="casesensitive" value="false"/>
+		<item key="wholeword" value="false"/>
+		<item key="incremental" value="false"/>
+		<item key="isRegEx" value="false"/>
+		<item key="replaceBarOpen" value="false"/>
+		<list key="findhistory">
+			<item value="filterlistDetailsData"/>
+			<item value="conditionForFiled"/>
+			<item value="productionCodeId"/>
+			<item value="buildHsmQualityUDDto"/>
+			<item value="UDcode"/>
+			<item value="PRUEFLOS"/>
+			<item value="MATNR"/>
+			<item value="bwart"/>
+			<item value="BWART"/>
+			<item value="getMillPdiCount"/>
+			<item value="getRhfPdiCount"/>
+			<item value="countStatus"/>
+			<item value="findCountByIdAndStatus"/>
+			<item value="getTotalPlannedSlabs"/>
+			<item value="sap"/>
+		</list>
+		<list key="replacehistory">
+		</list>
+	</section>
+	<section name="org.eclipse.ui.texteditor.FindReplaceDialog_dialogBounds">
+		<item key="DIALOG_X_ORIGIN" value="464"/>
+		<item key="DIALOG_Y_ORIGIN" value="84"/>
+		<item key="DIALOG_WIDTH" value="366"/>
+		<item key="DIALOG_HEIGHT" value="389"/>
+		<item key="DIALOG_FONT_NAME" value="1|Segoe UI|9.0|0|WINDOWS|1|-18|0|0|0|400|0|0|0|1|0|0|0|0|Segoe UI"/>
+	</section>
+</section>

@@ -1,0 +1,29 @@
+package com.hindindustec.fluenta.sales.service;
+
+import java.util.List;
+
+import org.springframework.data.domain.Page;
+
+import com.hindindustec.fluenta.sales.dto.OrderBookRequest;
+import com.hindindustec.fluenta.sales.dto.OrderBookViewDto;
+import com.hindindustec.fluenta.sales.dto.SegmentDto;
+import com.hindindustec.fluenta.sales.dto.StatusDto;
+
+public interface OrderBookService {
+List<SegmentDto> getSegments(String prdid);
+
+	List<String> getSosts();
+
+	List<String> getSo();
+
+	List<String> getProduct();
+
+	List<Long> getSoItem();
+
+	List<StatusDto> getKpis(OrderBookRequest request);
+
+	<T> T getSlabStocks(OrderBookRequest slabStockRequest, String status, int pageNumber, int pageSize, String filter,
+			String sort, String group, int skip, boolean requireTotalCount, boolean requireGroupCount,
+			String searchValue, Integer pageStore, Integer latestGroupCount);
+
+}

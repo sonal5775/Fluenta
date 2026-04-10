@@ -1,0 +1,298 @@
+package com.hindindustec.fluenta.hsm.quality.model;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.Date;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.Entity;
+import jakarta.persistence.NamedQuery;
+import jakarta.persistence.Table;
+import lombok.Data;
+
+
+/**
+ * The persistent class for the TDCDIMTOLAIM_JM database table.
+ * 
+ */
+@Entity
+@Data
+@Table(name="TDCDIMTOLAIM_JM", schema = "HITTRAN")
+@NamedQuery(name="TdcdimtolaimJmEntity.findAll", query="SELECT t FROM TdcdimtolaimJmEntity t")
+public class TdcdimtolaimJmEntity implements Serializable {
+	private static final long serialVersionUID = 1L;
+
+	@EmbeddedId
+	private TdcdimtolaimJmEntityPK id;
+
+	private BigDecimal acceptedtolnve;
+
+	private BigDecimal acceptedtolpve;
+
+	private BigDecimal aimval;
+
+	@Column(name="CR_BY")
+	private String crBy;
+
+	@Column(name="CR_DT")
+	private Date crDt;
+
+	@Column(name="CR_MAC_ADDR")
+	private String crMacAddr;
+
+	private BigDecimal dimtolnve;
+
+	private BigDecimal dimtolpve;
+
+	private BigDecimal isactv;
+
+	private String maxopr;
+
+	private String minopr;
+
+	@Column(name="MO_BY")
+	private String moBy;
+
+	@Column(name="MO_DT")
+	private Date moDt;
+
+	@Column(name="MO_MAC_ADDR")
+	private String moMacAddr;
+
+	private String remarks;
+
+	private String reserve01;
+
+	private String reserve02;
+
+	private String reserve03;
+
+	private String reserve04;
+
+	private String reserve05;
+
+	private BigDecimal thkmax;
+
+	private BigDecimal thkmin;
+
+	private String uom;
+
+	private BigDecimal wdtmax;
+
+	private BigDecimal wdtmin;
+
+	public TdcdimtolaimJmEntity() {
+		//empty constructor
+	}
+
+	public TdcdimtolaimJmEntityPK getId() {
+		return this.id;
+	}
+
+	public void setId(TdcdimtolaimJmEntityPK id) {
+		this.id = id;
+	}
+
+	public BigDecimal getAcceptedtolnve() {
+		return this.acceptedtolnve;
+	}
+
+	public void setAcceptedtolnve(BigDecimal acceptedtolnve) {
+		this.acceptedtolnve = acceptedtolnve;
+	}
+
+	public BigDecimal getAcceptedtolpve() {
+		return this.acceptedtolpve;
+	}
+
+	public void setAcceptedtolpve(BigDecimal acceptedtolpve) {
+		this.acceptedtolpve = acceptedtolpve;
+	}
+
+	public BigDecimal getAimval() {
+		return this.aimval;
+	}
+
+	public void setAimval(BigDecimal aimval) {
+		this.aimval = aimval;
+	}
+
+	public String getCrBy() {
+		return this.crBy;
+	}
+
+	public void setCrBy(String crBy) {
+		this.crBy = crBy;
+	}
+
+	public Date getCrDt() {
+		return this.crDt;
+	}
+
+	public void setCrDt(Date crDt) {
+		this.crDt = crDt;
+	}
+
+	public String getCrMacAddr() {
+		return this.crMacAddr;
+	}
+
+	public void setCrMacAddr(String crMacAddr) {
+		this.crMacAddr = crMacAddr;
+	}
+
+	public BigDecimal getDimtolnve() {
+		return this.dimtolnve;
+	}
+
+	public void setDimtolnve(BigDecimal dimtolnve) {
+		this.dimtolnve = dimtolnve;
+	}
+
+	public BigDecimal getDimtolpve() {
+		return this.dimtolpve;
+	}
+
+	public void setDimtolpve(BigDecimal dimtolpve) {
+		this.dimtolpve = dimtolpve;
+	}
+
+	public BigDecimal getIsactv() {
+		return this.isactv;
+	}
+
+	public void setIsactv(BigDecimal isactv) {
+		this.isactv = isactv;
+	}
+
+	public String getMaxopr() {
+		return this.maxopr;
+	}
+
+	public void setMaxopr(String maxopr) {
+		this.maxopr = maxopr;
+	}
+
+	public String getMinopr() {
+		return this.minopr;
+	}
+
+	public void setMinopr(String minopr) {
+		this.minopr = minopr;
+	}
+
+	public String getMoBy() {
+		return this.moBy;
+	}
+
+	public void setMoBy(String moBy) {
+		this.moBy = moBy;
+	}
+
+	public Date getMoDt() {
+		return this.moDt;
+	}
+
+	public void setMoDt(Date moDt) {
+		this.moDt = moDt;
+	}
+
+	public String getMoMacAddr() {
+		return this.moMacAddr;
+	}
+
+	public void setMoMacAddr(String moMacAddr) {
+		this.moMacAddr = moMacAddr;
+	}
+
+	public String getRemarks() {
+		return this.remarks;
+	}
+
+	public void setRemarks(String remarks) {
+		this.remarks = remarks;
+	}
+
+	public String getReserve01() {
+		return this.reserve01;
+	}
+
+	public void setReserve01(String reserve01) {
+		this.reserve01 = reserve01;
+	}
+
+	public String getReserve02() {
+		return this.reserve02;
+	}
+
+	public void setReserve02(String reserve02) {
+		this.reserve02 = reserve02;
+	}
+
+	public String getReserve03() {
+		return this.reserve03;
+	}
+
+	public void setReserve03(String reserve03) {
+		this.reserve03 = reserve03;
+	}
+
+	public String getReserve04() {
+		return this.reserve04;
+	}
+
+	public void setReserve04(String reserve04) {
+		this.reserve04 = reserve04;
+	}
+
+	public String getReserve05() {
+		return this.reserve05;
+	}
+
+	public void setReserve05(String reserve05) {
+		this.reserve05 = reserve05;
+	}
+
+	public BigDecimal getThkmax() {
+		return this.thkmax;
+	}
+
+	public void setThkmax(BigDecimal thkmax) {
+		this.thkmax = thkmax;
+	}
+
+	public BigDecimal getThkmin() {
+		return this.thkmin;
+	}
+
+	public void setThkmin(BigDecimal thkmin) {
+		this.thkmin = thkmin;
+	}
+
+	public String getUom() {
+		return this.uom;
+	}
+
+	public void setUom(String uom) {
+		this.uom = uom;
+	}
+
+	public BigDecimal getWdtmax() {
+		return this.wdtmax;
+	}
+
+	public void setWdtmax(BigDecimal wdtmax) {
+		this.wdtmax = wdtmax;
+	}
+
+	public BigDecimal getWdtmin() {
+		return this.wdtmin;
+	}
+
+	public void setWdtmin(BigDecimal wdtmin) {
+		this.wdtmin = wdtmin;
+	}
+
+
+}

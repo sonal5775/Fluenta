@@ -1,0 +1,39 @@
+package in.net.usit.yip.core.auditing;
+
+
+import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+
+@Component
+public class AuditableEntityListener {
+
+    @PrePersist
+    public void setCreatedMacAddress(Object entity) {
+        if (entity instanceof Auditable) {
+            Auditable<?> auditable = (Auditable<?>) entity;
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attributes != null) {
+                String crMacAddress = NetworkUtils.getCurrentMacAddress();
+                auditable.setCreatedMacAddrs(crMacAddress != null ? crMacAddress : "UNKNOWN");
+
+            }
+        }
+    }
+
+    @PreUpdate
+    public void setModifiedMacAddress(Object entity) {
+        if (entity instanceof Auditable) {
+            Auditable<?> auditable = (Auditable<?>) entity;
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attributes != null) {
+                String moMacAddress = NetworkUtils.getCurrentMacAddress();
+                
+                auditable.setModifyMacAddrs(moMacAddress != null ? moMacAddress : "UNKNOWN");
+            }
+        }
+    }
+}

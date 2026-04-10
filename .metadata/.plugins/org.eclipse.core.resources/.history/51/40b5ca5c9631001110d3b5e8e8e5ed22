@@ -1,0 +1,94 @@
+package com.hindindustec.fluenta.hsm.masters.customrepository;
+
+import java.util.Date;
+import java.util.List;
+
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.masters.dto.AttributeDto;
+import com.hindindustec.fluenta.hsm.masters.dto.StandardDimToleranceDto;
+import com.hindindustec.fluenta.hsm.masters.dto.StandardDimToleranceRequest;
+import com.hindindustec.fluenta.hsm.masters.dto.ThickWdtToleranceDto;
+import com.hindindustec.fluenta.hsm.masters.entities.StddimtoldJm;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+
+@Repository
+public class StandardDimToleranceCustRepository {
+
+	private EntityManager entityManager;
+
+	public StandardDimToleranceCustRepository(EntityManager entityManager) {
+		super();
+		this.entityManager = entityManager;
+	}
+
+	public List<StandardDimToleranceDto> getDimToleranceDetails(StandardDimToleranceRequest request) {
+
+		TypedQuery<StandardDimToleranceDto> q = entityManager.createQuery(
+				OfsConstants.STD_DIM_TOL_DTL_DTO + "(" + "s.stdid,  " + "s.crBy,      " + "s.crDt,      "
+						+ "s.crMacAddr, " + "s.isactv,    " + "s.moBy, " + "s.moDt,  " + "s.moMacAddr,    "
+						+ "s.prdid,      " + "s.reserve01,      " + "s.reserve02, " + "s.reserve03,     "
+						+ "s.reserve04, " + "s.reserve05, " + "s.stddesc, " + "s.stdnm " + ")" + " FROM StdtolJm s"
+						+ " WHERE (:prdid is null or s.prdid = :prdid)" + " order by s.crDt DESC",
+				StandardDimToleranceDto.class);
+		q.setParameter("prdid", request.getPrdid());
+		return q.getResultList();
+	}
+
+	public List<String> getProduct() {
+		TypedQuery<String> q = entityManager.createQuery(
+				"SELECT distinct (p.prdid) from PrdCs p" + " where p.prdid is not null" + " order by p.prdid asc",
+				String.class);
+		return q.getResultList();
+	}
+
+	public List<String> getAttribute(String prdid) {
+		TypedQuery<String> q = entityManager.createQuery(
+				"SELECT distinct (p.id.atrid) from PrdatrMapCs p" + " where p.id.prdid = :prdid", String.class);
+		q.setParameter("prdid", prdid);
+		return q.getResultList();
+	}
+
+	public List<AttributeDto> getAttributeDetails(String stdid) {
+
+		TypedQuery<AttributeDto> q = entityManager.createQuery(
+				OfsConstants.STD_DIM_TOL_ATR_DTL_DTO + "(" + "st.dimtolid,  " + "st.dimtolnm," + "st.dimatr,"
+						+ "st.stdid," + "st.prdid" + ")" + " FROM StddimtolJm st" + " WHERE st.stdid = :stdid",
+				AttributeDto.class);
+		q.setParameter("stdid", stdid);
+		return q.getResultList();
+	}
+
+	public List<ThickWdtToleranceDto> getThickWdtToleranceDetails(String dimtolid) {
+		TypedQuery<ThickWdtToleranceDto> q = entityManager.createQuery(OfsConstants.STD_DIM_THK_WDT_DTL_DTO + "("
+				+ "st.id.dimtolid, st.id.thkmin, st.thkmax, st.id.wdtmin, st.wdtmax, st.dimtolpve, st.dimtolnve, st.crDt) "
+				+ "FROM StddimtoldJm st " + "WHERE st.id.dimtolid = :dimtolid " + "order by st.crDt DESC",
+				ThickWdtToleranceDto.class);
+		q.setParameter("dimtolid", dimtolid);
+		return q.getResultList();
+	}
+
+	@SuppressWarnings("all")
+	@Transactional(rollbackFor = Exception.class)
+	private void updateCrdtAndModt(StddimtoldJm entity, Date modifiedDate, String modifiedBy, String modifiedMacAddr, Date createdDate, String createdBy, String createdMacAddr) {
+	//	dbSessionService.setSessionInfo(this.getClass().getName());
+		jakarta.persistence.Query q = entityManager
+				.createQuery("UPDATE StddimtoldJm SET crDt= :createdDate,crBy= :createdBy,crMacAddr= :createdMacAddr,moDt= :modifiedDate,moBy= :modifiedBy,moMacAddr= :modifiedMacAddr" + " WHERE id.dimtolid = :dimtolid" + " AND id.thkmin = :thkmin"
+						+ " AND id.wdtmin = :wdtmin");
+		q.setParameter("dimtolid", entity.getId().getDimtolid());
+		q.setParameter("thkmin", entity.getId().getThkmin());
+		q.setParameter("wdtmin", entity.getId().getWdtmin());
+		q.setParameter("modifiedDate", modifiedDate);
+		q.setParameter("modifiedBy", modifiedBy);
+		q.setParameter("modifiedMacAddr", modifiedMacAddr);
+		q.setParameter("createdDate", createdDate);
+		q.setParameter("createdBy", createdBy);
+		q.setParameter("createdMacAddr", createdMacAddr);
+		q.executeUpdate();
+	}
+
+}

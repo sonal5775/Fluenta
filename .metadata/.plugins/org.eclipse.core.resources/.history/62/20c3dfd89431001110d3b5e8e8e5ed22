@@ -1,0 +1,222 @@
+package com.hindindustec.fluenta.hsm.masters.serviceimpl;
+
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import com.hindindustec.fluenta.hsm.masters.common.config.ClientIpUtils;
+import jakarta.persistence.EntityManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.customrepository.StandardDimToleranceCustRepository;
+import com.hindindustec.fluenta.hsm.masters.dto.AttributeDto;
+import com.hindindustec.fluenta.hsm.masters.dto.StandardDimToleranceDto;
+import com.hindindustec.fluenta.hsm.masters.dto.StandardDimToleranceRequest;
+import com.hindindustec.fluenta.hsm.masters.dto.ThickWdtToleranceDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ThickWdtToleranceRequest;
+import com.hindindustec.fluenta.hsm.masters.entities.StddimtolJm;
+import com.hindindustec.fluenta.hsm.masters.entities.StddimtoldJm;
+import com.hindindustec.fluenta.hsm.masters.entities.StddimtoldJmPK;
+import com.hindindustec.fluenta.hsm.masters.entities.StdtolJm;
+import com.hindindustec.fluenta.hsm.masters.repository.StddimtolJmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.StddimtoldJmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.StdtolJmRepository;
+import com.hindindustec.fluenta.hsm.masters.service.StandardDimToleranceService;
+
+@Service
+public class StandardDimToleranceServiceImpl implements StandardDimToleranceService {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(StandardDimToleranceServiceImpl.class);
+
+	private StandardDimToleranceCustRepository standardDimToleranceCustRepository;
+	private DBSessionService dbSessionService;
+	private StddimtolJmRepository stddimtolJmRepository;
+	private StddimtoldJmRepository stddimtoldJmRepository ;
+	private StdtolJmRepository stdtolJmRepository;
+	private EntityManager entityManager;
+
+	
+	
+	public StandardDimToleranceServiceImpl(StandardDimToleranceCustRepository standardDimToleranceCustRepository,
+			DBSessionService dbSessionService, StddimtolJmRepository stddimtolJmRepository,
+			StddimtoldJmRepository stddimtoldJmRepository, StdtolJmRepository stdtolJmRepository,EntityManager entityManager) {
+		super();
+		this.standardDimToleranceCustRepository = standardDimToleranceCustRepository;
+		this.dbSessionService = dbSessionService;
+		this.stddimtolJmRepository = stddimtolJmRepository;
+		this.stddimtoldJmRepository = stddimtoldJmRepository;
+		this.stdtolJmRepository = stdtolJmRepository;
+		this.entityManager = entityManager;
+	}
+
+	@Override
+	public List<StandardDimToleranceDto> getDimToleranceDetails(StandardDimToleranceRequest request) {
+		LOGGER.info("Retriving all the data of dim tolerance: {}", request);
+		return standardDimToleranceCustRepository.getDimToleranceDetails(request);
+	}
+
+	@Override
+	public List<String> getProduct() {
+		LOGGER.info("Fetching product details");
+		return standardDimToleranceCustRepository.getProduct();
+	}
+	
+	@Override
+	public List<String> getAttribute(String prdid) {
+		LOGGER.info("Retriving attribute data: {}", prdid);
+		return standardDimToleranceCustRepository.getAttribute(prdid);
+	}
+
+
+	
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<StandardDimToleranceDto> updateProdTolr(List<StandardDimToleranceDto> list) {
+		LOGGER.info("Starting updateProdTolr with dto: {}", list);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		
+		 for (StandardDimToleranceDto dto : list) {
+		        if (dto.getStdid() != null && !dto.getStdid().trim().isEmpty()) {
+		            Optional<StdtolJm> catMasterOptional = stdtolJmRepository.findById(dto.getStdid().trim());
+		            StdtolJm entity = catMasterOptional.orElseGet(StdtolJm::new);
+
+		            
+		            // Update entity fields
+		            entity.setStdid(dto.getStdid());
+		            entity.setStdnm(dto.getStdnm());
+		            entity.setPrdid(dto.getPrdid());	            
+  
+		            // Save the entity
+		            stdtolJmRepository.save(entity);
+		        }
+		    }
+
+		    return list;
+	}
+
+	@Override
+	public List<AttributeDto> getAttributeDetails(String stdid) {
+		LOGGER.info("Starting getAttributeDetails: {}", stdid);
+		return standardDimToleranceCustRepository.getAttributeDetails(stdid);
+	}
+
+	@Override
+	public List<ThickWdtToleranceDto> getThickWdtToleranceDetails(String dimtolid) {
+		LOGGER.info("Starting getThickWdtToleranceDetails: {}", dimtolid);
+		return standardDimToleranceCustRepository.getThickWdtToleranceDetails(dimtolid);
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<ThickWdtToleranceDto> updateThkWdtTolerance(ThickWdtToleranceRequest request) {
+		LOGGER.info("Starting updateThkWdtTolerance with dto: {}", request);
+
+	    dbSessionService.setSessionInfo(this.getClass().getName());
+		Date modifiedDate = null;
+		String modifiedBy = null;
+		String modifiedMacAddr = null;
+		Date createdDate = null;
+		String createdBy = null;
+		String createdMacAddr = null;
+	    	if (request.getPrevData()!=null && request.getPrevData().get(0)!=null) {
+	    		StddimtoldJmPK stddimtoldJmPk = new StddimtoldJmPK();
+	    		stddimtoldJmPk.setDimtolid(request.getPrevData().get(0).getDimtolid());
+	    		stddimtoldJmPk.setThkmin(request.getPrevData().get(0).getThkmin());
+	    		stddimtoldJmPk.setWdtmin(request.getPrevData().get(0).getWdtmin());
+				Optional<StddimtoldJm> existingEntity = stddimtoldJmRepository.findById(stddimtoldJmPk);
+				if (existingEntity.isPresent()) {
+					modifiedDate = new Date();
+					modifiedBy = ClientIpUtils.getClient();
+					modifiedMacAddr = ClientIpUtils.getClientIpAddress();
+					createdDate = existingEntity.get().getCrDt();
+					createdBy = existingEntity.get().getCrBy();
+					createdMacAddr = existingEntity.get().getCrMacAddr();
+					stddimtoldJmRepository.deleteById(stddimtoldJmPk);
+				}
+			}
+	        
+	    
+
+	    // Insert entities represented by list
+	    for (ThickWdtToleranceDto dto : request.getCurrentData()) {
+	        if (dto.getDimtolid() != null && !dto.getDimtolid().trim().isEmpty()) {
+	            StddimtoldJmPK stddimtoldJmPk = new StddimtoldJmPK(dto.getDimtolid(), dto.getThkmin(), dto.getWdtmin());
+
+	            StddimtoldJm entity = new StddimtoldJm();
+	            entity.setId(stddimtoldJmPk);
+	            entity.setThkmax(dto.getThkmax());
+	            entity.setWdtmax(dto.getWdtmax());
+	            entity.setDimtolpve(dto.getDimtolpve());
+	            entity.setDimtolnve(dto.getDimtolnve());
+	            entity.setIsactv(BigDecimal.ZERO);
+				createdDate = createdDate == null ? new Date() : createdDate;
+				createdBy = createdBy == null ? ClientIpUtils.getClient() : createdBy;
+				createdMacAddr = createdMacAddr == null ? ClientIpUtils.getClientIpAddress() : createdMacAddr;
+				modifiedDate = modifiedDate != null ? modifiedDate : null;
+				modifiedBy = modifiedBy != null ? modifiedBy : null;
+				modifiedMacAddr = modifiedMacAddr != null ? modifiedMacAddr : null;
+	          
+	            stddimtoldJmRepository.save(entity);
+				updateCrdtAndModt(entity, modifiedDate, modifiedBy, modifiedMacAddr, createdDate, createdBy, createdMacAddr);
+	        }
+	    }
+
+	    return request.getCurrentData();
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	private void updateCrdtAndModt(StddimtoldJm entity, Date modifiedDate, String modifiedBy, String modifiedMacAddr, Date createdDate, String createdBy, String createdMacAddr) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		jakarta.persistence.Query q = entityManager
+				.createQuery("UPDATE StddimtoldJm SET crDt= :createdDate,crBy= :createdBy,crMacAddr= :createdMacAddr,moDt= :modifiedDate,moBy= :modifiedBy,moMacAddr= :modifiedMacAddr" + " WHERE id.dimtolid = :dimtolid" + " AND id.thkmin = :thkmin"
+						+ " AND id.wdtmin = :wdtmin");
+		q.setParameter("dimtolid", entity.getId().getDimtolid());
+		q.setParameter("thkmin", entity.getId().getThkmin());
+		q.setParameter("wdtmin", entity.getId().getWdtmin());
+		q.setParameter("modifiedDate", modifiedDate);
+		q.setParameter("modifiedBy", modifiedBy);
+		q.setParameter("modifiedMacAddr", modifiedMacAddr);
+		q.setParameter("createdDate", createdDate);
+		q.setParameter("createdBy", createdBy);
+		q.setParameter("createdMacAddr", createdMacAddr);
+		q.executeUpdate();
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<AttributeDto> updateAttributeDetails(List<AttributeDto> list) {
+		LOGGER.info("Starting updateAttributeDetails with dto: {}", list);
+
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		
+		 for (AttributeDto dto : list) {
+		        if (dto.getDimtolid() != null && !dto.getDimtolid().trim().isEmpty()) {
+		            Optional<StddimtolJm> catMasterOptional = stddimtolJmRepository.findByDimtolid(dto.getDimtolid().trim());
+		            StddimtolJm entity = catMasterOptional.orElse(new StddimtolJm());
+
+		            
+		            // Update entity fields
+		            entity.setDimtolid(dto.getDimtolid());
+		            entity.setStdid(dto.getStdid());
+		            entity.setDimatr(dto.getDimatr());
+		            entity.setPrdid(dto.getPrdid());	            
+		            
+		            BigDecimal dimAtr = stddimtolJmRepository.getMaxDimAtr(dto.getDimatr());
+	                entity.setDimatrctr(dimAtr.add(BigDecimal.ONE));
+	               
+		            // Save the entity
+		            stddimtolJmRepository.save(entity);
+		        }
+		    }
+
+		    return list;
+	}
+	
+
+
+}

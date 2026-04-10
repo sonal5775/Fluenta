@@ -1,0 +1,208 @@
+package com.hindindustec.fluenta.hsm.masters.serviceimpl;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.masters.common.exception.CustomException;
+import com.hindindustec.fluenta.hsm.masters.customrepository.ExternalGrdChemistryCustRepository;
+import com.hindindustec.fluenta.hsm.masters.dto.NormchemJmDTO;
+import com.hindindustec.fluenta.hsm.masters.dto.NormchemJmRepoDTO;
+import com.hindindustec.fluenta.hsm.masters.entities.AtrlCs;
+import com.hindindustec.fluenta.hsm.masters.entities.ExtGrdJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormchemJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormmastJmEntity;
+import com.hindindustec.fluenta.hsm.masters.repository.ExtGrdJmEntityRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormChemRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormMastRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.NormmastJmEntityRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.TdcElementMasterRepository;
+import com.hindindustec.fluenta.hsm.masters.service.ExternalGrdChemistryService;
+
+import jakarta.persistence.EntityManager;
+
+@Service
+public class ExternalGrdChemistryServiceImpl implements ExternalGrdChemistryService {
+
+	private static final Logger logger = LoggerFactory.getLogger(ExternalGrdChemistryServiceImpl.class);
+
+	private ExternalGrdChemistryCustRepository externalChemistryCustRepository;
+
+	private ExternalGradeNormChemRepository externalGradeNormChemRepository;
+
+	private TdcElementMasterRepository elementMastrepository;
+
+	private ExternalGradeNormMastRepository normMastRepository;
+
+	private DBSessionService dbSessionService;
+	
+	private EntityManager entityManager;
+	
+	private NormmastJmEntityRepository normMastEntityRepository;
+	
+	private ExtGrdJmEntityRepository extGrdRepository;
+
+	public ExternalGrdChemistryServiceImpl(ExternalGrdChemistryCustRepository externalChemistryCustRepository,
+			ExternalGradeNormChemRepository externalGradeNormChemRepository,
+			TdcElementMasterRepository elementMastrepository, ExternalGradeNormMastRepository normMastRepository,
+			DBSessionService dbSessionService, EntityManager entityManager, NormmastJmEntityRepository normMastEntityRepository, 
+			ExtGrdJmEntityRepository extGrdRepository) {
+		this.externalChemistryCustRepository = externalChemistryCustRepository;
+		this.externalGradeNormChemRepository = externalGradeNormChemRepository;
+		this.elementMastrepository = elementMastrepository;
+		this.normMastRepository = normMastRepository;
+		this.dbSessionService = dbSessionService;
+		this.entityManager = entityManager;
+		this.normMastEntityRepository = normMastEntityRepository;
+		this.extGrdRepository = extGrdRepository;
+	}
+
+	@Override
+	public List<NormchemJmRepoDTO> getExtGrdChemistry(String extgrdnm, String isMultiStd) {
+		logger.info("Fetching external grade chemistry for extgrdnm: {} and isMultiStd:{}", extgrdnm,isMultiStd);
+		String normId = null;
+		if(extgrdnm!=null) {
+			Optional<ExtGrdJmEntity> extgrd =  extGrdRepository.findByExtGrdNm(extgrdnm);
+			if(extgrd.isPresent()) {
+				normId = extgrd.get().getNormid();
+			}
+		}
+		List<NormchemJmRepoDTO> normChemResponse = new ArrayList<>();
+		try {
+			if (isMultiStd != null && isMultiStd.trim().equals("Y")) {
+				normChemResponse = externalChemistryCustRepository.getMultiStdGrdChemistry(normId);
+			} else {
+				normChemResponse = externalChemistryCustRepository.getExtGrdChemistry(normId);
+			}
+		} catch (Exception e) {
+			logger.error("Error retrieving external grade chemistry: {}", e.getMessage(), e);
+		}
+		return normChemResponse;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public String saveExtGrdChemistry(List<NormchemJmDTO> chemistryList, String normId,String extGrdNm) {
+		logger.info("Saving external grade chemistry for request: {} and normid:{}", chemistryList,normId);
+
+		try {
+			dbSessionService.setSessionInfo(this.getClass().getName());
+			chemistryList.forEach(element -> {
+				if (element.getIsNewRowAdded() != null && element.getIsNewRowAdded().trim().equals("Y")) {
+					Optional<AtrlCs> existingMasterElement = elementMastrepository.findByAtrid(element.getAtrid());
+					extractedIfMasterElementPresent(element, existingMasterElement);
+				} else if (element.getChemFormula() != null) {
+					Optional<AtrlCs> existingMasterElement = elementMastrepository.findByAtrid(element.getAtrid());
+					if(existingMasterElement.isPresent()){
+						AtrlCs entity = existingMasterElement.get();
+						entity.setChemFormula(element.getChemFormula());
+						elementMastrepository.save(entity);
+					}
+				}
+				Optional<AtrlCs> existingMasterElement = elementMastrepository.findByAtrid(element.getAtrid());
+				if(existingMasterElement.isPresent()){
+					AtrlCs atrlCsEntity = existingMasterElement.get();
+					atrlCsEntity.setAtrdispnm(element.getAtrdispnm());
+					elementMastrepository.save(atrlCsEntity);
+				}
+				NormchemJmEntity entity;
+				Optional<NormchemJmEntity> existingRecord = externalGradeNormChemRepository
+						.findById(element.getChemid() != null ? element.getChemid() : "0");
+				if (existingRecord.isPresent()) {
+					entity = existingRecord.get();
+				} else {
+					Long counter = 0L;
+					entity = new NormchemJmEntity();
+					entity.setElement(element.getAtrid());
+					counter = externalGradeNormChemRepository.findMaxId();
+					if(counter == null) {
+						counter = 0L;
+					}
+					entity.setChemid((++counter) + "");
+				}
+				Optional<ExtGrdJmEntity> optionalExtGrd = extGrdRepository.findById(extGrdNm);
+				extractedIfExternalGrdPresent(normId, element, entity, optionalExtGrd);
+				
+			});
+
+		} catch (Exception e) {
+			logger.error("Failed to save external grade chemistry: {}", e.getMessage(), e);
+			throw new CustomException("Failed to save Chemistry");
+		}
+		logger.info("External grade chemistry saved successfully");
+		return "Saved Successfully";
+	}
+
+	private void extractedIfMasterElementPresent(NormchemJmDTO element, Optional<AtrlCs> existingMasterElement) {
+		if (!existingMasterElement.isPresent()) {
+			AtrlCs entity = new AtrlCs();
+			BigDecimal maxSortSeqId = elementMastrepository
+					.findMaxSortSeqIdByAtrCategoryId(OfsConstants.CHEMISTRY_CATEGORY);
+			if (entity.getSortseqid() == null) {
+				entity.setSortseqid(
+						maxSortSeqId != null ? maxSortSeqId.add(BigDecimal.ONE) : BigDecimal.ONE);
+			}
+			entity.setAtrid(element.getAtrid());
+			entity.setAtrdispnm(element.getAtrdispnm());
+			entity.setAtrtyid("NUM");
+			entity.setAtrcatid("CHEMICAL");
+			entity.setTestMethod("CHEM FORMULA");
+			entity.setValidationReq("N");
+			entity.setDispflag("Y");
+			entity.setChemFormula(element.getChemFormula());
+			elementMastrepository.save(entity);
+		}
+	}
+
+	private void extractedIfExternalGrdPresent(String normId, NormchemJmDTO element, NormchemJmEntity entity,
+			Optional<ExtGrdJmEntity> optionalExtGrd) {
+		if(optionalExtGrd.isPresent()) {
+			ExtGrdJmEntity extGrdEntity = optionalExtGrd.get();
+			if(extGrdEntity.getNormid()!=null) {
+				entity.setNormid(extGrdEntity.getNormid());
+			}else {
+				NormmastJmEntity normmastJmEntity = null;
+				Optional<NormmastJmEntity> optional = normMastRepository.findById(normId!=null?normId:" ");
+				if (optional.isPresent()) {
+					normmastJmEntity = optional.get();
+					entity.setNormid(normmastJmEntity.getNormid());
+				} else {
+					normmastJmEntity = new NormmastJmEntity();
+					String maxCount = normMastEntityRepository.generateNormId();
+					long newId = Long.parseLong(maxCount) + 1;
+					normmastJmEntity.setNormid(Long.toString(newId));
+					normmastJmEntity.setNormty("EG");
+					normmastJmEntity = normMastEntityRepository.save(normmastJmEntity);
+					entity.setNormid(normmastJmEntity.getNormid());
+					entityManager.flush();
+
+				}
+				extGrdEntity.setNormid(normmastJmEntity.getNormid());
+				extGrdRepository.save(extGrdEntity);
+			}
+			entity.setElementvalaim(element.getElementvalaim());
+			entity.setElementvalmax(element.getElementvalmax());
+			entity.setElementvalmin(element.getElementvalmin());
+			entity.setMaxopr(element.getMaxopr());
+			entity.setMinopr(element.getMinopr());
+			entity.setThkmax(element.getThkmax());
+			entity.setThkmin(element.getThkmin());
+			entity.setDerivationFlag(element.isDerivationFlag()?"Y":"N");
+			externalGradeNormChemRepository.save(entity);
+		}
+	}
+
+	@Override
+	public void deleteByChemid(String chemid) {
+		externalGradeNormChemRepository.deleteByChemid(chemid);
+	}
+
+}

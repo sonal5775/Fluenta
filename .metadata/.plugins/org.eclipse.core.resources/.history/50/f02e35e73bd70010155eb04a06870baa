@@ -1,0 +1,341 @@
+package com.hindindustec.fluenta.hsm.quality.repository;
+
+
+import java.util.List;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Repository;
+
+import com.hindindustec.fluenta.hsm.quality.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.quality.constants.QualityConstants;
+import com.hindindustec.fluenta.hsm.quality.dto.CoilModificationDetailsDto;
+import com.hindindustec.fluenta.hsm.quality.dto.CoilModificationRequestDto;
+import com.hindindustec.fluenta.hsm.quality.dto.ScrapDetailsDto;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
+import jakarta.persistence.TypedQuery;
+
+
+@Repository
+public class CoilModificationCustRepository {
+
+    private final EntityManager entityManager;
+
+    public static final String SELECT_NUMVAL = "(COALESCE((SELECT ppinsp.numval FROM PpInspCharEntity ppinsp ";
+    public static final String WHERE_CONDITION = "WHERE TRIM(ppinsp.id.ppid) = TRIM(ppt.id.ppId) "
+            + "AND ppinsp.id.ppctr = ppt.id.ppCtr "
+            + "AND ppinsp.id.taskstepid = ppt.id.taskstepId "
+            + "AND ppinsp.id.atrid = '";
+
+	public static final String QUERY = "query";
+
+    public CoilModificationCustRepository(EntityManager entityManager) {
+        this.entityManager = entityManager;
+    }
+
+    public String getCoilDetailsQuery() {
+        StringBuilder queryBuilder = new StringBuilder();
+        queryBuilder.append("SELECT DISTINCT new com.hindindustec.fluenta.hsm.quality.dto.CoilModificationDetailsDto (")
+                .append("TRIM(pdo.id.coilid), ")
+                .append("TRIM(pdo.id.slabid), ")
+                .append("TRIM(pdo.schdid), ")
+                .append("TRIM(pdo.heatid), ")
+                .append("TRIM(pdo.grade), ")
+                .append("TRIM(qcsch.extGrdNm), ")
+                .append("COALESCE((SELECT ppinsp.strval FROM PpInspCharEntity ppinsp ")
+                .append(WHERE_CONDITION).append(QualityConstants.ACHIEVE_GRADE).append("'), TRIM(pphmt.gradeId)), ")
+                .append("CONCAT(qcsch.soId, '-', qcsch.solId), ")
+                .append("qcsch.tdcId, ")
+                .append("pdo.avgCoilThk, ")
+                .append("COALESCE((SELECT ppinsp.numval FROM PpInspCharEntity ppinsp ")
+                .append(WHERE_CONDITION).append(QualityConstants.AVG_COIL_THK).append("'), sobd.thkaim), ")
+                .append("pdo.avgCoilWidth, ")
+                .append("COALESCE((SELECT ppinsp.numval FROM PpInspCharEntity ppinsp ")
+                .append(WHERE_CONDITION).append(QualityConstants.AVG_COIL_WIDTH).append("'), sobd.wdtaim), ")
+                .append("ROUND(pdo.coilWgt / 1000, 2), ")
+                .append("COALESCE((SELECT ppinsp.numval FROM PpInspCharEntity ppinsp ")
+                .append(WHERE_CONDITION).append(QualityConstants.COIL_WGT).append("'), pphmt.weight), ")
+
+                .append("pdo.coilInnerDia, ")
+                .append("COALESCE((SELECT ppinsp.numval FROM PpInspCharEntity ppinsp ")
+                .append("WHERE TRIM(ppinsp.id.ppid) = TRIM(ppt.id.ppId) ")
+                .append("AND ppinsp.id.ppctr = ppt.id.ppCtr AND ppinsp.id.taskstepid = ppt.id.taskstepId ")
+                .append("AND ppinsp.id.atrid = '").append(QualityConstants.COIL_INNER_DIA).append("'), pphmt.internalDiameter), ")
+                .append("pdo.coilOuterDia, ")
+                .append("COALESCE((SELECT ppinsp.numval FROM PpInspCharEntity ppinsp ")
+                .append("WHERE TRIM(ppinsp.id.ppid) = TRIM(ppt.id.ppId) ")
+                .append("AND ppinsp.id.ppctr = ppt.id.ppCtr AND ppinsp.id.taskstepid = ppt.id.taskstepId ")
+                .append("AND ppinsp.id.atrid = '").append(QualityConstants.COIL_OUTER_DIA).append("'), pphmt.outerDiameter), ")
+                .append("ppt.cutFlag, ")
+                .append("ppt.cutType, ")
+//                .append("ppt.holdRemark, ")
+//                .append("ppt.holdReason, ")
+                .append(" CASE ")
+                .append("     WHEN ppt.tpiRequired = :REWORK THEN NULL ")
+                .append("     WHEN ppt.tpiRequired = :tpiRequired AND ppt.manualDecision IN ('HLD','HRCA') THEN ppt.holdRemark ")
+                .append("     WHEN ppt.tpiRequired = :tpiRequired AND ppt.manualDecision NOT IN ('HLD','HRCA') THEN ppt.releaseRemark ")
+                .append("     ELSE NULL ")
+                .append(" END AS holdRemark, ")
+                .append(" CASE ")
+                .append("     WHEN ppt.tpiRequired = :REWORK THEN ppt.releaseRemark ")
+                .append("     WHEN ppt.tpiRequired = :tpiRequired THEN NULL ")
+                .append("     ELSE NULL ")
+                .append(" END AS holdReason, ")
+                .append("ppt.id.ppCtr, ")
+                .append("ppt.id.taskstepId, ")
+                .append("sobd.thkaim, ")
+                .append("sobd.wdtaim, ")
+                .append("sobd.wgtaim) ")
+                .append("FROM H1mh01Hm1millPdoLi pdo ")
+                .append("JOIN PostProdTaskMtEntity ppt ON TRIM(pdo.id.coilid) = TRIM(ppt.id.ppId) ")
+                .append("AND ppt.taskStatus = :taskStatus ")
+                .append("AND ppt.latestFlag = 'Y' ")
+                .append("AND ppt.tpiRequired IN (:tpiRequired, :HSMINSP, :REWORK) ")
+                .append("AND (ppt.tpiRequired != :HSMINSP OR ppt.cutType IS NOT NULL) ")
+                .append("JOIN QualityScheduleLinesEntity qcsch ON TRIM(qcsch.ppId) = TRIM(ppt.id.ppId) ")
+                .append("JOIN Inventory pphmt ON TRIM(pphmt.id.ppid) = TRIM(ppt.id.ppId) ")
+                .append("LEFT JOIN SalesOrderBomDetails sobd ON TRIM(qcsch.soId) = TRIM(sobd.id.soid) ")
+                .append("AND qcsch.solId = sobd.id.solid ")
+                .append("AND sobd.id.prdid = :hrcoil AND sobd.id.dimind = :codef ")
+
+                .append("WHERE (")
+                .append(":coilIdFrom IS NULL AND :coilIdTo IS NULL ")
+                .append("OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(qcsch.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+                .append("OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(qcsch.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)) ")
+                .append(")");
+
+        return queryBuilder.toString();
+    }
+
+
+    public String getCoilDetailsCountQuery() {
+        StringBuilder queryBuilder = new StringBuilder();
+
+        queryBuilder.append("FROM H1mh01Hm1millPdoLi pdo ")
+                .append("JOIN PostProdTaskMtEntity ppt ON TRIM(pdo.id.coilid) = TRIM(ppt.id.ppId) ")
+                .append("AND ppt.taskStatus = :taskStatus ")
+                .append("AND ppt.latestFlag = 'Y' ")
+                .append("AND ppt.tpiRequired IN (:tpiRequired, :HSMINSP, :REWORK) ")
+                .append("AND (ppt.tpiRequired != :HSMINSP OR ppt.cutType IS NOT NULL) ")
+                .append("JOIN QualityScheduleLinesEntity qcsch ON TRIM(qcsch.ppId) = TRIM(ppt.id.ppId) ")
+                .append("LEFT JOIN SalesOrderBomDetails sobd ON TRIM(qcsch.soId) = TRIM(sobd.id.soid) ")
+                .append("AND qcsch.solId = sobd.id.solid ")
+                .append("AND sobd.id.prdid = :hrcoil AND sobd.id.dimind = :codef ")
+                .append("JOIN Inventory pphmt ON TRIM(pphmt.id.ppid) = TRIM(ppt.id.ppId) ") // added this condition @sonal patil
+                .append("WHERE (")
+                .append(":coilIdFrom IS NULL AND :coilIdTo IS NULL ")
+                .append("OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(qcsch.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+                .append("OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(qcsch.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)) ")
+                .append(")");
+
+        return queryBuilder.toString();
+    }
+
+    public List<ScrapDetailsDto> getScrapDetails(CoilModificationDetailsDto dto) {
+        StringBuilder queryBuilder = new StringBuilder();
+        queryBuilder.append("SELECT DISTINCT new com.hindindustec.fluenta.hsm.quality.dto.ScrapDetailsDto(")
+                .append("mass.id.prdctr, ")
+                .append("mass.scrapdesc, ")
+                .append("'', ")
+                .append("mass.samplen, ")
+                .append("mass.ppwgt, ")
+                .append("mass.sampwdt, ")
+                .append("mass.samprem,")
+                .append("mass.prdid")
+                .append(") ")
+                .append("FROM PpqcmassbalQt mass ")
+                .append("WHERE TRIM(mass.id.ppid) = :ppId ")
+                .append("AND mass.id.ppctr = :ppctr ")
+                .append("AND mass.id.taskstepid = :taskstepid ");
+
+        TypedQuery<ScrapDetailsDto> q = entityManager.createQuery(queryBuilder.toString(), ScrapDetailsDto.class);
+
+        q.setParameter(QualityConstants.PP_ID, dto.getCoilid());
+        q.setParameter(QualityConstants.PPCTR, dto.getPpCtr());
+        q.setParameter(QualityConstants.TASK_STEP_ID, dto.getTaskStepId());
+
+        return q.getResultList();
+    }
+
+    public List<String> getIntGradeList() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT DISTINCT TRIM(pdo.grade) ")
+          .append("FROM H1mh01Hm1millPdoLi pdo");
+
+        TypedQuery<String> query = entityManager.createQuery(sb.toString(), String.class);
+
+        return query.getResultList();
+    }
+
+
+    public List<String> getScrapTypeList() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT DISTINCT pe.prdid ")
+          .append("FROM ProductEntity pe ")
+          .append("WHERE pe.prdty = :SCRAP");
+
+        TypedQuery<String> query = entityManager.createQuery(sb.toString(), String.class);
+        query.setParameter("SCRAP", QualityConstants.SCRAP_TYPE);
+
+        return query.getResultList();
+    }
+
+
+    public List<String> getCoilIdList() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT DISTINCT TRIM(qsl.ppId) ")
+          .append("FROM QualityScheduleListEntity qsl ")
+          .append("ORDER BY TO_NUMBER(TRIM(qsl.ppId)) DESC");
+
+        TypedQuery<String> q = entityManager.createQuery(sb.toString(), String.class);
+        q.setMaxResults(100);   
+
+        return q.getResultList();
+    }
+
+
+    /**
+     * @author Sonal Patil
+     */
+
+    public Page<CoilModificationDetailsDto> getCoilDetails(CoilModificationRequestDto request, Integer page,
+                                                           Integer size, String query, String countQueryParm, Integer skip) {
+        int effectiveOffset = page * size;
+        int effectivePageSize = size;
+        if (skip != null && skip > 0) {
+            if (skip >= size) {
+                effectiveOffset += skip;
+                skip = 0;
+            } else {
+                effectiveOffset += skip;
+                effectivePageSize -= skip;
+            }
+        }
+
+        TypedQuery<CoilModificationDetailsDto> queryCount = entityManager.createQuery(query, CoilModificationDetailsDto.class);
+
+        queryCount.setParameter(QualityConstants.TPI_REQUIRED, QualityConstants.HSM_QC);
+        queryCount.setParameter(QualityConstants.TASK_STATUS, QualityConstants.PENDING);
+        queryCount.setParameter(OfsConstants.COIL_ID_FROM, request.getFromCoilid());
+        queryCount.setParameter(OfsConstants.COIL_ID_TO, request.getToCoilid());
+        queryCount.setParameter(QualityConstants.HSM_INSP, QualityConstants.HSM_INSP);
+        queryCount.setParameter(QualityConstants.REWORK, QualityConstants.REWORK);
+        queryCount.setParameter(QualityConstants.SHRCOIL, QualityConstants.PROD_CODE_HRCOIL);
+        queryCount.setParameter(QualityConstants.S_CODE_F, QualityConstants.CODE_F);
+
+        queryCount.setFirstResult(effectiveOffset);
+        queryCount.setMaxResults(effectivePageSize);
+        List<CoilModificationDetailsDto> resultList = queryCount.getResultList();
+        Query countQuery = entityManager.createQuery(countQueryParm);
+
+        countQuery.setParameter(QualityConstants.TPI_REQUIRED, QualityConstants.HSM_QC);
+        countQuery.setParameter(QualityConstants.TASK_STATUS, QualityConstants.PENDING);
+        countQuery.setParameter(OfsConstants.COIL_ID_FROM, request.getFromCoilid());
+        countQuery.setParameter(OfsConstants.COIL_ID_TO, request.getToCoilid());
+        countQuery.setParameter(QualityConstants.HSM_INSP, QualityConstants.HSM_INSP);
+        countQuery.setParameter(QualityConstants.REWORK, QualityConstants.REWORK);
+        countQuery.setParameter(QualityConstants.SHRCOIL, QualityConstants.PROD_CODE_HRCOIL);
+        countQuery.setParameter(QualityConstants.S_CODE_F, QualityConstants.CODE_F);
+        Long totalRows = (Long) countQuery.getSingleResult();
+        Pageable pageable = PageRequest.of(page, size);
+        return new PageImpl<>(resultList, pageable, totalRows);
+
+    }
+
+    /**
+     * @author Sonal Patil
+     */
+    public Long getMaindetailsQueryCount(CoilModificationRequestDto request, String query) {
+        Query countQuery = entityManager.createQuery(query);
+        countQuery.setParameter(QualityConstants.TPI_REQUIRED, QualityConstants.HSM_QC);
+        countQuery.setParameter(QualityConstants.TASK_STATUS, QualityConstants.PENDING);
+        countQuery.setParameter(OfsConstants.COIL_ID_FROM, request.getFromCoilid());
+        countQuery.setParameter(OfsConstants.COIL_ID_TO, request.getToCoilid());
+        countQuery.setParameter(QualityConstants.HSM_INSP, QualityConstants.HSM_INSP);
+        countQuery.setParameter(QualityConstants.REWORK, QualityConstants.REWORK);
+        countQuery.setParameter(QualityConstants.SHRCOIL, QualityConstants.PROD_CODE_HRCOIL);
+        countQuery.setParameter(QualityConstants.S_CODE_F, QualityConstants.CODE_F);
+        return (Long) countQuery.getSingleResult();
+    }
+
+    /**
+     * @author Sonal Patil
+     */
+    public Page<Object[]> getGroupingListData(String queryForGrouping, String queryForGroupingAndFilteringCount,
+                                              Integer page, Integer size, Integer skip, CoilModificationRequestDto request) {
+        Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+        queryCount.setParameter(QualityConstants.TPI_REQUIRED, QualityConstants.HSM_QC);
+        queryCount.setParameter(QualityConstants.TASK_STATUS, QualityConstants.PENDING);
+        queryCount.setParameter(OfsConstants.COIL_ID_FROM, request.getFromCoilid());
+        queryCount.setParameter(OfsConstants.COIL_ID_TO, request.getToCoilid());
+        queryCount.setParameter(QualityConstants.HSM_INSP, QualityConstants.HSM_INSP);
+        queryCount.setParameter(QualityConstants.REWORK, QualityConstants.REWORK);
+        queryCount.setParameter(QualityConstants.SHRCOIL, QualityConstants.PROD_CODE_HRCOIL);
+        queryCount.setParameter(QualityConstants.S_CODE_F, QualityConstants.CODE_F);
+        Number resultNumber = (Number) queryCount.getSingleResult();
+        int totalRows = resultNumber.intValue();
+        int effectiveOffset = page * size;
+        int effectivePageSize = size;
+
+        if (skip != null && skip > 0) {
+            if (skip >= size) {
+                effectiveOffset += skip;
+                skip = 0;
+            } else {
+                effectiveOffset += skip;
+                effectivePageSize -= skip;
+            }
+        }
+        Pageable pageable = PageRequest.of(page, size);
+        TypedQuery<Object[]> query = entityManager.createQuery(queryForGrouping, Object[].class);
+
+        query.setParameter(QualityConstants.TPI_REQUIRED, QualityConstants.HSM_QC);
+        query.setParameter(QualityConstants.TASK_STATUS, QualityConstants.PENDING);
+        query.setParameter(OfsConstants.COIL_ID_FROM, request.getFromCoilid());
+        query.setParameter(OfsConstants.COIL_ID_TO, request.getToCoilid());
+        query.setParameter(QualityConstants.HSM_INSP, QualityConstants.HSM_INSP);
+        query.setParameter(QualityConstants.REWORK, QualityConstants.REWORK);
+        query.setParameter(QualityConstants.SHRCOIL, QualityConstants.PROD_CODE_HRCOIL);
+        query.setParameter(QualityConstants.S_CODE_F, QualityConstants.CODE_F);
+        query.setFirstResult(effectiveOffset);
+        query.setMaxResults(effectivePageSize);
+        List<Object[]> resultList = query.getResultList();
+        return new PageImpl<>(resultList, pageable, totalRows);
+    }
+
+    /**
+     * @author Sonal Patil
+     */
+    public Long groupCountQuery(String queryForGroupingAndFilteringCount, CoilModificationRequestDto request) {
+        Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+
+        queryCount.setParameter(QualityConstants.TPI_REQUIRED, QualityConstants.HSM_QC);
+        queryCount.setParameter(QualityConstants.TASK_STATUS, QualityConstants.PENDING);
+        queryCount.setParameter(OfsConstants.COIL_ID_FROM, request.getFromCoilid());
+        queryCount.setParameter(OfsConstants.COIL_ID_TO, request.getToCoilid());
+        queryCount.setParameter(QualityConstants.HSM_INSP, QualityConstants.HSM_INSP);
+        queryCount.setParameter(QualityConstants.REWORK, QualityConstants.REWORK);
+        queryCount.setParameter(QualityConstants.SHRCOIL, QualityConstants.PROD_CODE_HRCOIL);
+        queryCount.setParameter(QualityConstants.S_CODE_F, QualityConstants.CODE_F);
+        Number resultNumber = (Number) queryCount.getSingleResult();
+        return resultNumber.longValue();
+    }
+
+    public List<String> searchMatchingCoils(String query) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT DISTINCT TRIM(qsl.ppId) ")
+          .append("FROM QualityScheduleListEntity qsl ")
+          .append("WHERE LOWER(TRIM(qsl.ppId)) LIKE LOWER(:query)");  /
+   
+        TypedQuery<String> q = entityManager.createQuery(sb.toString(), String.class);
+        q.setMaxResults(10);
+        q.setParameter("query", "%" + query.trim().toLowerCase() + "%");
+
+        return q.getResultList();
+    }
+
+}

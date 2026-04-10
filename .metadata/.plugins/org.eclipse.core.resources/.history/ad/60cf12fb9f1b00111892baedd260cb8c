@@ -1,0 +1,627 @@
+package com.hindindustec.fluenta.hsm.quality.service.impl;
+
+import java.math.BigDecimal;
+import java.sql.Time;
+import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.hindindustec.fluenta.hsm.quality.client.SapServiceClient;
+import com.hindindustec.fluenta.hsm.quality.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.quality.constants.QualityConstants;
+import com.hindindustec.fluenta.hsm.quality.dto.BendResultLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.CasterSlabDataDto;
+import com.hindindustec.fluenta.hsm.quality.dto.CasterSlabDataSapOfsPayload;
+import com.hindindustec.fluenta.hsm.quality.dto.CasterSlabUdDataDto;
+import com.hindindustec.fluenta.hsm.quality.dto.CasterSlabUdDataSapOfsPayload;
+import com.hindindustec.fluenta.hsm.quality.dto.CoilClearanceListDto;
+import com.hindindustec.fluenta.hsm.quality.dto.CoilClearanceRequestDto;
+import com.hindindustec.fluenta.hsm.quality.dto.DWTTResultLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HardnessLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HighTempTensileTestResultLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HsmQualityChemicalDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HsmQualityMechanicalDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HsmQualityUDDecisionDto;
+import com.hindindustec.fluenta.hsm.quality.dto.ImpactResultDto;
+import com.hindindustec.fluenta.hsm.quality.dto.InclusionRatingLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.MechanicalTestDto;
+import com.hindindustec.fluenta.hsm.quality.dto.OfsToSapIntResponse;
+import com.hindindustec.fluenta.hsm.quality.dto.OtherTestResultLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.TensileLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.ZTestResultLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.model.ChemResultQtEntity;
+import com.hindindustec.fluenta.hsm.quality.model.Inventory;
+import com.hindindustec.fluenta.hsm.quality.model.PpChemEntity;
+import com.hindindustec.fluenta.hsm.quality.model.SpecimenQualityTransactionEntity;
+import com.hindindustec.fluenta.hsm.quality.repository.ChemResultQtRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.MechanicalTestRecordsCustRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PpChemRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.SapAckE2oEiRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.SolStRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.SpecimenQualityTransactionRepository;
+import com.hindindustec.fluenta.hsm.quality.service.SapInterface;
+
+@Service
+public class SapInterfaceImpl implements SapInterface {
+
+	private static final Logger logger = LoggerFactory.getLogger(SapInterfaceImpl.class);
+
+	private SapServiceClient sapServiceClient;
+	private SapAckE2oEiRepository sapdataO2eEiRepository;
+	private MechanicalTestRecordsCustRepository custRepository;
+	private SpecimenQualityTransactionRepository specimenQualityTransactionRepository;
+	private ChemResultQtRepository chemResultQtRepository;
+	private SolStRepository solStRepository;
+	private PpChemRepository ppChemRepository;
+
+
+	public SapInterfaceImpl(SapServiceClient sapServiceClient, SapAckE2oEiRepository sapdataO2eEiRepository,
+			MechanicalTestRecordsCustRepository custRepository,
+			SpecimenQualityTransactionRepository specimenQualityTransactionRepository,
+			ChemResultQtRepository chemResultQtRepository, SolStRepository solStRepository,
+			com.hindindustec.fluenta.hsm.quality.repository.PpChemRepository ppChemRepository) {
+		super();
+		this.sapServiceClient = sapServiceClient;
+		this.sapdataO2eEiRepository = sapdataO2eEiRepository;
+		this.custRepository = custRepository;
+		this.specimenQualityTransactionRepository = specimenQualityTransactionRepository;
+		this.chemResultQtRepository = chemResultQtRepository;
+		this.solStRepository = solStRepository;
+		this.ppChemRepository = ppChemRepository;
+	}
+
+	@Override
+	public OfsToSapIntResponse sendCasterSlabData(Inventory pphMt) {
+		CasterSlabDataDto dto = new CasterSlabDataDto();
+		logger.info("SENDING SLAB ID {}", pphMt.getId().getPpid());
+
+		dto.setRecordNo(pphMt.getId().getPpctr());
+		dto.setMatnr(pphMt.getProductionCodeId());
+		dto.setCharg(pphMt.getId().getPpid());
+		dto.setSaleOrdNo(null);
+		dto.setSaleOrdItem(null);
+		dto.setSpecStock("E");
+		dto.setChargMs("");
+		dto.setMenge(pphMt.getWeight());
+		dto.setMeins("TO");
+		dto.setBudat(new SimpleDateFormat(QualityConstants.YYYYMMDD).format(pphMt.getProductionDate()));
+		dto.setWerks("9083");
+		dto.setLgort("SRLA");
+		dto.setBwart("101");
+		dto.setVExtGrade(pphMt.getGradeId());
+		dto.setVHeatno(pphMt.getHeatId());
+		dto.setVProduct("SL");
+		dto.setVExtGrade(pphMt.getExternalGrade());
+		logger.info("PPHMT THK :{}", pphMt.getThickness());
+		if (pphMt.getThickness() != null && pphMt.getThickness().intValue() >= 215
+				&& pphMt.getThickness().intValue() <= 225) {
+			logger.info("THK IN RAGNGE >= 215 && <=225 :{}", pphMt.getThickness());
+			dto.setVThickness(new BigDecimal("220"));
+		} else {
+			logger.info("THK NOT IN RAGNGE >= 215 && <=225 :{}", pphMt.getThickness());
+			dto.setVThickness(pphMt.getThickness());
+		}
+		logger.info("SENDING THK :{}", dto.getVThickness());
+		dto.setVWidth(pphMt.getWidth());
+		dto.setSLength(pphMt.getLength());
+		dto.setVPieces(pphMt.getPieces());
+		dto.setVTpp(pphMt.getWeight());
+		dto.setVProcessRoute("NORM");
+		dto.setVInspectionBy(pphMt.getInspectedBy());
+		dto.setVTdcNo(pphMt.getToolDesignationCodeId());
+		dto.setVQuality("");
+		dto.setVQualityremark("");
+		dto.setSODefect("");
+		dto.setSMDefect("");
+		dto.setSECondition("");
+		dto.setVPweight(pphMt.getTheoreticalWeight());
+		dto.setVColourCode("");
+		dto.setVTnp(null);
+		dto.setVSectionalWt2(dto.getVThickness().multiply(pphMt.getWidth()).multiply(BigDecimal.valueOf(7.85))
+				.divide(BigDecimal.valueOf(Math.pow(10, 6))));
+		dto.setVSectionalWt3(null);
+		dto.setVHsqn("");
+		dto.setXTranSlab("");
+		dto.setVHeatnoT("");
+
+		CasterSlabDataSapOfsPayload payload = new CasterSlabDataSapOfsPayload();
+		payload.setSms2PrdDtl(dto);
+		return sapServiceClient.saveSlabData(payload);
+	}
+
+	@Override
+	public OfsToSapIntResponse sendCasterSlabUdData(Inventory pphMt) {
+		CasterSlabUdDataDto dto = new CasterSlabUdDataDto();
+
+		dto.setRecordNo(pphMt.getId().getPpctr());
+		dto.setMatnr(pphMt.getProductionCodeId());
+		dto.setCharg(pphMt.getId().getPpid());
+		dto.setSaleOrd(null);
+		dto.setSOrdItem(null);
+		dto.setSpecStock("E");
+		dto.setMenge(pphMt.getWeight());
+		dto.setMeins("TO");
+		dto.setBudat(new SimpleDateFormat(QualityConstants.YYYYMMDD).format(pphMt.getProductionDate()));
+		dto.setWerks("9083");
+		dto.setBwart("321");
+		dto.setUdCode("01");
+		dto.setUdDesc("Accept");
+		dto.setUdDate(new SimpleDateFormat(QualityConstants.YYYYMMDD).format(pphMt.getProductionDate()));
+		dto.setDetag("");
+		dto.setLgort("SRLA");
+		dto.setChargingType("");
+		dto.setBwartH("");
+		dto.setWerksH("");
+		dto.setLgortH("");
+		dto.setMengeH("");
+		dto.setMeinsH("");
+		dto.setMatnrN("");
+		dto.setLgortN("");
+		dto.setMengeN("");
+		dto.setMeinsN("");
+		dto.setChargN("");
+		dto.setReasonCode("");
+		dto.setReasonText("");
+		dto.setOThk("");
+		dto.setOWid("");
+		dto.setOLen("");
+		dto.setSlabDef("");
+		dto.setOTSurf("");
+		dto.setOEdge("");
+		dto.setQlty("");
+		dto.setInSft("");
+		dto.setVColourCode("");
+
+		CasterSlabUdDataSapOfsPayload payload = new CasterSlabUdDataSapOfsPayload();
+		payload.setSlabUdDtl(dto);
+		return sapServiceClient.saveSlabUdData(payload);
+	}
+
+	@Override
+	public HsmQualityUDDecisionDto buildHsmQualityUDDto(HsmQualityUDDecisionDto dtoUDDataSAP,
+			CoilClearanceListDto record, String coilDecision, CoilClearanceRequestDto request, Date shiftDate) {
+
+		long maxRecordNo = sapdataO2eEiRepository.getMaxRecordNo(QualityConstants.OFS_SAP_INT_OBJ_TYPE_UD_COILQC);
+		logger.info(QualityConstants.FETCHEDMAXRECORDNO, maxRecordNo);
+		dtoUDDataSAP.setRecordNo(String.valueOf(maxRecordNo + 1));
+		dtoUDDataSAP.setCharg(record.getPpid());
+		dtoUDDataSAP.setSoNumber(record.getSoId());
+		dtoUDDataSAP.setSLineItem(record.getSolId());
+		dtoUDDataSAP.setPasThk40(record.getThickness());
+		dtoUDDataSAP.setPasWid40(record.getWidth());
+		dtoUDDataSAP.setPasLen40(null);
+		dtoUDDataSAP.setUdDate(new Date());
+		dtoUDDataSAP.setBudat(new Date());
+		dtoUDDataSAP.setUdCode(coilDecision);
+		switch (coilDecision) {
+		  case "FGP1" -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_UD_PRIME);
+		    case "FGP2" -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_NCO);
+		    case "FGP3" -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_NON_PRIME);
+		    case "HCSL" -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_UD_SALVAGE);
+		    case "HLD"  -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_HOLD);
+		    case "HCRM" -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_ANGUL_CRM);
+		    case "TPIP" -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_THIRD_PARTY);
+		    case "HCTL" -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_CUT_TO_LENGTH);
+		    case "HRSP" -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_SKIN_PASS);
+		    case "AUS1" -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_AUCTION);
+		    case "HSLT" -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_SLITTER);
+		    case "HRCA" -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_NEW_DEV);
+		    default     -> dtoUDDataSAP.setUdDesc(QualityConstants.RESULT_UNKNOWN);
+	}
+		dtoUDDataSAP.setCheFin40(coilDecision);
+		dtoUDDataSAP.setInspNam40(record.getDecisionBy());
+		dtoUDDataSAP.setErdat(record.getDecisionDate());
+		dtoUDDataSAP.setErzet(record.getDecisionDate());
+		if (shiftDate != null) {
+			LocalDateTime dateTime = shiftDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+			int hour = dateTime.getHour();
+			String shift;
+
+			if (hour >= 6 && hour < 14) {
+				shift = "A";
+			} else if (hour >= 14 && hour < 22) {
+				shift = "B";
+			} else {
+				shift = "C";
+			}
+
+			dtoUDDataSAP.setInSft40(shift);
+		} else {
+			dtoUDDataSAP.setInSft40(null);
+		}
+		BigDecimal soqty = solStRepository.findSoqtyBySoidAndSolid(record.getSoId(), record.getSolId());
+		dtoUDDataSAP.setMenge(soqty);
+		dtoUDDataSAP.setMeins("TO");
+		dtoUDDataSAP.setWerks("9082");
+		dtoUDDataSAP.setMenge(record.getWeight());
+		return dtoUDDataSAP;
+	}
+
+	@Override
+	public HsmQualityMechanicalDto buildHsmQualityMechanicalDto(HsmQualityMechanicalDto dtoMechDataSAP, String coilid,
+			String heatId, String sampleId, long recordNo) {
+		
+		long maxRecordNo = sapdataO2eEiRepository.getMaxRecordNo(QualityConstants.OFS_SAP_INT_OBJ_TYPE_MECH_COILQC);
+		logger.info(QualityConstants.FETCHEDMAXRECORDNO, maxRecordNo);
+		dtoMechDataSAP.setRecordNo(String.valueOf(maxRecordNo + 1));
+		dtoMechDataSAP.setResultId(20);
+		dtoMechDataSAP.setCharg(coilid);
+		dtoMechDataSAP.setMatnr(" ");
+		dtoMechDataSAP.setOperations(heatId);
+		dtoMechDataSAP.setBudat(new Date());
+		dtoMechDataSAP.setWerks("9082");
+		dtoMechDataSAP.setZdate(new Date());
+		dtoMechDataSAP.setZtime(new Time(System.currentTimeMillis()));
+		dtoMechDataSAP.setSampleId(sampleId);
+		if (sampleId != null) {
+
+			List<MechanicalTestDto> mechanicalTestList = custRepository.getMechanicalTestList(sampleId);
+			logger.debug("Mechanical test list: {}", mechanicalTestList);
+			for (MechanicalTestDto dtomech : mechanicalTestList) {
+				logger.debug("Processing testType: {}", dtomech.getTestType());
+
+				switch (dtomech.getTestType()) {
+				case OfsConstants.TENSILE:
+					List<TensileLabTestingDto> tensileResults = custRepository
+							.getTensileResult(dtomech.getSpecimenId());
+					extractedTensile(dtoMechDataSAP, tensileResults);
+					break;
+				case OfsConstants.BEND:
+					List<BendResultLabTestingDto> bendResults = custRepository.getBendtResult(dtomech.getSpecimenId());
+
+					extractedBend(dtoMechDataSAP, bendResults);
+					break;
+				case OfsConstants.HARDNESS:
+					List<HardnessLabTestingDto> hardnessResults = custRepository
+							.getHardnessResult(dtomech.getSpecimenId());
+					extractedHardness(dtoMechDataSAP, hardnessResults);
+					break;
+
+				case OfsConstants.IMPACT_CVN:
+					List<ImpactResultDto> impactResultCvn = custRepository.getImpactResult(dtomech.getSpecimenId(),
+							"CVN");
+					extractedImpact(dtoMechDataSAP, impactResultCvn);
+					break;
+				case OfsConstants.IMPACT_CUN:
+					List<ImpactResultDto> impactResultCun = custRepository.getImpactResult(dtomech.getSpecimenId(),
+							"CUN");
+					extractedImpact(dtoMechDataSAP, impactResultCun);
+					break;
+
+				case OfsConstants.HTTT:
+					List<HighTempTensileTestResultLabTestingDto> highTempTensileTestResult = custRepository
+							.getHighTempTesnsileTestResult(dtomech.getSpecimenId());
+					extractedHttt(highTempTensileTestResult);
+					break;
+				case OfsConstants.DWTT:
+					List<DWTTResultLabTestingDto> dwttResult = custRepository.getDWTTResult(dtomech.getSpecimenId());
+					extractedDwtt(dtoMechDataSAP, dwttResult);
+					break;
+				case OfsConstants.INCLUSION_RATING:
+					List<InclusionRatingLabTestingDto> getInclusionRatingResult = custRepository
+							.getInclusionRatingResult(dtomech.getSpecimenId());
+					extractedInclusionTest(dtoMechDataSAP, getInclusionRatingResult);
+					break;
+				case OfsConstants.Z_TEST:
+					List<ZTestResultLabTestingDto> getZtestResult = custRepository
+							.getZTestResult(dtomech.getSpecimenId());
+					extractedZtest(dtoMechDataSAP, getZtestResult);
+					break;
+				default:
+					logger.warn("Unhandled testType: {}", dtomech.getTestType());
+					break;
+				}
+
+				extractedGrainSize(dtoMechDataSAP, dtomech);
+
+				extractedMicrostructure(dtoMechDataSAP, dtomech);
+			}
+
+		}
+
+		return dtoMechDataSAP;
+	}
+
+	private void extractedTensile(HsmQualityMechanicalDto dtoMechDataSAP, List<TensileLabTestingDto> tensileResults) {
+		if (!tensileResults.isEmpty()) {
+			TensileLabTestingDto tensile = tensileResults.get(0);
+			dtoMechDataSAP.setYs20(tensile.getYs());
+			dtoMechDataSAP.setUts20(tensile.getUts());
+			dtoMechDataSAP.setYsuts20(tensile.getYsuts());
+			dtoMechDataSAP.setEl20(tensile.getElongationGL200());
+			dtoMechDataSAP.setGl20(new BigDecimal("20"));
+			dtoMechDataSAP.setRa20("");
+		}
+	}
+
+	private void extractedBend(HsmQualityMechanicalDto dtoMechDataSAP, List<BendResultLabTestingDto> bendResults) {
+		if (!bendResults.isEmpty()) {
+			BendResultLabTestingDto bend = bendResults.get(0);
+			dtoMechDataSAP.setBend20(bend.getBendval());
+			dtoMechDataSAP.setBendAngl20(bend.getDegrees());
+		}
+	}
+
+	private void extractedHardness(HsmQualityMechanicalDto dtoMechDataSAP,
+			List<HardnessLabTestingDto> hardnessResults) {
+		if (!hardnessResults.isEmpty()) {
+			HardnessLabTestingDto hard = hardnessResults.get(0);
+			dtoMechDataSAP.setHard20(hard.getHardness());
+			dtoMechDataSAP.setHardUnt20("");
+		}
+	}
+
+	private void extractedImpact(HsmQualityMechanicalDto dtoMechDataSAP, List<ImpactResultDto> impactResultCun) {
+		if (!impactResultCun.isEmpty()) {
+			ImpactResultDto impactcun = impactResultCun.get(0);
+			dtoMechDataSAP.setImp120(impactcun.getEnergyIndex());
+			dtoMechDataSAP.setImp220(impactcun.getSaIndex());
+			dtoMechDataSAP.setImp320(impactcun.getEnergyIndex());
+			dtoMechDataSAP.setImpAvg20(impactcun.getEnergyAverage());
+			dtoMechDataSAP.setImpTemp20(impactcun.getTemperature());
+			dtoMechDataSAP.setImpSize20(impactcun.getEnergyIndex());
+			dtoMechDataSAP.setImpShr120(impactcun.getEnergyIndex());
+			dtoMechDataSAP.setImpShr220(impactcun.getEnergyIndex());
+			dtoMechDataSAP.setImpShr320(impactcun.getEnergyIndex());
+			dtoMechDataSAP.setImpShr20(impactcun.getEnergyIndex());
+		}
+	}
+
+	private void extractedHttt(List<HighTempTensileTestResultLabTestingDto> highTempTensileTestResult) {
+		if (!highTempTensileTestResult.isEmpty()) {
+			HighTempTensileTestResultLabTestingDto htttresult = highTempTensileTestResult.get(0);
+
+		}
+	}
+
+	private void extractedDwtt(HsmQualityMechanicalDto dtoMechDataSAP, List<DWTTResultLabTestingDto> dwttResult) {
+		if (!dwttResult.isEmpty()) {
+			DWTTResultLabTestingDto dwwt = dwttResult.get(0);
+			dtoMechDataSAP.setDwtt20(dwwt.getSaIndex());
+			dtoMechDataSAP.setDwttShr120(dwwt.getSaAverage());
+			dtoMechDataSAP.setDwttShr220(dwwt.getSaavgmin());
+			dtoMechDataSAP.setDwttTmp20(dwwt.getTemperature());
+		}
+	}
+
+	private void extractedInclusionTest(HsmQualityMechanicalDto dtoMechDataSAP,
+			List<InclusionRatingLabTestingDto> getInclusionRatingResult) {
+		if (!getInclusionRatingResult.isEmpty()) {
+			InclusionRatingLabTestingDto dwwt = getInclusionRatingResult.get(0);
+			dtoMechDataSAP.setAThin30(dwwt.getTyathin());
+			dtoMechDataSAP.setAThick30(dwwt.getTyathick());
+			dtoMechDataSAP.setBThin30(dwwt.getTybthin());
+			dtoMechDataSAP.setBThick30(dwwt.getTybthick());
+			dtoMechDataSAP.setCThin30(dwwt.getTycthin());
+			dtoMechDataSAP.setCThick30(dwwt.getTycthick());
+			dtoMechDataSAP.setDThin30(dwwt.getTydthin());
+			dtoMechDataSAP.setDThick30(dwwt.getTydthick());
+		}
+	}
+
+	private void extractedZtest(HsmQualityMechanicalDto dtoMechDataSAP, List<ZTestResultLabTestingDto> getZtestResult) {
+		if (!getZtestResult.isEmpty()) {
+			ZTestResultLabTestingDto ztest = getZtestResult.get(0);
+			dtoMechDataSAP.setZRa120(ztest.getRaind());
+			dtoMechDataSAP.setZRa220(ztest.getRaindmin());
+			dtoMechDataSAP.setZRa320(ztest.getReductionareamin());
+			dtoMechDataSAP.setZRaAvg20(ztest.getReductionArea());
+		}
+	}
+
+	private void extractedGrainSize(HsmQualityMechanicalDto dtoMechDataSAP, MechanicalTestDto dtomech) {
+		if (dtomech.getTestType().equals(OfsConstants.GRAIN_SIZE)) {
+			List<OtherTestResultLabTestingDto> grainsizeResult = custRepository
+					.getOtherTest(dtomech.getSpecimenId(), OfsConstants.GRAIN_SIZE);
+			OtherTestResultLabTestingDto grian = grainsizeResult.get(0);
+			dtoMechDataSAP.setGs30(grian.getTestRemarks());
+		}
+	}
+
+	private void extractedMicrostructure(HsmQualityMechanicalDto dtoMechDataSAP, MechanicalTestDto dtomech) {
+		if (dtomech.getTestType().equals(OfsConstants.MICROSTRUCTURE)) {
+			List<OtherTestResultLabTestingDto> grainsizeResult = custRepository
+					.getOtherTest(dtomech.getSpecimenId(), OfsConstants.MICROSTRUCTURE);
+			OtherTestResultLabTestingDto grian = grainsizeResult.get(0);
+			dtoMechDataSAP.setMicro30(grian.getTestRemarks());
+		}
+	}
+
+	@Override
+	public HsmQualityChemicalDto buildHsmQualityChemicalDto(HsmQualityChemicalDto dtoData, String coilid, String slabId,
+			String heatId , String sampleId, long recordNo) {
+
+		long maxRecordNo = sapdataO2eEiRepository.getMaxRecordNo(QualityConstants.OFS_SAP_INT_OBJ_TYPE_CHEM_COILQC);
+		logger.info(QualityConstants.FETCHEDMAXRECORDNO, maxRecordNo);
+		dtoData.setRecordNo(String.valueOf(maxRecordNo + 1));
+		dtoData.setResultId(10);
+		dtoData.setPpid(coilid);
+		dtoData.setMatnr("");
+		dtoData.setOperations(heatId);
+		dtoData.setBudat(new Date());
+		dtoData.setWerks("9082");
+		dtoData.setInspectionPoint("1");
+		dtoData.setMachineInfo("");
+		dtoData.setZdate(new Date());
+		dtoData.setZtime(new Time(System.currentTimeMillis()));
+		dtoData.setRemark1("");
+		dtoData.setRemark2("");
+		dtoData.setText1("NA");
+		dtoData.setText2("NA");
+		dtoData.setStatus("");
+		dtoData.setIntStatus("");
+		dtoData.setPrueflos("");
+		dtoData.setSampleId(sampleId);
+		dtoData.setClResultId("");
+		dtoData.setActionFlag("");
+		dtoData.setReserve1("NA");
+		dtoData.setReserve2("NA");
+		dtoData.setReserve3("NA");
+		dtoData.setReserve4("NA");
+		if (sampleId != null) {
+			Optional<SpecimenQualityTransactionEntity> chemData = specimenQualityTransactionRepository
+					.getDetailsBySampleIdAndTestMethod(sampleId.trim(), OfsConstants.SPECTRO_TEST);
+			if(chemData.isPresent()) {
+				SpecimenQualityTransactionEntity chemSpecimen = chemData.get();
+				List<ChemResultQtEntity> chemistry = chemResultQtRepository
+						.findBySpecimenId(chemSpecimen.getSpecimenId());
+
+				for (ChemResultQtEntity chem : chemistry) {
+					setElements(dtoData,chem,null);
+				}
+			}else {
+				List<PpChemEntity> ladleChemistry = ppChemRepository.findAllByPpid(slabId);
+				for (PpChemEntity chem : ladleChemistry) {
+					setElements(dtoData,null,chem);
+				}
+			}
+		}
+		return dtoData;
+
+	}
+
+	private void setElements(HsmQualityChemicalDto dtoData, ChemResultQtEntity chem,PpChemEntity ladleChemistry) {
+		String element = null;
+		BigDecimal value = null;
+		if(chem!=null) {
+			element = chem.getId().getElement();
+			value = chem.getElementValue();
+		}else if (ladleChemistry!=null) {
+			element = ladleChemistry.getId().getElement();
+			value = ladleChemistry.getElementval();
+		}
+		switch (element) {
+		case OfsConstants.C_ELEMENT:
+			dtoData.setChar1(OfsConstants.C_ELEMENT);
+			dtoData.setChar1Value(value);
+			break;  
+
+		case OfsConstants.MN:
+			dtoData.setChar2(OfsConstants.MN);
+			dtoData.setChar2Value(value);
+			break;
+
+		case OfsConstants.S:
+			dtoData.setChar3(OfsConstants.S);
+			dtoData.setChar3Value(value);
+			break;
+		case OfsConstants.P:
+			dtoData.setChar4(OfsConstants.P);
+			dtoData.setChar4Value(value);
+			break;
+		case OfsConstants.SI:
+			dtoData.setChar5(OfsConstants.SI);
+			dtoData.setChar5Value(value);
+			break;
+		case OfsConstants.AL:
+			dtoData.setChar6(OfsConstants.AL);
+			dtoData.setChar6Value(value);
+			break;
+
+		case OfsConstants.CU:
+			dtoData.setChar7(OfsConstants.CU);
+			dtoData.setChar7Value(value);
+			break;
+		case OfsConstants.CA:
+			dtoData.setChar8(OfsConstants.CA);
+			dtoData.setChar8Value(value);
+			break;
+		case OfsConstants.NI:
+			dtoData.setChar9(OfsConstants.NI);
+			dtoData.setChar9Value(value);
+			break;
+		case OfsConstants.CR:
+			dtoData.setChar10(OfsConstants.CR);
+			dtoData.setChar10Value(value);
+			break;
+		case OfsConstants.MO:
+			dtoData.setChar11(OfsConstants.MO);
+			dtoData.setChar11Value(value);
+			break;
+		case OfsConstants.TI:
+			dtoData.setChar12(OfsConstants.TI);
+			dtoData.setChar12Value(value);
+			break;
+		case OfsConstants.V:
+			dtoData.setChar13(OfsConstants.V);
+			dtoData.setChar13Value(value);
+			break;
+
+		case OfsConstants.SN:
+			dtoData.setChar14(OfsConstants.SN);
+			dtoData.setChar14Value(value);
+			break;
+		case OfsConstants.NB:
+			dtoData.setChar15(OfsConstants.NB);
+			dtoData.setChar15Value(value);
+			break;
+		case OfsConstants.AS:
+			dtoData.setChar16(OfsConstants.AS);
+			dtoData.setChar16Value(value);
+			break;
+		case OfsConstants.B_ELEMENT:
+			dtoData.setChar17(OfsConstants.B_ELEMENT);
+			dtoData.setChar17Value(value);
+			break;
+		case OfsConstants.CO:
+			dtoData.setChar18(OfsConstants.CO);
+			dtoData.setChar18Value(value);
+			break;
+
+		case OfsConstants.N2:
+			dtoData.setChar19(OfsConstants.N2);
+			dtoData.setChar19Value(value);
+			break;
+		case OfsConstants.ZR:
+			dtoData.setChar20(OfsConstants.ZR);
+			dtoData.setChar20Value(value);
+			break;
+		case OfsConstants.BI:
+			dtoData.setChar21(OfsConstants.BI);
+			dtoData.setChar21Value(value);
+			break;
+
+		case OfsConstants.SB:
+			dtoData.setChar22(OfsConstants.SB);
+			dtoData.setChar22Value(value);
+			break;
+		case OfsConstants.H:
+			dtoData.setChar23(OfsConstants.H);
+			dtoData.setChar23Value(value);
+			break;
+		case OfsConstants.O:
+			dtoData.setChar24(OfsConstants.O);
+			dtoData.setChar24Value(value);
+			break;
+
+		case OfsConstants.GA:
+			dtoData.setChar25(OfsConstants.GA);
+			dtoData.setChar25Value(value);
+			break;
+		case OfsConstants.LI:
+			dtoData.setChar26(OfsConstants.LI);
+			dtoData.setChar26Value(value);
+			break;
+		case OfsConstants.TA:
+			dtoData.setChar27(OfsConstants.TA);
+			dtoData.setChar27Value(value);
+			break;
+
+		case OfsConstants.SE:
+			dtoData.setChar28(OfsConstants.SE);
+			dtoData.setChar28Value(value);
+			break;
+
+		default:
+			break;
+		}
+	}
+
+}

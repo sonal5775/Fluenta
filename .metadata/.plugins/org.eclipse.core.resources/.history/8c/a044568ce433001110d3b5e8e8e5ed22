@@ -1,0 +1,70 @@
+package com.hindindustec.fluenta.sales.dto;
+
+import java.math.BigDecimal;
+import java.util.Date;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@ToString
+public class ColorCodeDto {
+
+	private String seid;
+
+	private long selid;
+
+	private String colourcde;
+
+	private byte[] imagefile;
+
+	private String imagefilenm;
+	
+	private String imagefileData;
+
+	private String location;
+
+	private String rmks;
+
+	private BigDecimal isactv;
+
+	private String crBy;
+
+	private Date crDt;
+
+	private String crMacAddr;
+
+	private String moBy;
+
+	private Date moDt;
+
+	private String moMacAddr;
+
+	public ColorCodeDto(String seid, long selid, String colourcde, byte[] imagefile, String imagefilenm,
+			String location, String rmks, BigDecimal isactv, String crBy, Date crDt, String crMacAddr, String moBy,
+			Date moDt, String moMacAddr) {
+		super();
+		this.seid = seid;
+		this.selid = selid;
+		this.colourcde = colourcde;
+		this.imagefile = imagefile;
+		this.imagefilenm = imagefilenm;
+		this.location = location;
+		this.rmks = rmks;
+		this.isactv = isactv;
+		this.crBy = crBy;
+		this.crDt = crDt;
+		this.crMacAddr = crMacAddr;
+		this.moBy = moBy;
+		this.moDt = moDt;
+		this.moMacAddr = moMacAddr;
+	}
+	
+	
+}

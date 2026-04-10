@@ -1,0 +1,127 @@
+package com.hindindustec.fluenta.sales.repository;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Repository;
+
+import com.hindindustec.fluenta.sales.common.OfsConstants;
+import com.hindindustec.fluenta.sales.common.OfsLoggerNameConstants;
+import com.hindindustec.fluenta.sales.dto.EmailResponseDto;
+import com.hindindustec.fluenta.sales.dto.TdcStatusDto;
+import com.hindindustec.fluenta.sales.dto.TdcStatusRequest;
+import com.hindindustec.fluenta.sales.dto.UserIdUserNmDto;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+
+@Repository
+public class TdcStatusCustRepository {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(OfsLoggerNameConstants.SALES_ENQUIRY_LOG);
+
+	private EntityManager entityManager;
+	
+	public TdcStatusCustRepository(EntityManager entityManager) {
+		super();
+		this.entityManager = entityManager;
+	}
+	
+	/**
+	 * This method returns sales enquiry items
+	 *
+	 * @author Prajwal Dhande
+	 */
+	public List<String> searchMatchingSalesEnquiryItems(String query){
+		StringBuilder queryBuilder = new StringBuilder();
+	    LOGGER.info("Entering searchMatchingSalesEnquiryItems with query: {}", query);
+		queryBuilder.append("SELECT DISTINCT selSt.id.seid FROM SelStEntity selSt where selSt.tdcid IS NOT NULL AND LOWER(selSt.id.seid) LIKE LOWER(:query)");
+		TypedQuery<String> q = entityManager.createQuery(queryBuilder.toString(), String.class);
+		q.setMaxResults(10);
+		q.setParameter("query", "%" + query.toLowerCase() + "%");
+		return q.getResultList();
+	}
+	
+	/**
+	 * This method returns tdc ids
+	 *
+	 * @author Prajwal Dhande
+	 */
+	public List<String> searchMatchingTdcIds(String query){
+		StringBuilder queryBuilder = new StringBuilder();
+		LOGGER.info("Entering searchMatchingTdcIds with query: {}", query);
+		queryBuilder.append("SELECT DISTINCT selSt.tdcid FROM SelStEntity selSt where selSt.tdcid IS NOT NULL AND LOWER(selSt.tdcid) LIKE LOWER(:query)");
+		TypedQuery<String> q = entityManager.createQuery(queryBuilder.toString(), String.class);
+		q.setMaxResults(10);
+		q.setParameter("query", "%" + query.toLowerCase() + "%");
+		LOGGER.debug("searchMatchingTdcIds result size: {}", q.getResultList().size());
+		return q.getResultList();
+	}
+	
+	public List<TdcStatusDto> getTdcStatusDetails(TdcStatusRequest request) {
+		StringBuilder queryBuilder = new StringBuilder();
+		 LOGGER.info("Fetching TDC Status Details for SEID: {}, TDCID: {}, KAMID: {}",
+		            request.getSeid(), request.getTdcid(), request.getKamid());
+		queryBuilder.append(OfsConstants.TDC_STATUS_DTO)
+				.append("(")
+				.append("sse.id.selid, ")
+				.append("sse.tdcid, ")
+				.append("tje.approvalcycleid, ")
+				.append("tje.tdcsts,")
+				.append("tje.custnm ")
+				.append(") ")
+				.append("FROM SelStEntity sse ")
+				.append("LEFT JOIN TdcJmEntity tje ON TRIM(tje.id.tdcid) = TRIM(sse.tdcid) ")
+				.append("LEFT JOIN SehStEntity seh ON TRIM(tje.seidref) = TRIM(seh.seid) ")
+				.append("WHERE (:seid IS NULL OR TRIM(sse.id.seid) = TRIM(:seid)) ")
+				.append("AND (:tdcid IS NULL OR TRIM(sse.tdcid) = TRIM(:tdcid)) ")
+				.append("AND (:kamid IS NULL OR TRIM(seh.kamid) = TRIM(:kamid)) ")
+				.append("AND sse.tdcid IS NOT NULL ");
+
+		TypedQuery<TdcStatusDto> q = entityManager.createQuery(queryBuilder.toString(), TdcStatusDto.class);
+		q.setParameter(OfsConstants.SEID, request.getSeid());
+		q.setParameter(OfsConstants.KAMID, request.getKamid());
+		q.setParameter(OfsConstants.TDCID, request.getTdcid());
+		return q.getResultList();
+	}
+	
+	public List<UserIdUserNmDto> getUserIdAndUserNmByDept(String department) {
+		StringBuilder queryBuilder = new StringBuilder();
+
+	    queryBuilder.append(OfsConstants.TDC_STATUS_USER_DTO)
+	    			.append("(")
+	                .append("p.userid, p.usernm) ")
+	                .append("FROM UserMaster p ")
+	                .append("WHERE p.dept = :dept");
+
+	    return entityManager.createQuery(queryBuilder.toString(), UserIdUserNmDto.class)
+	                        .setParameter(OfsConstants.SDEPT, department)
+	                        .getResultList();
+	}
+	
+	public List<EmailResponseDto> getAllRecipentsByApprover(String approver, String tdcid) {
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append(OfsConstants.TDC_STATUS_EMAIL_RESPONSE_DTO)
+					.append("(")
+					.append(" u.usernm,")
+					.append(" u.emailid)")
+					.append(" FROM WfusermapJmEntity Wfuser")
+					.append(" JOIN ")
+					.append(" WfapprovalJmEntity wf ON wf.objectrefid = :tdcid")
+					.append(" JOIN")
+					.append(" WfroleJmEntity wfrole ON wfrole.rolenm = :approver and wfrole.id.wfid = wf.finalwfid")
+					.append(" AND Wfuser.id.wfid = wfrole.id.wfid")
+					.append(" AND Wfuser.id.roleid = wfrole.id.roleid AND wfrole.isactv=1")
+					.append(" JOIN")
+					.append(" UserMaster u ON u.userid = Wfuser.id.userid AND u.isactv=1 ")
+					.append(" WHERE Wfuser.isactv = 1");
+		
+		
+		TypedQuery<EmailResponseDto> q = entityManager.createQuery(queryBuilder.toString(), EmailResponseDto.class);
+		q.setParameter(OfsConstants.APPROVER, approver);
+		q.setParameter(OfsConstants.TDCID, tdcid);
+		return q.getResultList();
+
+	}
+}

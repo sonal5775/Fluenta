@@ -1,0 +1,681 @@
+package com.hindindustec.fluenta.reports.repository;
+
+import static com.hindindustec.fluenta.reports.common.OfsConstants.FROM_DATE;
+import static com.hindindustec.fluenta.reports.common.OfsConstants.QUERY;
+import static com.hindindustec.fluenta.reports.common.OfsConstants.SELECTED_HEAT;
+import static com.hindindustec.fluenta.reports.common.OfsConstants.SELECTED_LOCATION;
+import static com.hindindustec.fluenta.reports.common.OfsConstants.SELECTED_SHIFT;
+import static com.hindindustec.fluenta.reports.common.OfsConstants.SELECTED_SLAB;
+import static com.hindindustec.fluenta.reports.common.OfsConstants.SELECTED_SOURCE;
+import static com.hindindustec.fluenta.reports.common.OfsConstants.SELECTED_STATUS;
+import static com.hindindustec.fluenta.reports.common.OfsConstants.TO_DATE;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Repository;
+
+import com.hindindustec.fluenta.reports.common.OfsConstants;
+import com.hindindustec.fluenta.reports.common.OfsStatusConstants;
+import com.hindindustec.fluenta.reports.dto.Chemistry;
+import com.hindindustec.fluenta.reports.dto.SlabStockDto;
+import com.hindindustec.fluenta.reports.dto.SlabStockRequest;
+import com.hindindustec.fluenta.reports.model.PphMt;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
+import jakarta.persistence.TypedQuery;
+
+@Repository
+public class SlabStockCustRepository {
+
+	private static final Logger logger = LoggerFactory.getLogger(SlabStockCustRepository.class);
+
+	EntityManager entityManager;
+	private static final String STATUS_LOG = "status : {}";
+	private static final String CONDITION_SELECTED_HEAT = "WHERE (:selectedHeat IS NULL OR ph.heatid IN :selectedHeat) ";
+	private static final String CONDITION_SELECTED_SHIFT = "AND (:selectedShift IS NULL OR ph.shiftid IN :selectedShift) ";
+	private static final String CONDITION_SELECTED_LOCATION =
+	        "AND (:selectedLocation IS NULL OR ph.slocid LIKE CONCAT(:selectedLocation, '%')) ";
+	private static final String CONDITION_PPSTS_IN =
+	        "AND ph.ppsts IN (:available,:freestock,:charging,:hold,:readytodispatch,:loaded,:insppend,:dispatched,:scheduled,:identified) ";
+
+
+
+	public SlabStockCustRepository(EntityManager entityManager) {
+		super();
+		this.entityManager = entityManager;
+	}
+	
+	List<String> slabStatusList = Arrays.asList(
+			OfsStatusConstants.HOLD,
+			OfsStatusConstants.AVAILABLE,
+			OfsStatusConstants.CHARGING,
+			OfsStatusConstants.FREE_STOCK,
+			OfsStatusConstants.READY_TO_DISPATCH,
+			OfsStatusConstants.LOADED,
+			OfsStatusConstants.TOTAL);
+	
+
+	public Page<SlabStockDto> getSlabStocks(SlabStockRequest request,String status, int page, int size,String query,String countQueryParm,Integer skip){
+		logger.info(STATUS_LOG,status);
+	    // Step 1: Calculate effective OFFSET and PAGE SIZE
+	    int effectiveOffset = page * size;
+	    int effectivePageSize = size;
+
+	    if (skip != null && skip > 0) {
+	        if (skip >= size) {
+	            effectiveOffset += skip; // Adjust the offset by skipping additional rows
+	            skip = 0; // Reset skip as it's already accounted for
+				logger.info("skip : {} ",skip);
+	        } else {
+	            effectiveOffset += skip; 
+	            effectivePageSize -= skip; // Adjust the size to exclude skipped rows
+	        }
+	    }
+
+	    TypedQuery<SlabStockDto> q = entityManager.createQuery(query, SlabStockDto.class);
+
+	    q.setParameter(SELECTED_HEAT, request.getHeatid());
+	    q.setParameter(SELECTED_SLAB, request.getPpid());
+	    q.setParameter(SELECTED_STATUS, request.getPpsts());
+	    q.setParameter(SELECTED_SOURCE, request.getSource());
+	    q.setParameter(SELECTED_SHIFT, request.getShiftid());
+	    q.setParameter(FROM_DATE, request.getFromDate());
+	    q.setParameter(TO_DATE, request.getToDate());
+	    q.setParameter(SELECTED_LOCATION, request.getSlocid());
+	    q.setParameter(OfsConstants.PRID, OfsConstants.SMSINSP);
+
+	    q.setFirstResult(effectiveOffset);
+	    q.setMaxResults(effectivePageSize);
+
+	    List<SlabStockDto> resultList = q.getResultList();
+
+	    // Step 3: Query for Count
+	    Query countQuery = entityManager.createQuery(countQueryParm);
+
+	       
+	    countQuery.setParameter(SELECTED_HEAT, request.getHeatid());
+	    countQuery.setParameter(SELECTED_SLAB, request.getPpid());
+	    countQuery.setParameter(SELECTED_STATUS, request.getPpsts());
+	    countQuery.setParameter(OfsConstants.SELECTED_SOURCE, request.getSource());
+	    countQuery.setParameter(OfsConstants.SELECTED_SHIFT, request.getShiftid());
+	    countQuery.setParameter(OfsConstants.FROM_DATE, request.getFromDate());
+	    countQuery.setParameter(OfsConstants.TO_DATE, request.getToDate());
+	    countQuery.setParameter(OfsConstants.SELECTED_LOCATION, request.getSlocid());
+	    
+
+	    Long totalRows = (Long) countQuery.getSingleResult();
+
+	    Pageable pageable = PageRequest.of(page, size);
+	    return new PageImpl<>(resultList, pageable, totalRows);
+		
+	}
+	
+	public List<String> searchStringFilter(String filterValue,String tableName,String columnName) {
+		TypedQuery<String> q = entityManager.createQuery("SELECT distinct (fn."+columnName+") from "+tableName+" fn"
+				+ " where (lower(:filterValue) is null or lower(fn."+columnName+") like lower(concat('%', :filterValue,'%')))"
+				+ " and fn."+columnName+" is not null"
+				+ " and fn.ppsts IN :slabStatusList"
+				+ " order by fn."+columnName+" desc"
+				,String.class);
+		q.setParameter("filterValue", filterValue);
+		q.setParameter("slabStatusList", slabStatusList);
+		return q.getResultList();
+	}
+	public List<Long> searchNumberFilter(String filterValue,String tableName,String columnName) {
+		TypedQuery<Long> q = entityManager.createQuery("SELECT distinct (fn."+columnName+") from "+tableName+" fn"
+				+ " where (:filterValue is null or cast(fn."+columnName+" as string) like concat('%', :filterValue,'%'))"
+				+ " and fn."+columnName+" is not null"
+				+ " order by fn."+columnName+" desc"
+				,Long.class);
+		q.setParameter("filterValue", filterValue);
+		q.setParameter("slabStatusList", slabStatusList);
+		
+		return q.getResultList();
+	}
+	
+	public List<Chemistry> getSlabStocksChemistry(SlabStockRequest request){
+		TypedQuery<Chemistry> query = entityManager.createQuery(
+				"SELECT distinct new com.hindindustec.fluenta.reports.dto.Chemistry("
+						+ "    mmt.id.ppid, " + "    mmt.elementval," + "    mmt.id.element " + ")"
+						+ " FROM PpchemMt mmt" + " WHERE mmt.id.ppid = :ppid",
+				Chemistry.class);
+		query.setParameter("ppid", request.getPpid());
+		return query.getResultList();
+	}
+
+	public List<Chemistry> getSlabStocksChemistryForEachSlab(SlabStockRequest request){
+		 List<Chemistry> resultList = new ArrayList<>();
+		 
+//		 List<String> ppidList = request.stream()
+//                 .map(a -> a.getPpid())  // Ensure correct method casing
+//                 .toList(); 		    
+		        TypedQuery<Chemistry> query = entityManager.createQuery(
+		                "SELECT distinct new com.hindindustec.fluenta.reports.dto.Chemistry(" +
+		                        "    mmt.id.ppid, " +
+		                        "    mmt.elementval, " +
+		                        "    mmt.id.element " +
+		                        ") FROM PpchemMt mmt " +
+		                        "WHERE mmt.id.ppid IN :ppidList",
+		                Chemistry.class);
+		        query.setParameter("ppidList", request.getPpidList());
+		        resultList.addAll(query.getResultList());
+		   return resultList;
+	}
+	public List<String> searchMatchingSlab(String query){
+		TypedQuery<String> q = entityManager.createQuery(
+				"SELECT distinct ph.id.ppid FROM PphMt ph WHERE ph.prdid = 'SLAB' AND LOWER(ph.id.ppid) LIKE LOWER(:query)",String.class);
+		q.setMaxResults(10);
+		q.setParameter(QUERY, "%" + query.toLowerCase() + "%");
+		return q.getResultList();
+	}
+	
+	public List<String> searchMatchingIntGrd(String query){
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT distinct ph.grdid FROM PphMt ph ")
+				.append("WHERE ph.prdid = :slab ")
+				.append("AND LOWER(ph.grdid) LIKE LOWER(:query)");
+		TypedQuery<String> q = entityManager.createQuery(queryBuilder.toString(), String.class);
+		q.setMaxResults(10);
+		q.setParameter(QUERY, "%" + query.toLowerCase() + "%");
+		q.setParameter(OfsStatusConstants.SSLAB, OfsStatusConstants.SLAB);
+		return q.getResultList();
+	}
+	
+	public List<String> searchMatchingHeat(String query){
+		TypedQuery<String> q = entityManager.createQuery(
+				"SELECT distinct ph.heatid FROM PphMt ph WHERE ph.prdid = 'SLAB' AND LOWER(ph.heatid) LIKE LOWER(:query)",String.class);
+		q.setMaxResults(10);
+		q.setParameter(QUERY, "%" + query.toLowerCase() + "%");
+		return q.getResultList();
+	}
+	
+	public List<String> getStatusList(){
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT distinct UPPER(ph.ppsts) FROM PphMt ph ")
+				.append("WHERE ph.ppsts != :consumed ")
+				.append("AND ph.ppsts != :conspend");
+		TypedQuery<String> query = entityManager.createQuery(queryBuilder.toString(), String.class);
+		query.setParameter(OfsStatusConstants.SCONSUMED, OfsStatusConstants.CONSUMED);
+		query.setParameter(OfsStatusConstants.SCONSPEND, OfsStatusConstants.CONSPEND);
+		return query.getResultList();
+	}
+	
+	public List<String> getSourceList(){
+		TypedQuery<String> query = entityManager.createQuery(
+				"SELECT distinct ph.source FROM PphMt ph",String.class);
+		return query.getResultList();
+	}
+	
+	public List<String> getShiftList(){
+		TypedQuery<String> query = entityManager.createQuery(
+				"SELECT distinct ph.shiftid FROM PphMt ph",String.class);
+		return query.getResultList();
+	}
+	
+	public List<Object[]> getCombinedData() {
+	    TypedQuery<Object[]> query = entityManager.createQuery(
+	        "SELECT distinct ph.id.ppid, ph.heatid, ph.ppsts, ph.source FROM PphMt ph", Object[].class);
+	    return query.getResultList();
+	}
+	
+	public List<PphMt> findRecordUsingLocationAndSequenceTyped(String location, BigDecimal sequence) {
+	    StringBuilder queryBuilder = new StringBuilder();
+	    queryBuilder.append("SELECT p FROM PphMt p ")
+	                .append("WHERE p.slocid = :location ")
+	                .append("AND p.slocseq = :sequence ")
+	                .append("AND (UPPER(TRIM(p.ppsts)) = :freestock OR UPPER(TRIM(p.ppsts)) = :available OR UPPER(TRIM(p.ppsts)) = :hold)");
+
+	    TypedQuery<PphMt> query = entityManager.createQuery(queryBuilder.toString(), PphMt.class);
+
+	    query.setParameter(OfsStatusConstants.SLOCATION, location);
+	    query.setParameter(OfsStatusConstants.SSEQUENCE, sequence);
+	    query.setParameter(OfsStatusConstants.SFREESTOCK, OfsStatusConstants.FREE_STOCK);
+	    query.setParameter(OfsStatusConstants.SAVAILABLE, OfsStatusConstants.AVAILABLE);
+	    query.setParameter(OfsStatusConstants.SHOLD, OfsStatusConstants.HOLD);
+
+	    return query.getResultList();
+	}
+	
+	public long getTotalRecordCount(SlabStockRequest request) {
+		String slabIdFlag = null;
+		String statusFlag = null;
+		String locationFlag = null;
+		
+		
+		if (request.getMultiSlabList() != null && !request.getMultiSlabList().isEmpty()) {
+			slabIdFlag = OfsStatusConstants.AVAILABLE;
+		}
+		if (request.getMultiStatusList() != null && !request.getMultiStatusList().isEmpty()) {
+			statusFlag = OfsStatusConstants.AVAILABLE;
+		}
+		if (request.getMultiLocationList() != null && !request.getMultiLocationList().isEmpty()) {
+			locationFlag = OfsStatusConstants.AVAILABLE;
+		}
+		
+		
+		StringBuilder query = new StringBuilder();
+		query.append("SELECT count(ph) ")
+                .append("FROM PphMt ph LEFT JOIN PppostprodtaskMt pppt ON ph.id.ppid = pppt.id.ppid AND ph.id.ppctr = (select MAX(phh.id.ppctr) from PphMt phh where ph.id.ppid=phh.id.ppid) AND pppt.id.taskstepid = (select MAX(pt.id.taskstepid) from PppostprodtaskMt pt where pt.id.ppid=pppt.id.ppid AND pt.id.ppctr = pppt.id.ppctr) AND pppt.prid = :prid ")
+                .append("LEFT JOIN PpqcmassbalQt mbl ON pppt.id.ppid = mbl.id.ppid AND pppt.id.ppctr = mbl.id.ppctr AND pppt.id.taskstepid = mbl.id.taskstepid AND mbl.prdid = :slab ")
+                .append("LEFT JOIN PoprlSt pos ON ph.poid = pos.id.poid AND ph.poprctr = pos.id.poprctr AND pos.opprdid = :slab ")
+                .append("LEFT JOIN SolSt sos ON pos.soid = sos.id.soid AND pos.solid = sos.id.solid ")
+                .append(CONDITION_SELECTED_HEAT)
+                .append("AND (:selectedSlab IS NULL OR ph.id.ppid IN :selectedSlab) ")
+                .append("AND (:slabIdFlag IS NULL OR ph.id.ppid IN :multiSlab) ")
+                .append("AND (:statusFlag IS NULL OR UPPER(TRIM(ph.ppsts)) IN :multiStatus) ")
+                .append("AND (:locationFlag IS NULL OR ph.slocid IN :multiLocation) ")
+                .append("AND (:selectedStatus IS NULL OR UPPER(TRIM(ph.ppsts)) IN :selectedStatus) ")
+                .append(CONDITION_SELECTED_SHIFT)
+                .append("  AND (:fromDate IS NULL OR ph.prodDt >= :fromDate)")
+       		 	.append("  AND (:toDate IS NULL OR ph.prodDt<= :toDate )")
+                .append("AND (:selectedSource IS NULL OR ph.source IN :selectedSource)  ")
+                .append("AND (:selectedIntgrd IS NULL OR ph.grdid IN :selectedIntgrd)  ")
+                .append(CONDITION_SELECTED_LOCATION)
+                .append("AND UPPER(TRIM(ph.prdid)) = :slab ") 
+                .append(CONDITION_PPSTS_IN)
+			    .append("AND (:selectedThkFrom IS NULL OR ph.thk >= :selectedThkFrom) ")
+			    .append("AND (:selectedThkTo IS NULL OR ph.thk <= :selectedThkTo) ")
+			    .append("AND (:selectedFromSlabWidth IS NULL OR ph.wdt >= :selectedFromSlabWidth) ")
+			    .append("AND (:selectedToSlabWidth IS NULL OR ph.wdt <= :selectedToSlabWidth) ")
+			    .append("AND (:selectedFromSlabLength IS NULL OR ph.len >= :selectedFromSlabLength) ")
+			    .append("AND (:selectedToSlabLength IS NULL OR ph.len <= :selectedToSlabLength) ")
+				.append("order by ph.prodDt desc");
+		 
+		TypedQuery<Long> q = entityManager.createQuery(query.toString(),Long.class);
+		q.setParameter(SELECTED_HEAT, request.getHeatid());
+		q.setParameter(SELECTED_SLAB, request.getPpid());
+		q.setParameter(SELECTED_STATUS, request.getPpsts());
+		q.setParameter(OfsConstants.SELECTED_SOURCE, request.getSource());
+		q.setParameter(OfsConstants.SELECTED_SHIFT, request.getShiftid());
+		q.setParameter(OfsConstants.FROM_DATE, request.getFromDate());
+		q.setParameter(OfsConstants.TO_DATE, request.getToDate());
+		q.setParameter(OfsConstants.SELECTED_LOCATION, request.getSlocid());
+		q.setParameter(OfsConstants.SELECTED_INTGRD, request.getGrdid());
+		q.setParameter(OfsConstants.SELECTED_THKFROM, request.getSelectedThkFrom());
+		q.setParameter(OfsConstants.SELECTED_THKTO, request.getSelectedThkTo());
+		q.setParameter(OfsConstants.SELECTED_WIDTHFROM, request.getSelectedFromSlabWidth());
+		q.setParameter(OfsConstants.SELECTED_WIDTHTO, request.getSelectedToSlabWidth());
+		q.setParameter(OfsConstants.SELECTED_LENGTHFROM, request.getSelectedFromSlabLength());
+		q.setParameter(OfsConstants.SELECTED_LENGTHTO, request.getSelectedToSlabLength());
+		q.setParameter(OfsConstants.SELECTED_MULTI_SLAB, request.getMultiSlabList() != null ? request.getMultiSlabList() : null);
+		q.setParameter(OfsConstants.SELECTED_MULTI_STATUS, request.getMultiStatusList() != null ? request.getMultiStatusList() : null);
+		q.setParameter(OfsConstants.SELECTED_MULTI_LOCATION, request.getMultiLocationList() != null ? request.getMultiLocationList() : null);
+		q.setParameter(OfsConstants.SLAB_ID_FLAG, slabIdFlag);
+		q.setParameter(OfsConstants.STATUS_FLAG, statusFlag);
+		q.setParameter(OfsConstants.LOCATION_FLAG, locationFlag);
+		q.setParameter(OfsConstants.PRID, OfsConstants.SMSINSP);
+		q.setParameter(OfsConstants.SSLAB, OfsConstants.SLAB);
+		q.setParameter(OfsStatusConstants.SAVAILABLE, OfsStatusConstants.AVAILABLE);
+		q.setParameter(OfsStatusConstants.SFREESTOCK, OfsStatusConstants.FREE_STOCK);
+		q.setParameter(OfsStatusConstants.SCHARGING, OfsStatusConstants.CHARGING);
+		q.setParameter(OfsStatusConstants.SHOLD, OfsStatusConstants.HOLD);
+		q.setParameter(OfsStatusConstants.SREADYTODISPATCH, OfsStatusConstants.READY_TO_DISPATCH);
+		q.setParameter(OfsStatusConstants.SLOADED, OfsStatusConstants.LOADED);
+		q.setParameter(OfsStatusConstants.SINSPPEND, OfsStatusConstants.INSPPEND);
+		q.setParameter(OfsStatusConstants.SDISPATCHED, OfsStatusConstants.DISPATCHED);
+		q.setParameter(OfsStatusConstants.SSCHEDULED, OfsStatusConstants.BATCH_SCHEDULED);
+		q.setParameter(OfsStatusConstants.SIDENTIFIED, OfsStatusConstants.IDENTIFIED);
+		
+		return q.getSingleResult()!=null?q.getSingleResult():0;
+	}
+
+	
+	public List<SlabStockDto> getSlabStockDetails(SlabStockRequest request) {
+		String slabIdFlag = null;
+		String statusFlag = null;
+		String locationFlag = null;
+		String heatIdFlag = null;
+		String slbIdFlag = null;
+		
+		if (request.getSelectedSlabIdList() != null && !request.getSelectedSlabIdList().isEmpty()) {
+			slbIdFlag = OfsStatusConstants.AVAILABLE;
+		}
+		if (request.getSelectedHeatIdList() != null && !request.getSelectedHeatIdList().isEmpty()) {
+			heatIdFlag = OfsStatusConstants.AVAILABLE;
+		}
+		if (request.getMultiSlabList() != null && !request.getMultiSlabList().isEmpty()) {
+			slabIdFlag = OfsStatusConstants.AVAILABLE;
+		}
+		if (request.getMultiStatusList() != null && !request.getMultiStatusList().isEmpty()) {
+			statusFlag = OfsStatusConstants.AVAILABLE;
+		}
+		if (request.getMultiLocationList() != null && !request.getMultiLocationList().isEmpty()) {
+			locationFlag = OfsStatusConstants.AVAILABLE;
+		}
+		
+		
+		StringBuilder query = new StringBuilder();
+		query.append("SELECT distinct ")
+                .append("ph.ppid,")
+                .append("ph.ppctr,")
+                .append("ph.heatid,")
+                .append("ph.extgrd,")
+                .append("ph.grdid,")
+                .append("ph.thk,")
+                .append("ph.wdt,")
+                .append("ph.len,")
+                .append("ph.wgt,")
+                .append("ph.source,")
+                .append("ph.slocid,")
+                .append("ph.prevslocid,")
+                .append("UPPER(ph.ppsts) AS ppsts,")
+                .append("schd.SLBCHRG_DT AS chargingDate, ")
+                .append("COALESCE(mh01.SLAB_DISCHARGE,mh02.SENDING_DT || mh02.SENDING_TIME) AS dischargingDate, ")
+                .append("COALESCE(mh01.SLAB_DISCHARGE,mh02.SENDING_DT || mh02.SENDING_TIME) AS dischargingTime, ")
+                .append("sos.soid,")
+                .append("sos.solid,")
+                .append("ph.PROD_DT AS prodDt,")
+                .append("ph.schdid,")
+                .append("ph.schdordseq,")
+                .append("sos.stcustnm,")
+                .append("sos.tdcid,")
+                .append("ph.shiftid,")
+                .append("pppt.manualDecision,")
+                .append("ph.istaper,")
+                .append("ph.headwdt,")
+                .append("ph.tailwdt,")
+                .append("ph.tapstardis,")
+                .append("ph.tapenddis,")
+                .append("ph.taperwdt,")
+                .append("ph.mixgrdflg,")
+                .append("ph.fstslbflg,")
+                .append("ph.lstslbflg,")
+                .append("ph.CR_DT AS crDt,")
+                .append("ph.slocseq,")
+                .append("ph.prevslocseq,")
+                .append("pppt.releaserem,")
+                .append("COALESCE(pppt.holdrem, mbl.scrapdesc) AS holdrem, ")
+                .append("ph.rhfrmks ")
+                .append("FROM HITTRAN.PPH_MT ph LEFT JOIN HITTRAN.PPPOSTPRODTASK_MT pppt ON ph.ppid = pppt.ppid AND ph.ppctr = (select MAX(phh.ppctr) from HITTRAN.PPH_MT phh where ph.ppid=phh.ppid) AND pppt.taskstepid = (select MAX(pt.taskstepid) from HITTRAN.PPPOSTPRODTASK_MT pt where pt.ppid=pppt.ppid AND pt.ppctr = pppt.ppctr) AND pppt.prid = :prid ")
+                .append("LEFT JOIN HITTRAN.PPQCMASSBAL_QT mbl ON pppt.ppid = mbl.ppid AND pppt.ppctr = mbl.ppctr AND pppt.taskstepid = mbl.taskstepid AND mbl.prdid = :slab ")
+                .append("LEFT JOIN HITTRAN.POPRL_ST pos ON ph.poid = pos.poid AND ph.poprctr = pos.poprctr AND pos.opprdid = :slab ")
+                .append("LEFT JOIN HITTRAN.SOL_ST sos ON pos.soid = sos.soid AND pos.solid = sos.solid ")
+                .append("LEFT JOIN HITL2IF.H1MH02_HM1MILL_PDO_LI mh02 ON TRIM(mh02.SLABID) = TRIM(ph.PPID) ")
+                .append("LEFT JOIN HITL2IF.H1MH01_HM1MILL_PDO_LI mh01 ON TRIM(mh01.SLABID) = TRIM(ph.PPID) ")
+                .append("LEFT JOIN HITTRAN.HSMSCHDSLBD_PT schd ON TRIM(schd.ACTSLBID) = TRIM(ph.PPID) ")
+                .append("WHERE (:heatIdFlag IS NULL OR ph.heatid IN :selectedHeat) ")
+                .append("AND (:slbIdFlag IS NULL OR ph.ppid IN :selectedSlab) ")
+                .append("AND (:slabIdFlag IS NULL OR ph.ppid IN :multiSlab) ")
+                .append("AND (:statusFlag IS NULL OR UPPER(TRIM(ph.ppsts)) IN :multiStatus) ")
+                .append("AND (:locationFlag IS NULL OR ph.slocid IN :multiLocation) ")
+                .append("AND (:selectedStatus IS NULL OR UPPER(TRIM(ph.ppsts)) IN :selectedStatus) ")
+                .append("AND (:selectedShift IS NULL OR ph.shiftid IN :selectedShift) ")
+                .append("  AND (:fromDate IS NULL OR ph.PROD_DT >= :fromDate)")
+       		 	.append("  AND (:toDate IS NULL OR ph.PROD_DT<= :toDate ) ")
+                .append("AND (:selectedIntgrd IS NULL OR ph.grdid IN :selectedIntgrd)  ")
+                .append("AND (:selectedLocation IS NULL OR ph.slocid LIKE CONCAT(:selectedLocation, '%')) ")
+                .append("AND UPPER(TRIM(ph.prdid)) = :slab ") 
+                .append("AND ph.ppsts IN (:available,:freestock,:charging,:hold,:readytodispatch,:loaded,:insppend,:dispatched,:scheduled,:identified) ")
+			    .append("AND (:selectedThkFrom IS NULL OR ph.thk >= :selectedThkFrom) ")
+			    .append("AND (:selectedThkTo IS NULL OR ph.thk <= :selectedThkTo) ")
+			    .append("AND (:selectedFromSlabWidth IS NULL OR ph.wdt >= :selectedFromSlabWidth) ")
+			    .append("AND (:selectedToSlabWidth IS NULL OR ph.wdt <= :selectedToSlabWidth) ")
+			    .append("AND (:selectedFromSlabLength IS NULL OR ph.len >= :selectedFromSlabLength) ")
+			    .append("AND (:selectedToSlabLength IS NULL OR ph.len <= :selectedToSlabLength) ");
+		if ("SMS-1".equalsIgnoreCase(request.getSource())) {
+	        query.append(" AND ph.source = 'sap' ")
+	             .append(" AND REGEXP_LIKE(ph.ppid, '^[A-Za-z]{1,2}') ");
+	    } else if ("SMS-2".equalsIgnoreCase(request.getSource())) {
+	        query.append(" AND ph.source IN ('SMS-2', 'L2') ");
+	    } else if ("OUTSOURCE".equalsIgnoreCase(request.getSource())) {
+	        query.append(" AND ph.source = 'sap' ")
+	             .append(" AND (REGEXP_LIKE(ph.ppid, '[A-Za-z]$') OR NOT REGEXP_LIKE(ph.ppid, '[A-Za-z]')) ");
+	    }
+			query.append("order by ph.PROD_DT desc");
+		 
+		Query q = entityManager.createNativeQuery(query.toString(),"SlabStockMapping");
+		q.setParameter(SELECTED_HEAT, request.getSelectedHeatIdList());
+		q.setParameter(SELECTED_SLAB, request.getSelectedSlabIdList());
+		q.setParameter(OfsConstants.HEAT_ID_FLAG, heatIdFlag);
+		q.setParameter(OfsConstants.SLB_ID_FLAG, slbIdFlag);
+		q.setParameter(SELECTED_STATUS, request.getPpsts());
+		q.setParameter(OfsConstants.SELECTED_SHIFT, request.getShiftid());
+		q.setParameter(OfsConstants.FROM_DATE, request.getFromDate());
+		q.setParameter(OfsConstants.TO_DATE, request.getToDate());
+		q.setParameter(OfsConstants.SELECTED_LOCATION, request.getSlocid());
+		q.setParameter(OfsConstants.SELECTED_INTGRD, request.getGrdid());
+		q.setParameter(OfsConstants.SELECTED_THKFROM, request.getSelectedThkFrom());
+		q.setParameter(OfsConstants.SELECTED_THKTO, request.getSelectedThkTo());
+		q.setParameter(OfsConstants.SELECTED_WIDTHFROM, request.getSelectedFromSlabWidth());
+		q.setParameter(OfsConstants.SELECTED_WIDTHTO, request.getSelectedToSlabWidth());
+		q.setParameter(OfsConstants.SELECTED_LENGTHFROM, request.getSelectedFromSlabLength());
+		q.setParameter(OfsConstants.SELECTED_LENGTHTO, request.getSelectedToSlabLength());
+		q.setParameter(OfsConstants.SELECTED_MULTI_SLAB, request.getMultiSlabList() != null ? request.getMultiSlabList() : null);
+		q.setParameter(OfsConstants.SELECTED_MULTI_STATUS, request.getMultiStatusList() != null ? request.getMultiStatusList() : null);
+		q.setParameter(OfsConstants.SELECTED_MULTI_LOCATION, request.getMultiLocationList() != null ? request.getMultiLocationList() : null);
+		q.setParameter(OfsConstants.SLAB_ID_FLAG, slabIdFlag);
+		q.setParameter(OfsConstants.STATUS_FLAG, statusFlag);
+		q.setParameter(OfsConstants.LOCATION_FLAG, locationFlag);
+		q.setParameter(OfsConstants.PRID, OfsConstants.SMSINSP);
+		q.setParameter(OfsConstants.SSLAB, OfsConstants.SLAB);
+		q.setParameter(OfsStatusConstants.SAVAILABLE, OfsStatusConstants.AVAILABLE);
+		q.setParameter(OfsStatusConstants.SFREESTOCK, OfsStatusConstants.FREE_STOCK);
+		q.setParameter(OfsStatusConstants.SCHARGING, OfsStatusConstants.CHARGING);
+		q.setParameter(OfsStatusConstants.SHOLD, OfsStatusConstants.HOLD);
+		q.setParameter(OfsStatusConstants.SREADYTODISPATCH, OfsStatusConstants.READY_TO_DISPATCH);
+		q.setParameter(OfsStatusConstants.SLOADED, OfsStatusConstants.LOADED);
+		q.setParameter(OfsStatusConstants.SINSPPEND, OfsStatusConstants.INSPPEND);
+		q.setParameter(OfsStatusConstants.SDISPATCHED, OfsStatusConstants.DISPATCHED);
+		q.setParameter(OfsStatusConstants.SSCHEDULED, OfsStatusConstants.BATCH_SCHEDULED);
+		q.setParameter(OfsStatusConstants.SIDENTIFIED, OfsStatusConstants.IDENTIFIED);
+		return q.getResultList();
+	}
+	
+	public List<SlabStockDto> getSlabLocationUpdateDetails(SlabStockRequest request) {
+		
+		StringBuilder query = new StringBuilder();
+		query.append("SELECT distinct new ")
+		.append(SlabStockDto.class.getName())
+		.append("(")
+		.append("ph.id.ppid,")
+		.append("ph.id.ppctr,")
+		.append("ph.heatid,")
+		.append("ph.extgrd,")
+		.append("ph.grdid,")
+		.append("ph.thk,")
+		.append("ph.wdt,")
+		.append("ph.len,")
+		.append("ph.wgt,")
+		.append("ph.source,")
+		.append("ph.slocid,")
+		.append("ph.prevslocid,")
+		.append("ph.ppsts,")
+		.append("schd.slbchrgDt AS chargingDate, ")
+        .append("COALESCE(mh01.slabDischarge,mh02.sendingDt || mh02.sendingTime) AS dischargingDate, ")
+        .append("COALESCE(mh01.slabDischarge,mh02.sendingDt || mh02.sendingTime) AS dischargingTime, ")
+		.append("sos.id.soid,")
+        .append("sos.id.solid,")
+		.append("ph.prodDt,")
+		.append("ph.schdid,")
+		.append("ph.schdordseq,")
+		.append("sos.stcustnm,")
+		.append("sos.tdcid,")
+		.append("ph.shiftid,")
+		.append("pppt.manualDecision,")
+		.append("ph.istaper,")
+		.append("ph.headwdt,")
+		.append("ph.tailwdt,")
+		.append("ph.tapstardis,")
+		.append("ph.tapenddis,")
+		.append("ph.taperwdt,")
+		.append("ph.mixgrdflg,")
+		.append("ph.fstslbflg,")
+		.append("ph.lstslbflg,")
+		.append("ph.crDt,")
+		.append("ph.slocseq,")
+		.append("ph.prevslocseq,")
+		.append("pppt.releaserem,")
+		.append("pppt.holdrem,")
+		.append("ph.rhfrmks ")
+		.append(") ")
+		.append("FROM PphMt ph LEFT JOIN PppostprodtaskMt pppt ON ph.id.ppid = pppt.id.ppid AND ph.id.ppctr = (select MAX(phh.id.ppctr) from PphMt phh where ph.id.ppid=phh.id.ppid) AND pppt.id.taskstepid = (select MAX(pt.id.taskstepid) from PppostprodtaskMt pt where pt.id.ppid=pppt.id.ppid AND pt.id.ppctr = pppt.id.ppctr) AND pppt.prid = :prid ")
+        .append("LEFT JOIN PoprlSt pos ON ph.poid = pos.id.poid AND ph.poprctr = pos.id.poprctr ")
+		.append("LEFT JOIN SolSt sos ON pos.soid = sos.id.soid AND pos.solid = sos.id.solid ")
+		.append("LEFT JOIN H1mh02Hm1millPdoLi mh02 ON TRIM(mh02.slabid) = TRIM(ph.id.ppid) ")
+        .append("LEFT JOIN H1mh01Hm1millPdoLi mh01 ON TRIM(mh01.id.slabid) = TRIM(ph.id.ppid) ")
+        .append("LEFT JOIN HsmschdslbdPt schd ON TRIM(schd.actslbid) = TRIM(ph.id.ppid) ")
+		.append("WHERE (:selectedHeat IS NULL OR ph.heatid IN :selectedHeat) ")
+		.append("AND (:selectedSlab IS NULL OR ph.id.ppid IN :selectedSlab) ")
+		.append("AND (:selectedStatus IS NULL OR ph.ppsts IN :selectedStatus) ")
+		.append("AND (:selectedShift IS NULL OR ph.shiftid IN :selectedShift) ")
+		.append("  AND (:fromDate IS NULL OR ph.prodDt >= :fromDate)")
+		 .append("  AND (:toDate IS NULL OR ph.prodDt<= :toDate) ")
+		.append("AND (:selectedSource IS NULL OR ph.source IN :selectedSource)  ")
+		.append("AND (:selectedLocation IS NULL OR ph.slocid LIKE CONCAT(:selectedLocation, '%')) ")
+		.append("AND ph.prdid = :slab ") 
+		.append("AND ph.ppsts IN (:available,:freestock,:charging,:hold,:readytodispatch,:loaded,:insppend,:dispatched,:scheduled,:identified) ")
+		.append("order by ph.prodDt desc");
+		TypedQuery<SlabStockDto> q = entityManager.createQuery(query.toString(),SlabStockDto.class);
+		q.setParameter(SELECTED_HEAT, request.getHeatid());
+		q.setParameter(SELECTED_SLAB, request.getPpid());
+		q.setParameter(SELECTED_STATUS, request.getPpsts());
+		q.setParameter(OfsConstants.SELECTED_SOURCE, request.getSource());
+		q.setParameter(OfsConstants.SELECTED_SHIFT, request.getShiftid());
+		q.setParameter(OfsConstants.FROM_DATE, request.getFromDate());
+		q.setParameter(OfsConstants.TO_DATE, request.getToDate());
+		q.setParameter(OfsConstants.SELECTED_LOCATION, request.getSlocid());
+		q.setParameter(OfsConstants.PRID, OfsConstants.SMSINSP);
+		q.setParameter("slab", OfsConstants.SLAB);
+		q.setParameter(OfsStatusConstants.SAVAILABLE, OfsStatusConstants.AVAILABLE);
+		q.setParameter(OfsStatusConstants.SFREESTOCK, OfsStatusConstants.FREE_STOCK);
+		q.setParameter(OfsStatusConstants.SCHARGING, OfsStatusConstants.CHARGING);
+		q.setParameter(OfsStatusConstants.SHOLD, OfsStatusConstants.HOLD);
+		q.setParameter(OfsStatusConstants.SREADYTODISPATCH, OfsStatusConstants.READY_TO_DISPATCH);
+		q.setParameter(OfsStatusConstants.SLOADED, OfsStatusConstants.LOADED);
+		q.setParameter(OfsStatusConstants.SINSPPEND, OfsStatusConstants.INSPPEND);
+		q.setParameter(OfsStatusConstants.SDISPATCHED, OfsStatusConstants.DISPATCHED);
+		q.setParameter(OfsStatusConstants.SSCHEDULED, OfsStatusConstants.BATCH_SCHEDULED);
+		q.setParameter(OfsStatusConstants.SIDENTIFIED, OfsStatusConstants.IDENTIFIED);
+		return q.getResultList();
+	}
+
+	public Long getMainSlabeStockQueryCount(SlabStockRequest request,String query, String status) {
+		logger.info(STATUS_LOG,status);
+		Query countQuery = entityManager.createQuery(query);
+	       
+	    countQuery.setParameter(SELECTED_HEAT, request.getHeatid());
+	    countQuery.setParameter(SELECTED_SLAB, request.getPpid());
+	    countQuery.setParameter(SELECTED_STATUS, request.getPpsts());
+	    countQuery.setParameter(SELECTED_SOURCE, request.getSource());
+	    countQuery.setParameter(SELECTED_SHIFT, request.getShiftid());
+	    countQuery.setParameter(FROM_DATE, request.getFromDate());
+	    countQuery.setParameter(TO_DATE, request.getToDate());
+	    countQuery.setParameter(SELECTED_LOCATION, request.getSlocid());
+	    
+	    return (Long) countQuery.getSingleResult();
+	}
+
+	public Page<Object[]> getGroupingListData(String queryForGrouping, String queryForGroupingAndFilteringCount,
+			Integer page, Integer size, Integer skip, SlabStockRequest request, String status) {
+		logger.info(STATUS_LOG,status);
+
+		
+	    Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+	    queryCount.setParameter(SELECTED_HEAT, request.getHeatid());
+	    queryCount.setParameter(SELECTED_SLAB, request.getPpid());
+	    queryCount.setParameter(SELECTED_STATUS, request.getPpsts());
+	    queryCount.setParameter(SELECTED_SOURCE, request.getSource());
+	    queryCount.setParameter(SELECTED_SHIFT, request.getShiftid());
+	    queryCount.setParameter(FROM_DATE, request.getFromDate());
+	    queryCount.setParameter(TO_DATE, request.getToDate());
+	    queryCount.setParameter(SELECTED_LOCATION, request.getSlocid());
+	    
+	    Number resultNumber = (Number) queryCount.getSingleResult();
+	    int totalRows = resultNumber.intValue();
+
+	    // Step 2: Adjust effective offset considering SKIP and PAGE SIZE
+	    int effectiveOffset = page * size;
+	    int effectivePageSize = size;
+
+	    if (skip != null && skip > 0) {
+	        if (skip >= size) {
+	            effectiveOffset += skip; // Move to the next offset if skip exceeds size
+	            skip = 0; // Skip is already included in the offset
+				logger.info("skip : {} ",skip);
+	        } else {
+	            effectiveOffset += skip;
+	            effectivePageSize -= skip; // Adjust the size to consider the skip
+	        }
+	    }
+
+	    // Step 3: Pageable object for response
+	    Pageable pageable = PageRequest.of(page, size);
+
+	    // Step 4: Data Query
+	    TypedQuery<Object[]> query = entityManager.createQuery(queryForGrouping, Object[].class);
+	    query.setParameter(SELECTED_HEAT, request.getHeatid());
+	    query.setParameter(SELECTED_SLAB, request.getPpid());
+	    query.setParameter(SELECTED_STATUS, request.getPpsts());
+	    query.setParameter(SELECTED_SOURCE, request.getSource());
+	    query.setParameter(SELECTED_SHIFT, request.getShiftid());
+	    query.setParameter(FROM_DATE, request.getFromDate());
+	    query.setParameter(TO_DATE, request.getToDate());
+	    query.setParameter(SELECTED_LOCATION, request.getSlocid());
+	    query.setFirstResult(effectiveOffset); // Correct OFFSET
+	    query.setMaxResults(effectivePageSize); // Adjusted PAGE SIZE
+	    
+	    // Step 5: Fetch results
+	    List<Object[]> resultList = query.getResultList();
+	    Set<String> seenKeys = new HashSet<>();
+	    boolean[] cSeen = { false }; // mutable wrapper
+	    List<Object[]> uniqueList = new ArrayList<>();
+
+	    resultList.forEach(row -> {
+	        if (row[0] instanceof String) {
+	            String key = (String) row[0];
+
+	            // Replace values as per condition
+	            switch (key) {
+	                case "A": row[0] = "B"; break;
+	                case "M": row[0] = "A"; break;
+	                case "N": row[0] = "C"; break;
+	                case "C": row[0] = "C"; break;
+	                default: break;
+	            }
+
+	            String newKey = (String) row[0];
+
+	            // Check for uniqueness and handle "C"
+	            if ("C".equals(newKey)) {
+	                if (!cSeen[0]) {
+	                    uniqueList.add(row); // allow first "C"
+	                    cSeen[0] = true;
+	                }
+	            } else if (seenKeys.add(newKey)) {
+	                uniqueList.add(row); // only add if not duplicate
+	            }
+	        }
+	    });
+
+	    resultList = uniqueList;
+	    return new PageImpl<>(resultList, pageable, totalRows);    
+	}
+
+	public Long groupCountQuery(String queryForGroupingAndFilteringCount, SlabStockRequest request, String status) {
+		logger.info(STATUS_LOG,status);
+		Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+		queryCount.setParameter(SELECTED_HEAT, request.getHeatid());
+		queryCount.setParameter(SELECTED_SLAB, request.getPpid());
+	    queryCount.setParameter(SELECTED_STATUS, request.getPpsts());
+	    queryCount.setParameter(SELECTED_SOURCE, request.getSource());
+	    queryCount.setParameter(SELECTED_SHIFT, request.getShiftid());
+	    queryCount.setParameter(FROM_DATE, request.getFromDate());
+	    queryCount.setParameter(TO_DATE, request.getToDate());
+	    queryCount.setParameter(SELECTED_LOCATION, request.getSlocid());
+	    Number resultNumber = (Number) queryCount.getSingleResult();
+	    return resultNumber.longValue();
+	}
+}

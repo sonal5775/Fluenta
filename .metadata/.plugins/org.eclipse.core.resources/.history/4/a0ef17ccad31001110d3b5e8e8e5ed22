@@ -1,0 +1,12 @@
+package com.hindindustec.fluenta.hsm.masters.common.config;
+
+import org.springframework.stereotype.Service;
+
+@Service
+public class LoginUserInfoService {
+
+    public String getLoginUserId() {
+
+    	return "admin";
+    }
+}

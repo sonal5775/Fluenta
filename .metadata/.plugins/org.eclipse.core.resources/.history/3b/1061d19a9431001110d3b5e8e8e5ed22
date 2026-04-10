@@ -1,0 +1,108 @@
+package com.hindindustec.fluenta.hsm.masters.serviceimpl;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.common.config.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.masters.customrepository.ProductCodeCustRepository;
+import com.hindindustec.fluenta.hsm.masters.dto.ProductCodeDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ProductCodeRequest;
+import com.hindindustec.fluenta.hsm.masters.dto.ProductCodeResponseDto;
+import com.hindindustec.fluenta.hsm.masters.entities.PrdcdeCm;
+import com.hindindustec.fluenta.hsm.masters.repository.ProductCodeRepository;
+import com.hindindustec.fluenta.hsm.masters.service.ProductCodeService;
+
+@Service
+public class ProductCodeServiceImpl implements ProductCodeService {
+
+    private ProductCodeRepository productCodeRepository;
+
+    private ProductCodeCustRepository productCodeCustRepository;
+
+    private DBSessionService dbSessionService;
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProductCodeServiceImpl.class);
+
+    public ProductCodeServiceImpl(ProductCodeRepository productCodeRepository, ProductCodeCustRepository productCodeCustRepository, DBSessionService dbSessionService) {
+        this.productCodeRepository = productCodeRepository;
+        this.productCodeCustRepository = productCodeCustRepository;
+        this.dbSessionService = dbSessionService;
+    }
+
+    @Override
+    @Transactional
+    @SuppressWarnings("java:S4030")
+    public ProductCodeResponseDto saveProductCode(ProductCodeRequest dto) {
+        dbSessionService.setSessionInfo(this.getClass().getName());
+        ProductCodeResponseDto responseDto = new ProductCodeResponseDto();
+        List<PrdcdeCm> prodList = new ArrayList<>();
+        for (ProductCodeDto pc : dto.getTdata()) {
+            if (validateUniqueConstraint(pc, responseDto)) {
+                responseDto.setSaveAllowed(false);
+                responseDto.setSavedList(new ArrayList<>());
+                return responseDto;
+            } else {
+                PrdcdeCm prdcdeCm = new PrdcdeCm();
+                Optional<PrdcdeCm> prodcodeResponse = productCodeRepository.findById(pc.getPrdcdeid());
+                LOGGER.info("prodcodeResponse >>>> {}", prodcodeResponse);
+                if (prodcodeResponse.isPresent()) {
+                    LOGGER.info("getting in prodcodeResponse");
+                    prdcdeCm = prodcodeResponse.get();
+                    prdcdeCm.setMoDt(new Date());
+                    prdcdeCm.setMoBy(ClientIpUtils.getClient());
+                    prdcdeCm.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+                    LOGGER.info("prodcodeResponse done>>>> {}", prdcdeCm);
+                } else {
+                    prdcdeCm.setPrdcdeid(pc.getPrdcdeid());
+                    BigDecimal maxCounter = productCodeRepository.getMaxCounter(pc.getPrdid());
+                    prdcdeCm.setPrdcdectr(maxCounter.add(BigDecimal.ONE));
+                    prdcdeCm.setCrBy(ClientIpUtils.getClient());
+                    prdcdeCm.setCrDt(new Date());
+                    prdcdeCm.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+                }
+                prdcdeCm.setPrdid(pc.getPrdid());
+                prdcdeCm.setGrdid(dto.getGrdid());
+                prdcdeCm.setThkmin(pc.getThkmin());
+                prdcdeCm.setThkmax(pc.getThkmax());
+                prdcdeCm.setWdtmin(pc.getWdtmin());
+                prdcdeCm.setWdtmax(pc.getWdtmax());
+                prdcdeCm.setIsactv(BigDecimal.ONE);
+                
+                prodList.add(prdcdeCm);
+                productCodeRepository.save(prdcdeCm);
+            }
+        }
+        responseDto.setSaveAllowed(true);
+        responseDto.setSavedList(new ArrayList<>());
+        return responseDto;
+    }
+
+    @Override
+    public List<ProductCodeDto> getProductCodeList(ProductCodeRequest request) {
+        return productCodeCustRepository.getProductCodeList(request);
+    }
+
+    @Override
+    public List<ProductCodeDto> fetchAll() {
+        return productCodeCustRepository.fetAllData();
+    }
+
+    private boolean validateUniqueConstraint(ProductCodeDto pc, ProductCodeResponseDto responseDto) {
+        LOGGER.info("prodcodeResponse>>>> {}", responseDto);
+        Optional<PrdcdeCm> optional = productCodeRepository.findByGrdIdThkMinWdtMin(pc.getGrdid(), pc.getThkmin(), pc.getWdtmin());
+        if (optional.isPresent()) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+}

@@ -1,0 +1,803 @@
+package com.hindindustec.fluenta.sales.service.serviceimpl;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.data.domain.Page;
+import org.springframework.stereotype.Service;
+
+import com.hindindustec.fluenta.sales.common.DevExtGridFilterUtils;
+import com.hindindustec.fluenta.sales.common.OfsConstants;
+import com.hindindustec.fluenta.sales.common.response.FluentaPaginatedResponse;
+import com.hindindustec.fluenta.sales.common.response.Group;
+import com.hindindustec.fluenta.sales.common.response.GroupedDataResponse;
+import com.hindindustec.fluenta.sales.dto.OrderBookRequest;
+import com.hindindustec.fluenta.sales.dto.OrderBookViewDto;
+import com.hindindustec.fluenta.sales.dto.SegmentDto;
+import com.hindindustec.fluenta.sales.dto.StatusDto;
+import com.hindindustec.fluenta.sales.repository.OrderBookCustRepository;
+import com.hindindustec.fluenta.sales.repository.SolStRepository;
+import com.hindindustec.fluenta.sales.service.OrderBookService;
+@SuppressWarnings({"java:S6541","java:S3776","java:S1192","java:S127","java:S108"})
+@Service
+public class OrderBookServiceImpl implements OrderBookService {
+
+	private OrderBookCustRepository salesOrderBookCustRepository;
+	private SolStRepository solStRepository;
+
+	public OrderBookServiceImpl(OrderBookCustRepository salesOrderBookCustRepository, SolStRepository solStRepository) {
+		super();
+		this.salesOrderBookCustRepository = salesOrderBookCustRepository;
+		this.solStRepository = solStRepository;
+	}
+
+	private static final String NOT_LIKE = " NOT LIKE ";
+
+	private static final String LIKE = " LIKE ";
+
+	private static final String ENDSWITH = "endswith";
+
+	private static final String STARTSWITH = "startswith";
+
+	private static final String NOTCONTAINS = "notcontains";
+
+	private static final String CONTAINS = "contains";
+	BigDecimal soQty;
+
+	@Override
+	public List<StatusDto> getKpis(OrderBookRequest request) {
+		soQty = salesOrderBookCustRepository.getSoqty(request);
+		return Collections.emptyList();
+	}
+
+	@Override
+	public <T> T getSlabStocks(OrderBookRequest slabStockRequest, String status, int pageNumber, int pageSize,
+			String filter, String sort, String group, int skip, boolean requireTotalCount, boolean requireGroupCount,
+			String searchValue, Integer pageStore, Integer latestGroupCount) {
+		
+		if(slabStockRequest.getSoStatus()==null || "".equals(slabStockRequest.getSoStatus())) {
+			slabStockRequest.setSoStatus(OfsConstants.SO_STATUS_OPEN);
+		}
+		
+		List<String> filterList = DevExtGridFilterUtils.extractElements(filter);
+
+		int[] pageSizeArr = processPageAndSize(pageNumber, pageSize, pageStore);
+		pageNumber = pageSizeArr[0];
+		pageSize = pageSizeArr[1];
+
+		List<String> groupList = DevExtGridFilterUtils.getSortListFromString(group);
+
+		List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);
+		 if (DevExtGridFilterUtils.isGroupWithoutFilterOrSort(group, filter, sort)) {
+			 
+		     return handleGroupOnly(slabStockRequest, groupList, pageNumber, pageSize, skip);
+		 }
+		
+		 if (DevExtGridFilterUtils.isGroupWithFilterOrSort(group, filter, sort)) {
+		     return handleGroupWithFilterOrSort(slabStockRequest, groupList, filterList, pageNumber, pageSize, skip,requireTotalCount,pageStore,latestGroupCount);
+		 }
+
+		if (DevExtGridFilterUtils.isFilterOrSortOnly(group, filter, sort)) {
+			return handleFilterOrSort(slabStockRequest, filterList, sortList, pageNumber, pageSize, skip,
+					requireTotalCount);
+		}
+
+		return null;
+	}
+	public String filterQueryUsingFilterList(List<String> filterList, String query, OrderBookRequest request) {
+		String productType = request.getProduct();
+		StringBuilder queryBuilder = new StringBuilder(query);
+		queryBuilder.append(" AND (");
+
+		List<String> columnNames = DevExtGridFilterUtils.getAllFields(OrderBookViewDto.class);
+
+		Map<String, String> columnDataTypesKeyValuePair = DevExtGridFilterUtils
+				.getAllFieldsWithTypes(OrderBookViewDto.class);
+		Map<String, String> columnAlise = checkClassAleas();
+		boolean isClobObject = false;
+		boolean isStringObject = false;
+		boolean isDateObject = false;
+		boolean isContains = false;
+		boolean isNotContains = false;
+		boolean isStartWith = false;
+		boolean isEndWith = false;
+
+		for (int i = 0; i < filterList.size(); i++) {
+			String item = filterList.get(i);
+
+			if (columnNames.contains(item)) {
+				if (columnDataTypesKeyValuePair.get(item).equals("CLOB")) {
+					queryBuilder.append("DBMS_LOB.INSTR(").append(columnAlise.get(item)).append(item).append(",");
+					isClobObject = true;
+				} else if (columnDataTypesKeyValuePair.get(item).equals("DATE")) {
+					queryBuilder.append(" TO_CHAR(").append(columnAlise.get(item)).append(item)
+							.append(", 'YYYY-MM-DD')");
+					isDateObject = true;
+				} else if (columnDataTypesKeyValuePair.get(item).equals("VARCHAR2")) {
+					if (item.equals("externalGrade")) {
+						int ind = filterList.indexOf(item);
+						if (CONTAINS.equalsIgnoreCase(filterList.get(ind + 1))) {
+							queryBuilder.append(" CONCAT(sol.eqSpec, sol.eqSpecGroup, sol.eqSpecSubGroup) LIKE '%")
+									.append(filterList.get(ind + 2)).append("%' ");
+						}
+						i += 2;
+					} else {
+						queryBuilder.append(columnAlise.get(item)).append(item);
+					}
+					isStringObject = true;
+				}
+
+				else {
+					if (item.equals("dispatchWgt")) {
+						int btrQtyindez = filterList.indexOf("dispatchWgt");
+						String dispatchWgtQuery = String.format("""
+								ROUND(COALESCE((
+								    SELECT SUM(PPH.wgt * PPRT.bwyld)
+								    FROM PphMt PPH, PpRouteDtlEntity PPRT
+								    WHERE PPH.poid = po2.id.poid
+								      AND PPH.poprctr = po2.id.poprctr
+								      AND PPH.ppsts = 'DISPATCHED'
+								      AND PPH.id.ppid = PPRT.id.ppid
+								      AND PPH.id.ppctr = PPRT.id.ppctr
+								      AND PPRT.prdid = '%s'
+								      AND PPRT.completionsts = 'COMPLETE'
+								), 0), 0)
+								""", productType);
+
+						queryBuilder.append(dispatchWgtQuery).append(filterList.get(btrQtyindez + 1)).append(" ")
+								.append(filterList.get(btrQtyindez + 2));
+						i += 2;
+					} else if (item.equals("stockWgt")) {
+						int stockWgtIndex = filterList.indexOf("stockWgt");
+						String stockWgtQuery = String.format(
+								"""
+										ROUND(COALESCE((
+										    SELECT SUM(PPH.wgt * PPRT.bwyld)
+										    FROM PphMt PPH, PpRouteDtlEntity PPRT
+										    WHERE PPH.poid = po2.id.poid
+										      AND PPH.poprctr = po2.id.poprctr
+										      AND PPH.ppsts IN ('PRODUCED', 'CONF PENDING@PROD', 'CONF PENDING@QA', 'HOLD', 'INSP PENDING', 'AVAILABLE', 'SCHEDULED', 'IDENTIFIED', 'CHARGED', 'CONS PENDING', 'CONSUMED', 'READY FOR DISPATCH', 'DISPATCHED', 'MATERIAL RELEASED', 'LOADED')
+										      AND PPH.id.ppid = PPRT.id.ppid
+										      AND PPH.id.ppctr = PPRT.id.ppctr
+										      AND PPRT.prdid = '%s'
+										      AND PPRT.completionsts = 'DISPATCHED'
+										), 0), 0)
+										""",
+								productType);
+
+						queryBuilder.append(stockWgtQuery).append(filterList.get(stockWgtIndex + 1)).append(" ")
+								.append(filterList.get(stockWgtIndex + 2));
+						i += 2;
+					} else if (item.equals("scheduledQty")) {
+						int scheduledQtyIndex = filterList.indexOf(item);
+						String scheduledQtyQuery = String.format("""
+								ROUND(COALESCE((
+								    SELECT SUM(sh3.slbwgt)
+								    FROM HsmSchOrderEntity sh2, HsmSchSlabDtlEntity sh3
+								    WHERE sh2.poid = po2.id.poid
+								      AND sh2.poprctr = po2.id.poprctr
+								      AND sh2.id.schdid = sh3.id.schdid
+								      AND sh2.id.poseqid = sh3.poseqid
+								      AND sh3.schdslbsts IN ('SCHEDULED', 'IDENTIFIED', 'CHARGED')
+								), 0), 0)
+								""");
+						queryBuilder.append(scheduledQtyQuery).append(filterList.get(scheduledQtyIndex + 1)).append(" ")
+								.append(filterList.get(scheduledQtyIndex + 2));
+
+						i += 2;
+					} else if (item.equals("availableWgt")) {
+						int availableWgtIndex = filterList.indexOf("availableWgt");
+						String availableWgtQuery = String.format("""
+								ROUND(COALESCE((
+								    SELECT SUM(p.wgt)
+								    FROM PphMt p
+								    WHERE p.poid = po2.id.poid
+								      AND p.poprctr = po2.id.poprctr
+								      AND p.ppsts = 'AVAILABLE'
+								), 0), 0)
+								""");
+
+						queryBuilder.append(availableWgtQuery).append(filterList.get(availableWgtIndex + 1)).append(" ")
+								.append(filterList.get(availableWgtIndex + 2));
+						i += 2;
+
+					} else if ("rfdWgt".equals(item)) {
+						int rfdWgtIndex = filterList.indexOf("rfdWgt");
+						String rfdWgtQuery = String.format("""
+								ROUND(COALESCE((
+								    SELECT SUM(p.wgt)
+								    FROM PphMt p
+								    WHERE p.poid = po2.id.poid
+								      AND p.poprctr = po2.id.poprctr
+								      AND p.ppsts = 'READY FOR DISPATCH'
+								), 0), 0)
+								""");
+
+						queryBuilder.append(rfdWgtQuery).append(filterList.get(rfdWgtIndex + 1)).append(" ")
+								.append(filterList.get(rfdWgtIndex + 2));
+						i += 2;
+					} else {
+						
+						String dataType = columnDataTypesKeyValuePair.get(item);
+						if ("VARCHAR2".equalsIgnoreCase(dataType) || "STRING".equalsIgnoreCase(dataType)) {
+							queryBuilder.append("UPPER(TRIM(").append(columnAlise.get(item)).append(item).append("))");
+						} else {
+							
+							queryBuilder.append(columnAlise.get(item)).append(item);
+						}
+					}
+				}
+			} else if (item.equals(CONTAINS) || item.equals(NOTCONTAINS) || item.equals(STARTSWITH)
+					|| item.equals(ENDSWITH)) {
+				if (isClobObject) {
+					//
+				} else if (isDateObject) {
+					queryBuilder.append(LIKE);
+				} else {
+					if (item.equals(CONTAINS)) {
+						queryBuilder.append(LIKE);
+						isContains = true;
+					} else if (item.equals(NOTCONTAINS)) {
+						queryBuilder.append(NOT_LIKE);
+						isNotContains = true;
+					} else if (item.equals(STARTSWITH)) {
+						queryBuilder.append(LIKE);
+						isStartWith = true;
+					} else if (item.equals(ENDSWITH)) {
+						queryBuilder.append(LIKE);
+						isEndWith = true;
+					} else {
+						queryBuilder.append(" = ");
+					}
+				}
+			} else if (item.equals("or") || item.equals("and")) {
+				queryBuilder.append(" ").append(item).append(" ");
+			} else if (item.equals("=") || item.equals("<>") || item.equals(">=") || item.equals("<")
+					|| item.equals(">")) {
+				queryBuilder.append(" ").append(item);
+			} else {
+				if (isClobObject) {
+					queryBuilder.append("'").append(item).append("') > 0");
+					isClobObject = false;
+				} else if (isStringObject) {
+					if (isContains) {
+						queryBuilder.append(" UPPER(TRIM('%").append(item).append("%'))");
+						isContains = false;
+					} else if (isNotContains) {
+						queryBuilder.append(" UPPER(TRIM('%").append(item).append("%'))");
+						isNotContains = false;
+					} else if (isStartWith) {
+						queryBuilder.append(" UPPER(TRIM('").append(item).append("%'))");
+						isStartWith = false;
+					} else if (isEndWith) {
+						queryBuilder.append(" UPPER(TRIM('%").append(item).append("'))");
+						isEndWith = false;
+					} else {
+						queryBuilder.append(" UPPER(TRIM('").append(item).append("'))");
+					}
+
+					isStringObject = false;
+				} else if (isDateObject) {
+					try {
+						DateTimeFormatter formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+						OffsetDateTime dateTime = OffsetDateTime.parse(item, formatter);
+						String dateOnly = dateTime.toLocalDate().toString();
+						queryBuilder.append(" '").append(dateOnly).append("'");
+					} catch (Exception e) {
+						LocalDateTime dateTime = LocalDate.parse(item, DateTimeFormatter.ISO_LOCAL_DATE).atStartOfDay();
+						String dateString = dateTime.toLocalDate().toString();
+						queryBuilder.append(" '").append(dateString).append("'");
+					}
+					isDateObject = false;
+				} else {
+					queryBuilder.append(" ").append(item);
+				}
+			}
+		}
+		queryBuilder.append(" )");
+		return queryBuilder.toString();
+	}
+@SuppressWarnings("unused")
+	private void appendFilterCondition(StringBuilder queryBuilder, List<String> filterList, int index) {
+		String operator = filterList.get(index + 1).toLowerCase();
+		String value = filterList.get(index + 2);
+
+		switch (operator) {
+		case CONTAINS:
+			queryBuilder.append("LIKE '%").append(value).append("%'");
+			break;
+		case NOTCONTAINS:
+			queryBuilder.append("NOT LIKE '%").append(value).append("%'");
+			break;
+		case STARTSWITH:
+			queryBuilder.append("LIKE '").append(value).append("%'");
+			break;
+		case ENDSWITH:
+			queryBuilder.append("LIKE '%").append(value).append("'");
+			break;
+		default:
+			queryBuilder.append(" = '").append(value).append("'");
+			break;
+		}
+	}
+
+	public Map<String, String> checkClassAleas() {
+		Map<String, String> fieldTypes = new HashMap<>();
+		fieldTypes.put(OfsConstants.SOID, OfsConstants.SOL_PREFIX + "id.");
+		fieldTypes.put(OfsConstants.SOLID, OfsConstants.SOL_PREFIX + "id.");
+		fieldTypes.put(OfsConstants.PRDID, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SOQTY, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SOQTYMAX, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.TDCID, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.STCUSTNM, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.PRDCDEID, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SORELDT, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.DOCTY, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.ERPSOSTS, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SOLMODCTR, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SOPROMDT, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.CUSTREQDT, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.INCOTERM, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.FRTTERM, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.MARKINSTN, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.PACKINSTN, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.LOADINSTN, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPEC, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPECGROUP, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPECSUBGROUP, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.LCEXPDT, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SOSEGMT, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.THKAIM, OfsConstants.SOB_PREFIX);
+		fieldTypes.put(OfsConstants.WDT_AIM, OfsConstants.SOB_PREFIX);
+		fieldTypes.put(OfsConstants.LENAIM, OfsConstants.SOB_PREFIX);
+		fieldTypes.put(OfsConstants.GRDID, OfsConstants.SOB_PREFIX);
+		fieldTypes.put(OfsConstants.BTCUSTID, OfsConstants.SOH_PREFIX);
+		fieldTypes.put(OfsConstants.STID, OfsConstants.CS_PREFIX);
+		fieldTypes.put(OfsConstants.SOSTS, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.ADDCDE, OfsConstants.CUST_PREFIX + "id.");
+		fieldTypes.put(OfsConstants.ADDLINM, OfsConstants.CUST_PREFIX + "id.");
+		fieldTypes.put(OfsConstants.ADDLIVAL, OfsConstants.CUST_PREFIX);
+		fieldTypes.put(OfsConstants.CLOSEREM, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SCHDID, OfsConstants.HSM_PREFIX);
+		fieldTypes.put(OfsConstants.ERPSTID, OfsConstants.CS_PREFIX);
+		fieldTypes.put(OfsConstants.WGT, OfsConstants.PH_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPEC2, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPECGROUP2, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPECSUBGROUP2, OfsConstants.SOL_PREFIX);
+
+		return fieldTypes;
+	}
+
+	public Map<String, String> checkClassAleasWithNoStop() {
+		Map<String, String> fieldTypes = new HashMap<>();
+		fieldTypes.put(OfsConstants.SOID, OfsConstants.SOL_PREFIX + "id.");
+		fieldTypes.put(OfsConstants.SOLID, OfsConstants.SOL_PREFIX + "id.");
+		fieldTypes.put(OfsConstants.PRDID, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SOQTY, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SOQTYMAX, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.TDCID, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.STCUSTNM, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.PRDCDEID, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SORELDT, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.DOCTY, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.ERPSOSTS, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SOLMODCTR, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SOPROMDT, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.CUSTREQDT, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.INCOTERM, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.FRTTERM, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.MARKINSTN, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.PACKINSTN, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.LOADINSTN, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPEC, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPECGROUP, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPECSUBGROUP, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.LCEXPDT, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SOSEGMT, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.THKAIM, OfsConstants.SOB_PREFIX);
+		fieldTypes.put(OfsConstants.WDTAIM, OfsConstants.SOB_PREFIX);
+		fieldTypes.put(OfsConstants.LENAIM, OfsConstants.SOB_PREFIX);
+		fieldTypes.put(OfsConstants.GRDID, OfsConstants.SOB_PREFIX);
+		fieldTypes.put(OfsConstants.BTCUSTID, OfsConstants.SOH_PREFIX);
+		fieldTypes.put(OfsConstants.STID, OfsConstants.CS_PREFIX);
+		fieldTypes.put(OfsConstants.SOSTS, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.ADDCDE, OfsConstants.CUST_PREFIX + "id");
+		fieldTypes.put(OfsConstants.ADDLINM, OfsConstants.CUST_PREFIX + "id");
+		fieldTypes.put(OfsConstants.ADDLIVAL, OfsConstants.CUST_PREFIX);
+		fieldTypes.put(OfsConstants.CLOSEREM, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.SCHDID, OfsConstants.HSM_PREFIX + "id");
+		fieldTypes.put(OfsConstants.ERPSTID, OfsConstants.CS_PREFIX);
+		fieldTypes.put(OfsConstants.WGT, OfsConstants.PH_PREFIX);
+		fieldTypes.put(OfsConstants.SOQTY, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPEC2, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPECGROUP2, OfsConstants.SOL_PREFIX);
+		fieldTypes.put(OfsConstants.EQSPECSUBGROUP2, OfsConstants.SOL_PREFIX);
+
+		return fieldTypes;
+	}
+
+	public String processSqlQuery(String sql) {
+		if (sql.trim().endsWith("or")) {
+			sql = sql.substring(0, sql.length() - 2);
+			sql = sql.trim().substring(0, sql.length() - 2).trim();
+		} else if (sql.trim().endsWith(" or")) {
+			sql = sql.substring(0, sql.length() - 2);
+			sql = sql.trim().substring(0, sql.length() - 3).trim();
+		}
+
+		sql = sql.replaceAll("h\\.isactv\\s*=\\s*'Active'", "h.isactv = 1");
+
+		sql = sql.replaceAll("h\\.isactv\\s*=\\s*'Inactive'", "h.isactv = 0");
+
+		return sql;
+	}
+
+	@Override
+	public List<SegmentDto> getSegments(String prdid) {
+		return salesOrderBookCustRepository.getSegments(prdid);
+	}
+
+	@Override
+	public List<String> getSosts() {
+		return solStRepository.getSosts();
+	}
+
+	@Override
+	public List<String> getSo() {
+		return salesOrderBookCustRepository.getSo();
+	}
+
+	@Override
+	public List<String> getProduct() {
+		return salesOrderBookCustRepository.getProductByType(OfsConstants.PRODUCT_TYPE_FG);
+	}
+
+	@Override
+	public List<Long> getSoItem() {
+		return salesOrderBookCustRepository.getSoItem();
+	}
+
+	private int[] processPageAndSize(Integer pageNumber, Integer pageSize, Integer pageStore) {
+		if (pageNumber == null) {
+			pageNumber = 0;
+		}
+		if (pageSize == null) {
+			pageSize = pageStore;
+		}
+		return new int[] { pageNumber, pageSize };
+	}
+
+	
+	private <T> T handleFilterOrSort(OrderBookRequest request, List<String> filterList, List<String> sortList,
+			Integer page, Integer size, Integer skip, boolean requireTotalCount) {
+		if (!requireTotalCount) {
+			size = page + size;
+			page = 0;
+		}
+
+		String query = OrderBookCustRepository.MAINQUARY ;
+		String countQuery = OrderBookCustRepository.COUNTMAINQUARY;
+
+		if (!filterList.isEmpty()) {
+			query = filterQueryUsingFilterList(filterList, query);
+			countQuery = filterQueryUsingFilterList(filterList, countQuery);
+		}
+
+		query = applySorting(sortList, query);
+		
+		Page<OrderBookViewDto> slabeStock = salesOrderBookCustRepository.getSlabStocks(request, page, size,
+				query, countQuery, skip);
+		for (OrderBookViewDto dto : slabeStock) {
+			BigDecimal dispatchedWgt = dto.getDispatchWgt();
+			BigDecimal btd = dto.getPoPrQty().subtract(dispatchedWgt);
+			BigDecimal btp = btd.subtract(dto.getStockWgt());
+			BigDecimal btr = btp.subtract(dto.getScheduledQty());
+
+			dto.setBtd(btd);
+			dto.setBtp(btp);
+			dto.setBtrQty(btr);
+		}
+		return (T) new FluentaPaginatedResponse<>(slabeStock.getContent(), slabeStock.getTotalElements());
+	}
+
+	public String filterQueryUsingFilterList(List<String> filterList, String query) {
+		StringBuilder queryBuilder = new StringBuilder(query);
+		queryBuilder.append(" AND (");
+
+		List<String> columnNames = DevExtGridFilterUtils.getAllFields(OrderBookViewDto.class);
+
+		Map<String, String> columnDataTypesKeyValuePair = DevExtGridFilterUtils
+				.getAllFieldsWithTypes(OrderBookViewDto.class);
+		Map<String, String> columnAlise = checkClassAleas();
+		boolean isClobObject = false;
+		boolean isStringObject = false;
+		boolean isDateObject = false;
+		boolean isContains = false;
+		boolean isNotContains = false;
+		boolean isStartWith = false;
+		boolean isEndWith = false;
+		boolean isNullCheck = false;
+
+		for (int i = 0; i < filterList.size(); i++) {
+			String item = filterList.get(i);
+			if (columnNames.contains(item)) {
+				if (columnDataTypesKeyValuePair.get(item).equals("CLOB")) {
+					queryBuilder.append("DBMS_LOB.INSTR(").append(columnAlise.get(item)).append(item).append(",");
+					isClobObject = true;
+				} else if (columnDataTypesKeyValuePair.get(item).equals("DATE")) {
+					queryBuilder.append(" TO_CHAR(").append(columnAlise.get(item)).append(item)
+							.append(", 'YYYY-MM-DD')");
+					isDateObject = true;
+				} else if (columnDataTypesKeyValuePair.get(item).equals("VARCHAR2")) {
+
+					queryBuilder.append(columnAlise.get(item)).append(item);
+					int columnIndex = findIndexOfKey(filterList, item, i);
+
+					if ("null".equals(filterList.get(columnIndex + 2))) {
+
+						isNullCheck = true;
+					}
+					isStringObject = true;
+				} else {
+					queryBuilder.append(columnAlise.get(item)).append(item);
+
+				}
+
+			} else if (isNullCheck) {
+				queryBuilder.append(" IS NULL ");
+				i = i + 1;
+				isNullCheck = false;
+				isStringObject = false;
+
+			} else if (item.equals(OfsConstants.CONTAINS) || item.equals(OfsConstants.NOTCONTAINS)
+					|| item.equals(OfsConstants.STARTSWITH) || item.equals(OfsConstants.ENDSWITH)) {
+				if (isClobObject) {
+				} else if (isDateObject) {
+					queryBuilder.append(OfsConstants.LIKE);
+				} else {
+					if (item.equals(OfsConstants.CONTAINS)) {
+						queryBuilder.append(OfsConstants.LIKE);
+						isContains = true;
+					} else if (item.equals(OfsConstants.NOTCONTAINS)) {
+						queryBuilder.append(OfsConstants.NOT_LIKE);
+						isNotContains = true;
+					} else if (item.equals(OfsConstants.STARTSWITH)) {
+						queryBuilder.append(OfsConstants.LIKE);
+						isStartWith = true;
+					} else if (item.equals(OfsConstants.ENDSWITH)) {
+						queryBuilder.append(OfsConstants.LIKE);
+						isEndWith = true;
+					} else {
+						queryBuilder.append(" = ");
+					}
+				}
+			} else if (item.equals("or") || item.equals("and")) {
+				queryBuilder.append(" ").append(item).append(" ");
+			} else if (item.equals("=") || item.equals("<>") || item.equals(">=") || item.equals("<")
+					|| item.equals(">")) {
+				queryBuilder.append(" ").append(item);
+			} else {
+				if (isClobObject) {
+					queryBuilder.append("'").append(item).append("') > 0");
+					isClobObject = false;
+				} else if (isStringObject) {
+					if (isContains) {
+						queryBuilder.append(" '%").append(item.trim().toUpperCase()).append("%'");
+						isContains = false;
+					} else if (isNotContains) {
+						queryBuilder.append(" '%").append(item.trim().toUpperCase()).append("%'");
+						isNotContains = false;
+					} else if (isStartWith) {
+						queryBuilder.append(" '").append(item.trim().toUpperCase()).append("%'");
+						isStartWith = false;
+					} else if (isEndWith) {
+						queryBuilder.append(" '%").append(item.trim().toUpperCase()).append("'");
+						isEndWith = false;
+					} else {
+						queryBuilder.append(" '").append(item.trim().toUpperCase()).append("'");
+					}
+					isStringObject = false;
+				} else if (isDateObject) {
+					DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+					LocalDateTime dateTime = LocalDateTime.parse(item, formatter);
+					String dateOnly = dateTime.toLocalDate().toString();
+					queryBuilder.append(" '").append(dateOnly).append("'");
+					isDateObject = false;
+				} else {
+					queryBuilder.append(" ").append(item);
+				}
+			}
+		}
+		queryBuilder.append(" )");
+
+		return queryBuilder.toString();
+	}
+
+	private String applySorting(List<String> sortList, String query) {
+		if (!sortList.isEmpty()) {
+			Map<String, String> columnAlias = checkClassAleasWithNoStop();
+			if (sortList.get(3).equals("true")) {
+				query += OfsConstants.ORDER_BY + columnAlias.get(sortList.get(1))+ sortList.get(1)+ OfsConstants.DESC;
+			} else {
+				query += OfsConstants.ORDER_BY + columnAlias.get(sortList.get(1))+sortList.get(1);
+			}
+		} else {
+			query += " ORDER BY sol.crDt DESC  ";
+		}
+		return query;
+	}
+
+	public int findIndexOfKey(List<String> list, String key, int targetIndex) {
+		int count = 0;
+		for (int i = 0; i < list.size(); i++) {
+			if (list.get(i).equals(key)) {
+				if (count == targetIndex) {
+					return i; 
+				}
+				count++;
+			}
+		}
+		return targetIndex; 
+	}
+	
+	@SuppressWarnings("java:S107")
+	private <T> T handleGroupWithFilterOrSort(OrderBookRequest request, List<String> groupList,
+			List<String> filterList, Integer page, Integer size, Integer skip,
+			boolean requireTotalCount,Integer pageStore, Integer latestGroupCounts) {
+		if (requireTotalCount && size == null) {
+			size = pageStore;
+		} else {
+			size = page + size;
+			page = 0;
+		}
+
+		String queryForGrouping = getSlabeStockQueryForGroupingAndFiltering(groupList, filterList);
+		String queryForGroupingAndFilteringCount = getSlabeStockQueryForGroupingAndFilteringCount(groupList, filterList);
+		String mainCountQuery = OrderBookCustRepository.COUNTMAINQUARY;
+		Long mainQueryCount = salesOrderBookCustRepository.getMainSlabeStockQueryCount(request,mainCountQuery);
+		Page<Object[]> groupingListData = salesOrderBookCustRepository.getGroupingListData(queryForGrouping,queryForGroupingAndFilteringCount, page, size, skip,request);
+		Long totalDistCount = salesOrderBookCustRepository.groupCountQuery(queryForGroupingAndFilteringCount,request);
+		return buildGroupedDataResponse(groupingListData, mainQueryCount,
+				(totalDistCount != null && totalDistCount != 0) ? (long) totalDistCount : latestGroupCounts);
+
+
+	}
+	
+	
+	public String getSlabeStockQueryForGroupingAndFiltering(List<String> groupList,List<String> filterList) {
+		String groupColumn = groupList.get(1);
+		String desc = groupList.get(3);
+		StringBuilder query = new StringBuilder();
+		query.append(OfsConstants.SELECT)
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)
+		.append(" ,COUNT(*")
+		.append(")")
+		.append(OrderBookCustRepository.COUNTFROMQUERY);
+
+		String filterQueryUsingFilterList = query.toString();
+		
+		 if(!filterList.isEmpty()) {
+			 filterQueryUsingFilterList = filterQueryUsingFilterList(filterList,query.toString());
+		 }
+		 filterQueryUsingFilterList = filterQueryUsingFilterList+" "+"GROUP BY "+checkClassAleas().get(groupColumn)+""+ groupColumn + " "+"ORDER BY "+checkClassAleas().get(groupColumn)+""+ groupColumn;
+		 if("true".equals(desc)) {
+			 filterQueryUsingFilterList = filterQueryUsingFilterList+" DESC";
+		 }
+		 		
+		return filterQueryUsingFilterList;
+		
+	}
+	
+	
+	public String getSlabeStockQueryForGroupingAndFilteringCount(List<String> groupList,List<String> filterList) {
+		String filterQueryUsingFilterList = null;
+		String groupColumn = groupList.get(1); 
+		StringBuilder query = new StringBuilder();
+		query.append(OfsConstants.SELECT)
+		.append("COUNT( DISTINCT ")
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)
+		.append(")")
+		.append(OrderBookCustRepository.COUNTFROMQUERY);
+
+		filterQueryUsingFilterList = query.toString();
+		if(!filterList.isEmpty()) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList(filterList,query.toString());	
+		}
+
+		return filterQueryUsingFilterList;
+		
+	}
+	
+	
+	
+	
+	@SuppressWarnings({"java:S6201","unchecked"})
+	private <T> T buildGroupedDataResponse(Page<Object[]> groupingListData, Long mainQueryCount, Long totalDistCount) {
+	    GroupedDataResponse<OrderBookViewDto> result = new GroupedDataResponse<>(null, 0L, 0L);
+	    List<Group<OrderBookViewDto>> list = new ArrayList<>();
+
+	    for (Object[] row : groupingListData) {
+	        String groupKey = row[0] instanceof BigDecimal
+	                ? ((BigDecimal) row[0]).toPlainString()
+	                : String.valueOf(row[0]);
+	        Long count = row[1] instanceof BigDecimal
+	                ? ((BigDecimal) row[1]).longValue()
+	                : (Long) row[1];
+	        list.add(new Group<>(groupKey, null, count));
+	    }
+
+	    result.setData(list);
+	    result.setTotalCount(mainQueryCount);
+	    result.setGroupCount(totalDistCount);
+	    return (T) result;
+	}
+	
+	
+	
+	private <T> T handleGroupOnly(OrderBookRequest slabStockRequest, List<String> groupList, int pageNumber,
+			int pageSize, int skip) {
+		pageSize = pageNumber + pageSize;
+		pageNumber = 0;
+		String groupQuery = getQueryForGrouping(groupList);
+	    String groupCountQuery = getQueryForGroupingCount(groupList);
+		String mainCountQuery = OrderBookCustRepository.COUNTMAINQUARY;
+		Long mainQueryCount = salesOrderBookCustRepository.getMainSlabeStockQueryCount(slabStockRequest,mainCountQuery);
+	    Page<Object[]> groupingListData = salesOrderBookCustRepository.getGroupingListData(groupQuery, groupCountQuery,pageNumber,pageSize, skip,slabStockRequest);
+		Long totalDistCount = salesOrderBookCustRepository.groupCountQuery(groupCountQuery,slabStockRequest);
+		return buildGroupedDataResponse(groupingListData, mainQueryCount, totalDistCount);
+	}
+	
+	
+	
+	
+	private String getQueryForGrouping(List<String> groupList) {
+		if (groupList == null || groupList.isEmpty()) {
+	        throw new IllegalArgumentException("groupList cannot be null or empty");
+	    }
+		
+		String desc = groupList.get(3);
+	    String groupColumn = groupList.get(1); 
+	    StringBuilder query = new StringBuilder();
+		query.append("SELECT ")
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)	
+		.append(" ,COUNT(*")
+		.append(")")
+		.append(OrderBookCustRepository.COUNTFROMQUERY);
+
+		query.append(" GROUP BY "+checkClassAleas().get(groupColumn)+""+groupColumn+" ");
+		
+		if ("true".equals(desc)) {
+		    query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn)).append(groupColumn).append(" DESC");
+		} else {
+		    query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn)).append(groupColumn);
+		}
+		return query.toString();
+	}
+	
+	
+	
+	
+	private String getQueryForGroupingCount(List<String> groupList) {
+		String groupColumn = groupList.get(1); 
+		StringBuilder query = new StringBuilder();
+		query.append("SELECT ")
+		.append("COUNT( DISTINCT ")
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)
+		.append(")")
+		.append(OrderBookCustRepository.COUNTFROMQUERY);
+		return query.toString();
+	}
+
+}

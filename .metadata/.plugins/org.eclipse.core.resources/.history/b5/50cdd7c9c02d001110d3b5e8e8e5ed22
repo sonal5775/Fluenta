@@ -1,0 +1,262 @@
+package com.hindindustec.fluenta.hsm.masters.repository;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Repository;
+
+import com.hindindustec.fluenta.hsm.masters.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceDimensionDto;
+import com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceDto;
+import com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceRequestDto;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
+import jakarta.persistence.TypedQuery;
+
+@Repository
+public class FlatnessToleranceCustRepository {
+
+	private EntityManager entityManager;
+	private static final Logger LOGGER = LoggerFactory.getLogger(FlatnessToleranceCustRepository.class);
+
+	public FlatnessToleranceCustRepository(EntityManager entityManager) {
+		super();
+		this.entityManager = entityManager;
+	}
+
+	public static final String DIM_QUERY;
+	static {
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT NEW com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceDimensionDto(")
+				.append("cr.rangeCode, ") // from FlattolRngCm
+				.append("fr.id.version, ").append("cr.currentVersion, ").append("fr.modItemStamp, ")
+				.append("fr.thicknessMin, ").append("fr.thicknessMinOperator, ").append("fr.thicknessMaxOperator, ")
+				.append("fr.thicknessMax, ").append("fr.widthMin, ").append("fr.widthMinOperator, ")
+				.append("fr.widthMaxOperator, ").append("fr.widthMax, ").append("fr.validPgCode, ")
+				.append("fr.isActive, ").append("fr.createdDate, ").append("fr.createdBy, ").append("fr.modifiedDate, ")
+				.append("fr.modifiedBy, ").append("fr.createdMacAddress, ").append("fr.modifiedMacAddress")
+				.append(") ");
+		DIM_QUERY = queryBuilder.toString();
+	}
+
+	public static final String DIM_QUERY_CONDITION;
+	static {
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("FROM FlattolRngCa fr ").append("JOIN FlattolrngCm cr ON fr.id.rangeCode = cr.rangeCode ");
+		DIM_QUERY_CONDITION = queryBuilder.toString();
+	}
+
+	public static final String DIM_QUERY_WHERE_CONDITION;
+	static {
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("WHERE 1=1 ");
+		queryBuilder.append("AND (:rangeCode IS NULL OR fr.id.rangeCode = :rangeCode) ");
+		queryBuilder.append("AND (:version IS NULL OR fr.id.version = :version) ");
+		DIM_QUERY_WHERE_CONDITION = queryBuilder.toString();
+	}
+
+	public Page<FlatnessToleranceDimensionDto> getDetails(FlatnessToleranceRequestDto request, Integer page,
+			Integer size, String query, String countQueryParm, Integer skip) {
+		int effectiveOffset = page * size;
+		int effectivePageSize = size;
+		if (skip != null && skip > 0) {
+			if (skip >= size) {
+				effectiveOffset += skip;
+				@SuppressWarnings("unused")
+				skip = 0;
+			} else {
+				effectiveOffset += skip;
+				effectivePageSize -= skip;
+			}
+		}
+
+		TypedQuery<FlatnessToleranceDimensionDto> queryCount = entityManager.createQuery(query,
+				FlatnessToleranceDimensionDto.class);
+
+		queryCount.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		queryCount.setParameter(OfsConstants.VERSION, request.getVersion());
+
+		queryCount.setFirstResult(effectiveOffset);
+		queryCount.setMaxResults(effectivePageSize);
+		List<FlatnessToleranceDimensionDto> resultList = queryCount.getResultList();
+		Query countQuery = entityManager.createQuery(countQueryParm);
+
+		countQuery.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		countQuery.setParameter(OfsConstants.VERSION, request.getVersion());
+		Long totalRows = (Long) countQuery.getSingleResult();
+		Pageable pageable = PageRequest.of(page, size);
+		return new PageImpl<>(resultList, pageable, totalRows);
+
+	}
+
+	public Long getMaindetailsQueryCount(FlatnessToleranceRequestDto request, String query) {
+		LOGGER.debug("Main details query request: {}", request);
+		Query countQuery = entityManager.createQuery(query);
+		countQuery.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		countQuery.setParameter(OfsConstants.VERSION, request.getVersion());
+		return (Long) countQuery.getSingleResult();
+	}
+
+	public Page<Object[]> getGroupingListData(String queryForGrouping, String queryForGroupingAndFilteringCount,
+			Integer page, Integer size, Integer skip, FlatnessToleranceRequestDto request) {
+		Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+		queryCount.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		queryCount.setParameter(OfsConstants.VERSION, request.getVersion());
+		Number resultNumber = (Number) queryCount.getSingleResult();
+		int totalRows = resultNumber.intValue();
+		int effectiveOffset = page * size;
+		int effectivePageSize = size;
+
+		if (skip != null && skip > 0) {
+			if (skip >= size) {
+				effectiveOffset += skip;
+				skip = 0;
+			} else {
+				effectiveOffset += skip;
+				effectivePageSize -= skip;
+			}
+		}
+		Pageable pageable = PageRequest.of(page, size);
+		TypedQuery<Object[]> query = entityManager.createQuery(queryForGrouping, Object[].class);
+
+		query.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		query.setParameter(OfsConstants.VERSION, request.getVersion());
+		query.setFirstResult(effectiveOffset);
+		query.setMaxResults(effectivePageSize);
+		List<Object[]> resultList = query.getResultList();
+		return new PageImpl<>(resultList, pageable, totalRows);
+	}
+
+	public Long groupCountQuery(String queryForGroupingAndFilteringCount, FlatnessToleranceRequestDto request) {
+		Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+
+		queryCount.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		queryCount.setParameter(OfsConstants.VERSION, request.getVersion());
+		Number resultNumber = (Number) queryCount.getSingleResult();
+		return resultNumber.longValue();
+	}
+
+	public static final String FLATNESS_TOL_QUERY;
+	static {
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT NEW com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceDto(")
+				.append("ca.id.rangeCode, ").append("ca.id.productGaranteeCode, ").append("ca.id.version, ")
+				.append("cm.currentVersion, ").append("ca.modificationTimestamp, ").append("ca.inputUnitPositive, ")
+				.append("ca.inputUnitNegative, ").append("ca.isActive, ").append("ca.createdDate, ")
+				.append("ca.createdBy, ").append("ca.modifiedDate, ").append("ca.modifiedBy, ")
+				.append("ca.createdMacAddress, ").append("ca.modifiedMacAddress").append(") ");
+		FLATNESS_TOL_QUERY = queryBuilder.toString();
+	}
+
+	public static final String FLATNESS_TOL_QUERY_CONDITION;
+	static {
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("FROM FlattolvalCa ca ")
+				.append("JOIN FlattolvalCm cm ON ca.id.rangeCode = cm.id.rangeCode ")
+				.append("AND ca.id.productGaranteeCode = cm.id.productGaranteeCode ");
+		FLATNESS_TOL_QUERY_CONDITION = queryBuilder.toString();
+	}
+
+	public static final String FLATNESS_TOL_QUERY_WHERE_CONDITION;
+	static {
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("WHERE 1=1 ");
+		queryBuilder.append("AND (:rangeCode IS NULL OR ca.id.rangeCode = :rangeCode) ");
+		queryBuilder.append("AND (:productGaranteeCode IS NULL OR ca.id.productGaranteeCode = :productGaranteeCode) ");
+		queryBuilder.append("AND (:version IS NULL OR ca.id.version = :version) ");
+		FLATNESS_TOL_QUERY_WHERE_CONDITION = queryBuilder.toString();
+	}
+
+	public Page<FlatnessToleranceDto> getDetailsFlatnessTolerance(FlatnessToleranceRequestDto request, Integer page,
+			Integer size, String query, String countQueryParm, Integer skip) {
+		int effectiveOffset = page * size;
+		int effectivePageSize = size;
+		if (skip != null && skip > 0) {
+			if (skip >= size) {
+				effectiveOffset += skip;
+				skip = 0;
+			} else {
+				effectiveOffset += skip;
+				effectivePageSize -= skip;
+			}
+		}
+
+		TypedQuery<FlatnessToleranceDto> queryCount = entityManager.createQuery(query, FlatnessToleranceDto.class);
+
+		queryCount.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		queryCount.setParameter(OfsConstants.PRODUCTGARANTEECODE, request.getProductGarantee());
+		queryCount.setParameter(OfsConstants.VERSION, request.getVersion());
+
+		queryCount.setFirstResult(effectiveOffset);
+		queryCount.setMaxResults(effectivePageSize);
+		List<FlatnessToleranceDto> resultList = queryCount.getResultList();
+		Query countQuery = entityManager.createQuery(countQueryParm);
+
+		countQuery.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		countQuery.setParameter(OfsConstants.PRODUCTGARANTEECODE, request.getProductGarantee());
+		countQuery.setParameter(OfsConstants.VERSION, request.getVersion());
+		Long totalRows = (Long) countQuery.getSingleResult();
+		Pageable pageable = PageRequest.of(page, size);
+		return new PageImpl<>(resultList, pageable, totalRows);
+
+	}
+
+	public Long getMaindetailsQueryCountFlatnessTolerance(FlatnessToleranceRequestDto request, String query) {
+		Query countQuery = entityManager.createQuery(query);
+		countQuery.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		countQuery.setParameter(OfsConstants.PRODUCTGARANTEECODE, request.getProductGarantee());
+		countQuery.setParameter(OfsConstants.VERSION, request.getVersion());
+		return (Long) countQuery.getSingleResult();
+	}
+
+	public Page<Object[]> getGroupingListDataFlatnessTolerance(String queryForGrouping,
+			String queryForGroupingAndFilteringCount, Integer page, Integer size, Integer skip,
+			FlatnessToleranceRequestDto request) {
+		Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+		queryCount.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		queryCount.setParameter(OfsConstants.PRODUCTGARANTEECODE, request.getProductGarantee());
+		queryCount.setParameter(OfsConstants.VERSION, request.getVersion());
+		Number resultNumber = (Number) queryCount.getSingleResult();
+		int totalRows = resultNumber.intValue();
+		int effectiveOffset = page * size;
+		int effectivePageSize = size;
+
+		if (skip != null && skip > 0) {
+			if (skip >= size) {
+				effectiveOffset += skip;
+				skip = 0;
+			} else {
+				effectiveOffset += skip;
+				effectivePageSize -= skip;
+			}
+		}
+		Pageable pageable = PageRequest.of(page, size);
+		TypedQuery<Object[]> query = entityManager.createQuery(queryForGrouping, Object[].class);
+
+		query.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		query.setParameter(OfsConstants.PRODUCTGARANTEECODE, request.getProductGarantee());
+		query.setParameter(OfsConstants.VERSION, request.getVersion());
+		query.setFirstResult(effectiveOffset);
+		query.setMaxResults(effectivePageSize);
+		List<Object[]> resultList = query.getResultList();
+		return new PageImpl<>(resultList, pageable, totalRows);
+	}
+
+	public Long groupCountQueryFlatnessTolerance(String queryForGroupingAndFilteringCount,
+			FlatnessToleranceRequestDto request) {
+		Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+
+		queryCount.setParameter(OfsConstants.RANGE_CODE, request.getRangeCode());
+		queryCount.setParameter(OfsConstants.PRODUCTGARANTEECODE, request.getProductGarantee());
+		queryCount.setParameter(OfsConstants.VERSION, request.getVersion());
+		Number resultNumber = (Number) queryCount.getSingleResult();
+		return resultNumber.longValue();
+	}
+
+}

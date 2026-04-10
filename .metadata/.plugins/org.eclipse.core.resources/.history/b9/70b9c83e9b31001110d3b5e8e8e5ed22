@@ -1,0 +1,729 @@
+package com.hindindustec.fluenta.hsm.masters.serviceimpl;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.masters.common.config.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.masters.customrepository.ExternalGrdMechanicalCustRepository;
+import com.hindindustec.fluenta.hsm.masters.dto.ExternalGradeMechTestReqRes;
+import com.hindindustec.fluenta.hsm.masters.entities.ExtGrdJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormbendJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormdwttJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormhardnessJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormhtttJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormimpactJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NorminclusionJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormmastJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormothrtestJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormshtJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormtensileJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.NormztestJmEntity;
+import com.hindindustec.fluenta.hsm.masters.repository.ExtGrdJmEntityRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormBendRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormDwttRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormHardnessRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormHtttRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormImpactRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormInclusionRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormMastRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormOthrtestRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormShtRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormTensileRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExternalGradeNormZtestRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.NormmastJmEntityRepository;
+import com.hindindustec.fluenta.hsm.masters.service.ExternalGrdMechanicalService;
+
+
+@Service
+@SuppressWarnings({"java:S4030", "java:3776"})
+public class ExternalGrdMechanicalServiceImpl implements ExternalGrdMechanicalService {
+
+	private static final Logger logger = LoggerFactory.getLogger(ExternalGrdMechanicalServiceImpl.class);
+
+	private ExternalGrdMechanicalCustRepository externalMechanicalCustRepository;
+
+	private ExternalGradeNormTensileRepository tensileRepository;
+
+	private ExternalGradeNormBendRepository bendRepository;
+
+	private ExternalGradeNormDwttRepository dwttRepository;
+
+	private ExternalGradeNormHardnessRepository hardnessRepository;
+
+	private ExternalGradeNormHtttRepository htttRepository;
+
+	private ExternalGradeNormImpactRepository impactRepository;
+
+	private ExternalGradeNormInclusionRepository inclusionRepository;
+
+	private ExternalGradeNormShtRepository shtRepository;
+
+	private ExternalGradeNormZtestRepository ztestRepository;
+
+	private ExternalGradeNormOthrtestRepository othrtestRepository;
+
+	private ExternalGradeNormMastRepository mastRepository;
+
+	private DBSessionService dbSessionService;
+
+	private NormmastJmEntityRepository normMastEntityRepository;
+
+	private ExtGrdJmEntityRepository extGrdRepository;
+
+	public ExternalGrdMechanicalServiceImpl(ExternalGrdMechanicalCustRepository externalMechanicalCustRepository,
+			ExternalGradeNormTensileRepository tensileRepository, ExternalGradeNormBendRepository bendRepository,
+			ExternalGradeNormDwttRepository dwttRepository, ExternalGradeNormHardnessRepository hardnessRepository,
+			ExternalGradeNormHtttRepository htttRepository, ExternalGradeNormImpactRepository impactRepository,
+			ExternalGradeNormInclusionRepository inclusionRepository, ExternalGradeNormShtRepository shtRepository,
+			ExternalGradeNormZtestRepository ztestRepository, ExternalGradeNormOthrtestRepository othrtestRepository,
+			ExternalGradeNormMastRepository mastRepository, DBSessionService dbSessionService,
+			NormmastJmEntityRepository normMastEntityRepository, ExtGrdJmEntityRepository extGrdRepository) {
+		this.externalMechanicalCustRepository = externalMechanicalCustRepository;
+		this.tensileRepository = tensileRepository;
+		this.bendRepository = bendRepository;
+		this.dwttRepository = dwttRepository;
+		this.hardnessRepository = hardnessRepository;
+		this.htttRepository = htttRepository;
+		this.impactRepository = impactRepository;
+		this.inclusionRepository = inclusionRepository;
+		this.shtRepository = shtRepository;
+		this.ztestRepository = ztestRepository;
+		this.othrtestRepository = othrtestRepository;
+		this.mastRepository = mastRepository;
+		this.dbSessionService = dbSessionService;
+		this.normMastEntityRepository = normMastEntityRepository;
+		this.extGrdRepository = extGrdRepository;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public Optional<NormtensileJmEntity> findByNormidAndThkmin(String normid, BigDecimal thkmin) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		logger.info("Finding by normid: {} and thkmin: {}", normid, thkmin);
+
+		return tensileRepository.findByNormidAndThkmin(normid, thkmin);
+	}
+
+	public ExternalGradeMechTestReqRes getTestMethodData(String testName, String normid, String extgrdnm) {
+		if(extgrdnm!=null) {
+			Optional<ExtGrdJmEntity> extgrd =  extGrdRepository.findByExtGrdNm(extgrdnm);
+			if(extgrd.isPresent()) {
+				normid = extgrd.get().getNormid();
+			}
+		}
+		logger.info("Getting test method data for testName: {} and normid: {} and extgrdnm: {}", testName, normid, extgrdnm);
+		
+		ExternalGradeMechTestReqRes response = new ExternalGradeMechTestReqRes();
+		if (testName.equals(OfsConstants.TENSILE_TEST)) {
+			response.setTensileList(externalMechanicalCustRepository.getAllNormTensile(normid));
+		}
+		if (testName.equals(OfsConstants.BEND_TEST)) {
+			response.setBendList(externalMechanicalCustRepository.getAllNormBend(normid));
+		}
+		if (testName.equals(OfsConstants.DWTT)) {
+			response.setDwttList(externalMechanicalCustRepository.getAllNormDwtt(normid));
+		}
+		if (testName.equals(OfsConstants.IMPACT)) {
+			response.setImpactList(externalMechanicalCustRepository.getAllNormImpact(normid));
+		}
+		if (testName.equals(OfsConstants.HARDNESS)) {
+			response.setHardnessList(externalMechanicalCustRepository.getAllNormHardness(normid));
+		}
+		if (testName.equals(OfsConstants.HTTT)) {
+			response.setHtttList(externalMechanicalCustRepository.getAllNormHttt(normid));
+		}
+		if (testName.equals(OfsConstants.INCLUSION_RATING)) {
+			response.setInclusionList(externalMechanicalCustRepository.getAllNormInclusion(normid));
+		}
+		if (testName.equals(OfsConstants.Z_TEST)) {
+			response.setZtestList(externalMechanicalCustRepository.getAllNormZtest(normid));
+		}
+		if (testName.equals(OfsConstants.SHT_CYCLES)) {
+			response.setShtList(externalMechanicalCustRepository.getAllNormSht(normid));
+		} else {
+			response.setOtherTestList(externalMechanicalCustRepository.getAllNormOthr(normid));
+		}
+
+		return response;
+
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public ExternalGradeMechTestReqRes saveTestMethodData(ExternalGradeMechTestReqRes request) {
+		logger.info("Saving test method data for request: {}", request);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		ExternalGradeMechTestReqRes reqRes = new ExternalGradeMechTestReqRes();
+		
+		Optional<ExtGrdJmEntity> optionalExtGrd = extGrdRepository.findById(request.getExtgrdnm());
+		
+		if (optionalExtGrd.isPresent()) {
+			String computedNormId = null;
+			ExtGrdJmEntity extGrdEntity = optionalExtGrd.get();
+			if (extGrdEntity.getNormid() != null) {
+				computedNormId = extGrdEntity.getNormid();
+			} else {
+				NormmastJmEntity normmastJmEntity = new NormmastJmEntity();
+				String maxCount = normMastEntityRepository.generateNormId();
+				long newId = Long.parseLong(maxCount) + 1;
+				normmastJmEntity.setNormid(Long.toString(newId));
+				normmastJmEntity.setNormty("EG");
+				normmastJmEntity = normMastEntityRepository.save(normmastJmEntity);
+				computedNormId = normmastJmEntity.getNormid();
+
+				normMastEntityRepository.flush();
+				extGrdEntity.setNormid(normmastJmEntity.getNormid());
+				extGrdRepository.save(extGrdEntity);
+			}
+			final String normId = computedNormId;
+			if (request.getTensileList() != null && !request.getTensileList().isEmpty()) {
+				request.getTensileList().stream().forEach(e -> e.setNormid(normId));
+				saveTensileTest(request);
+			}
+
+			if (request.getBendList() != null && !request.getBendList().isEmpty()) {
+				request.getBendList().stream().forEach(e -> e.setNormid(normId));
+				saveBendTest(request);
+			}
+
+			if (request.getDwttList() != null && !request.getDwttList().isEmpty()) {
+				request.getDwttList().stream().forEach(e -> e.setNormid(normId));
+				saveDwttTest(request);
+			}
+
+			if (request.getHardnessList() != null && !request.getHardnessList().isEmpty()) {
+				request.getHardnessList().stream().forEach(e -> e.setNormid(normId));
+				saveHardnessTest(request);
+			}
+
+			if (request.getHtttList() != null && !request.getHtttList().isEmpty()) {
+				request.getHtttList().stream().forEach(e -> e.setNormid(normId));
+				saveHttTest(request);
+			}
+
+			if (request.getImpactList() != null && !request.getImpactList().isEmpty()) {
+				request.getImpactList().stream().forEach(e -> e.setNormid(normId));
+				saveImpactTest(request);
+			}
+
+			if (request.getInclusionList() != null && !request.getInclusionList().isEmpty()) {
+				request.getInclusionList().stream().forEach(e -> e.setNormid(normId));
+				saveInclusionTest(request);
+			}
+
+			if (request.getOtherTestList() != null && !request.getOtherTestList().isEmpty()) {
+				request.getOtherTestList().stream().forEach(e -> e.setNormid(normId));
+				saveOtherTest(request);
+			}
+
+			if (request.getShtList() != null && !request.getShtList().isEmpty()) {
+				request.getShtList().stream().forEach(e -> e.setNormid(normId));
+				saveShtTest(request);
+			}
+
+			if (request.getZtestList() != null && !request.getZtestList().isEmpty()) {
+				request.getZtestList().stream().forEach(e -> e.setNormid(normId));
+				saveZTest(request);
+			}
+		}
+		return reqRes;
+	}
+
+	private void saveZTest(ExternalGradeMechTestReqRes request) {
+		logger.info("Saving ZTest data");
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<NormztestJmEntity> entities = new ArrayList<>();
+
+		request.getZtestList().forEach(item -> {
+			NormztestJmEntity entity = new NormztestJmEntity();
+			Optional<NormztestJmEntity> findRecord = ztestRepository
+					.findById(item.getZtestid() != null ? item.getZtestid() : " ");
+			if (findRecord.isPresent()) {
+
+				entity = findRecord.get();
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoDt(new Date());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+
+			} else {
+				List<NormztestJmEntity> maxVal = ztestRepository.findAll();
+				int nextId = maxVal.size() + 1;
+				entity.setZtestid(String.valueOf(nextId));
+				entity.setNormid(item.getNormid());
+				entity.setCrDt(new Date());
+				entity.setCrBy(ClientIpUtils.getClient());
+				entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+			}
+
+			entity.setMaxopr(item.getMaxopr());
+			entity.setMinopr(item.getMinopr());
+			entity.setReductionareamin(item.getReductionareamin());
+			entity.setThkmax(item.getThkmax());
+			entity.setThkmin(item.getThkmin());
+			entity.setSpecification(item.getSpecification());
+			entity.setIsactv(BigDecimal.ONE);
+
+			entities.add(entity);
+			ztestRepository.save(entity);
+		});
+	}
+
+	private void saveShtTest(ExternalGradeMechTestReqRes request) {
+		logger.info("Saving ShtTest data");
+
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<NormshtJmEntity> entities = new ArrayList<>();
+
+		request.getShtList().forEach(item -> {
+			NormshtJmEntity entity = new NormshtJmEntity();
+			Optional<NormshtJmEntity> findRecord = shtRepository
+					.findById(item.getShtid() != null ? item.getShtid() : " ");
+			if (findRecord.isPresent()) {
+				entity = findRecord.get();
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoDt(new Date());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+
+			} else {
+				Long maxVal = shtRepository.findMaxId();
+				if (maxVal == null) {
+					maxVal = 0L;
+				}
+				long nextId = maxVal + 1;
+				entity.setShtid(String.valueOf(nextId));
+				entity.setNormid(item.getNormid());
+				entity.setShtctr(BigDecimal.valueOf(nextId));
+				entity.setCrBy(ClientIpUtils.getClient());
+				entity.setCrDt(new Date());
+				entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+
+			}
+			entity.setLoadingtempmax(item.getLoadingtempmax());
+			entity.setRateofheatingmax(item.getRateofheatingmax());
+			entity.setSoakingtemp01(item.getSoakingtemp01());
+			entity.setSoakingdur(item.getSoakingdur());
+			entity.setSokduruom(item.getSokduruom());
+			entity.setCoolinginstillair(item.getCoolinginstillair());
+			entity.setRateofcoolmax(item.getRateofcoolmax());
+			entity.setUnloadingtempmax(item.getUnloadingtempmax());
+			entity.setShtty(item.getShtty());
+			entity.setIsactv(BigDecimal.ONE);
+
+			entities.add(entity);
+			shtRepository.save(entity);
+		});
+	}
+
+	private void saveOtherTest(ExternalGradeMechTestReqRes request) {
+		logger.info("Saving OtherTest data");
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<NormothrtestJmEntity> entities = new ArrayList<>();
+
+		request.getOtherTestList().forEach(item -> {
+			NormothrtestJmEntity entity = new NormothrtestJmEntity();
+
+			Optional<NormothrtestJmEntity> findRecordforOtherTestId = othrtestRepository.findByNormidAndMethodName(
+					(item.getNormid() != null ? item.getNormid() : " "),
+					(item.getTestmethod() != null ? item.getTestmethod() : " "));
+
+			if (item.getNormid() != null && item.getTestmethod() != null && findRecordforOtherTestId.isPresent()) {
+				entity = findRecordforOtherTestId.get();
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoDt(new Date());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+
+			} else {
+				Long maxVal = othrtestRepository.findMaxId();
+				if (maxVal == null) {
+					maxVal = 0L;
+				}
+				long nextId = maxVal + 1;
+				entity.setOthertestid(String.valueOf(nextId));
+				entity.setNormid(item.getNormid());
+				entity.setCrBy(ClientIpUtils.getClient());
+				entity.setCrDt(new Date());
+				entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+
+			}
+			entity.setTestmethod(item.getTestmethod());
+			entity.setTestremarks(item.getTestremarks());
+			entity.setIsactv(BigDecimal.ONE);
+
+			entities.add(entity);
+			othrtestRepository.save(entity);
+		});
+	}
+
+	private void saveInclusionTest(ExternalGradeMechTestReqRes request) {
+		logger.info("Saving InclusionTest data");
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<NorminclusionJmEntity> entities = new ArrayList<>();
+		request.getInclusionList().forEach(item -> {
+			NorminclusionJmEntity entity = new NorminclusionJmEntity();
+			NormmastJmEntity mastEntity = new NormmastJmEntity();
+			Optional<NormmastJmEntity> mastRecord = mastRepository
+					.findById(item.getNormid() != null ? item.getNormid() : " ");
+			if (mastRecord.isPresent()) {
+
+				mastEntity = mastRecord.get();
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoDt(new Date());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+				mastEntity.setTmremarks(item.getTmremarks());
+				mastRepository.save(mastEntity);
+			}
+
+			if (item.getInclusionid() != null && (item.getTyathickmax() != null || item.getTyathinmax() != null
+					|| item.getTybthickmax() != null || item.getTybthinmax() != null && item.getTycthickmax() != null
+					|| item.getTycthinmax() != null || item.getTydthickmax() != null || item.getTydthinmax() != null
+					|| item.getDirection() != null)) {
+				Optional<NorminclusionJmEntity> findRecord = inclusionRepository
+						.findById(item.getInclusionid() != null ? item.getInclusionid() : " ");
+				if (mastRecord.isPresent()) {
+					entity = findRecord.get();
+					entity.setMoBy(ClientIpUtils.getClient());
+					entity.setMoDt(new Date());
+					entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+				} else {
+					entity.setCrBy(ClientIpUtils.getClient());
+					entity.setCrDt(new Date());
+					entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+				}
+
+				entity.setTyathickmax(item.getTyathickmax());
+				entity.setTyathinmax(item.getTyathinmax());
+				entity.setTybthickmax(item.getTybthickmax());
+				entity.setTybthinmax(item.getTybthinmax());
+				entity.setTycthickmax(item.getTycthickmax());
+				entity.setTycthinmax(item.getTycthinmax());
+				entity.setTydthickmax(item.getTydthickmax());
+				entity.setTydthinmax(item.getTydthinmax());
+				entity.setDirection(
+						OfsConstants.SELECT_OPTION.equals(item.getDirection()) ? null : item.getDirection());
+				entity.setIsactv(BigDecimal.ONE);
+
+				entities.add(entity);
+				inclusionRepository.save(entity);
+
+			} else if (item.getInclusionid() == null && item.getTyathickmax() != null || item.getTyathinmax() != null
+					|| item.getTybthickmax() != null || item.getTybthinmax() != null || item.getTycthickmax() != null
+					|| item.getTycthinmax() != null || item.getTydthickmax() != null || item.getTydthinmax() != null
+					|| item.getDirection() != null) {
+				// Set new ID only if the record is not found
+				List<NorminclusionJmEntity> maxVal = inclusionRepository.findAll();
+				int nextId = maxVal.size() + 1;
+				entity.setInclusionid(String.valueOf(nextId));
+				entity.setNormid(item.getNormid());
+				entity.setTyathickmax(item.getTyathickmax());
+				entity.setTyathinmax(item.getTyathinmax());
+				entity.setTybthickmax(item.getTybthickmax());
+				entity.setTybthinmax(item.getTybthinmax());
+				entity.setTycthickmax(item.getTycthickmax());
+				entity.setTycthinmax(item.getTycthinmax());
+				entity.setTydthickmax(item.getTydthickmax());
+				entity.setTydthinmax(item.getTydthinmax());
+				entity.setDirection(
+						OfsConstants.SELECT_OPTION.equals(item.getDirection()) ? null : item.getDirection());
+				entity.setIsactv(BigDecimal.ONE);
+
+				entities.add(entity);
+				inclusionRepository.save(entity);
+			}
+
+		});
+	}
+
+	private void saveImpactTest(ExternalGradeMechTestReqRes request) {
+		logger.info("Saving ImpactTest data");
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<NormimpactJmEntity> entities = new ArrayList<>();
+
+		request.getImpactList().forEach(item -> {
+			NormimpactJmEntity entity = new NormimpactJmEntity();
+			Optional<NormimpactJmEntity> findRecord = impactRepository
+					.findById(item.getImpactid() != null ? item.getImpactid() : " ");
+
+			if (findRecord.isPresent()) {
+
+				entity = findRecord.get();
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoDt(new Date());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+
+			} else {
+				Long maxVal = impactRepository.findMaxId();
+				if (maxVal == null) {
+					maxVal = 0L;
+				}
+				long nextId = maxVal + 1;
+				entity.setImpactid(String.valueOf(nextId));
+				entity.setNormid(item.getNormid());
+				entity.setCrBy(ClientIpUtils.getClient());
+				entity.setCrDt(new Date());
+				entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+			}
+
+			entity.setCvncunflg(item.getCvncunflg());
+			entity.setEnergyavgmin(item.getEnergyavgmin());
+			entity.setEnergyindmin(item.getEnergyindmin());
+			entity.setLocation(item.getLocation());
+			entity.setMandrel(item.getMandrel());
+			entity.setMaxopr(item.getMaxopr());
+			entity.setMinopr(item.getMinopr());
+			entity.setPosition(item.getPosition());
+			entity.setThkmax(item.getThkmax());
+			entity.setThkmin(item.getThkmin());
+			entity.setSaindmin(item.getSaindmin());
+			entity.setDirection(item.getDirection());
+			entity.setSaavgmin(item.getSaavgmin());
+			entity.setTemperature(item.getTemperature());
+			entity.setIsactv(BigDecimal.ONE);
+
+			entities.add(entity);
+			impactRepository.save(entity);
+		});
+	}
+
+	private void saveHttTest(ExternalGradeMechTestReqRes request) {
+		logger.info("Saving HttTest data");
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<NormhtttJmEntity> entities = new ArrayList<>();
+
+		request.getHtttList().forEach(item -> {
+			NormhtttJmEntity entity = new NormhtttJmEntity();
+			Optional<NormhtttJmEntity> findRecord = htttRepository
+					.findById(item.getHtttid() != null ? item.getHtttid() : " ");
+			if (findRecord.isPresent()) {
+
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoDt(new Date());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+				entity = findRecord.get();
+
+			} else {
+				Long maxVal = htttRepository.findMaxId();
+				if (maxVal == null) {
+					maxVal = 0L;
+				}
+				long nextId = maxVal + 1;
+				entity.setHtttid(String.valueOf(nextId));
+				entity.setNormid(item.getNormid());
+				entity.setCrBy(ClientIpUtils.getClient());
+				entity.setCrDt(new Date());
+				entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+			}
+
+			entity.setMaxopr(item.getMaxopr());
+			entity.setMinopr(item.getMinopr());
+			entity.setThkmax(item.getThkmax());
+			entity.setThkmin(item.getThkmin());
+			entity.setProofstrengthmin(item.getProofstrengthmin());
+			entity.setDirection(item.getDirection());
+			entity.setTemperature(item.getTemperature());
+			entity.setIsactv(BigDecimal.ONE);
+
+			entities.add(entity);
+			htttRepository.save(entity);
+		});
+	}
+
+	private void saveHardnessTest(ExternalGradeMechTestReqRes request) {
+		logger.info("Saving HardnessTest data");
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<NormhardnessJmEntity> entities = new ArrayList<>();
+
+		request.getHardnessList().forEach(item -> {
+			NormhardnessJmEntity entity = new NormhardnessJmEntity();
+			Optional<NormhardnessJmEntity> findRecord = hardnessRepository
+					.findById(item.getHardnessid() != null ? item.getHardnessid() : " ");
+			if (findRecord.isPresent()) {
+
+				entity = findRecord.get();
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoDt(new Date());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+
+			} else {
+				Long maxVal = hardnessRepository.findMaxId();
+				if (maxVal == null) {
+					maxVal = 0L;
+				}
+				long nextId = maxVal + 1;
+				entity.setHardnessid(String.valueOf(nextId));
+				entity.setNormid(item.getNormid());
+				entity.setCrBy(ClientIpUtils.getClient());
+				entity.setCrDt(new Date());
+				entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+			}
+
+			entity.setHardnessmax(item.getHardnessmax());
+			entity.setHardnessmin(item.getHardnessmin());
+			entity.setHardnessunit(item.getHardnessunit());
+			entity.setThkmax(item.getThkmax());
+			entity.setMaxopr(OfsConstants.SELECT_OPTION.equals(item.getMaxopr()) ? null : item.getMaxopr());
+			entity.setMinopr(OfsConstants.SELECT_OPTION.equals(item.getMinopr()) ? null : item.getMinopr());
+			entity.setThkmin(item.getThkmin());
+			entity.setIsactv(BigDecimal.ONE);
+
+			entities.add(entity);
+			hardnessRepository.save(entity);
+		});
+	}
+
+	private void saveDwttTest(ExternalGradeMechTestReqRes request) {
+		logger.info("Saving DwttTest data");
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<NormdwttJmEntity> entities = new ArrayList<>();
+
+		request.getDwttList().forEach(item -> {
+			NormdwttJmEntity entity = new NormdwttJmEntity();
+			Optional<NormdwttJmEntity> findRecord = dwttRepository
+					.findById(item.getDwttid() != null ? item.getDwttid() : " ");
+
+			if (findRecord.isPresent()) {
+				entity = findRecord.get();
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoDt(new Date());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+
+			} else {
+				Long maxVal = dwttRepository.findMaxId();
+				if (maxVal == null) {
+					maxVal = 0L;
+				}
+				long nextId = maxVal + 1;
+				entity.setDwttid(String.valueOf(nextId));
+				entity.setNormid(item.getNormid());
+				entity.setCrBy(ClientIpUtils.getClient());
+				entity.setCrDt(new Date());
+				entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+			}
+
+			entity.setMaxopr(item.getMaxopr());
+			entity.setMinopr(item.getMinopr());
+			entity.setThkmax(item.getThkmax());
+			entity.setThkmin(item.getThkmin());
+			entity.setSaindmin(item.getSaindmin());
+			entity.setDirection(item.getDirection());
+			entity.setSaavgmin(item.getSaavgmin());
+			entity.setTemperature(item.getTemperature());
+			entity.setIsactv(BigDecimal.ONE);
+
+			entities.add(entity);
+			dwttRepository.save(entity);
+		});
+	}
+
+	private void saveBendTest(ExternalGradeMechTestReqRes request) {
+		logger.info("Saving BendTest data");
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<NormbendJmEntity> entities = new ArrayList<>();
+
+		request.getBendList().forEach(item -> {
+			NormbendJmEntity entity = new NormbendJmEntity();
+			Optional<NormbendJmEntity> findRecord = bendRepository
+					.findById(item.getBendid() != null ? item.getBendid() : " ");
+			if (findRecord.isPresent()) {
+
+				entity = findRecord.get();
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoDt(new Date());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+
+			} else {
+				Long maxVal = bendRepository.findMaxId();
+				if (maxVal == null) {
+					maxVal = 0L;
+				}
+				long nextId = maxVal + 1;
+				entity.setBendid(String.valueOf(nextId));
+				entity.setNormid(item.getNormid());
+				entity.setCrBy(ClientIpUtils.getClient());
+				entity.setCrDt(new Date());
+				entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+			}
+
+			entity.setMaxopr(item.getMaxopr());
+			entity.setMinopr(item.getMinopr());
+			entity.setThkmax(item.getThkmax());
+			entity.setThkmin(item.getThkmin());
+			entity.setMandrel(item.getMandrel());
+			entity.setDirection(item.getDirection());
+			entity.setDegrees(item.getDegrees());
+			entity.setBendvalmin(item.getBendvalmin());
+			entity.setIsactv(BigDecimal.ONE);
+
+			entities.add(entity);
+			bendRepository.save(entity);
+		});
+	}
+
+	private void saveTensileTest(ExternalGradeMechTestReqRes request) {
+		logger.info("Saving TensileTest data");
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<NormtensileJmEntity> entities = new ArrayList<>();
+
+		request.getTensileList().forEach(item -> {
+			NormtensileJmEntity entity = new NormtensileJmEntity();
+
+			Optional<NormtensileJmEntity> findRecord = tensileRepository
+					.findById(item.getTensileid() != null ? item.getTensileid() : " ");
+			if (findRecord.isPresent()) {
+				entity = findRecord.get();
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoDt(new Date());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+
+			} else {
+
+				Long maxVal = tensileRepository.findMaxId();
+				if (maxVal == null) {
+					maxVal = 0L;
+				}
+				long nextId = maxVal + 1;
+				entity.setTensileid(String.valueOf(nextId));
+				entity.setNormid(item.getNormid());
+				entity.setCrBy(ClientIpUtils.getClient());
+				entity.setCrDt(new Date());
+				entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+
+			}
+			entity.setElgl200min(item.getElgl200min());
+			entity.setElgl50min(item.getElgl50min());
+			entity.setElgl565min(item.getElgl565min());
+			entity.setElgl80min(item.getElgl80min());
+			entity.setMaxopr(item.getMaxopr());
+			entity.setMinopr(item.getMinopr());
+			entity.setThkmax(item.getThkmax());
+			entity.setThkmin(item.getThkmin());
+			entity.setUtsmax(item.getUtsmax());
+			entity.setUtsmin(item.getUtsmin());
+			entity.setYsmax(item.getYsmax());
+			entity.setYsmin(item.getYsmin());
+			entity.setYsutsmax(item.getYsutsmax());
+			entity.setYsutsmin(item.getYsutsmin());
+			entity.setDirection(OfsConstants.SELECT_OPTION.equals(item.getDirection()) ? null : item.getDirection());
+			entity.setIsactv(BigDecimal.ONE);
+			
+			entities.add(entity);
+			tensileRepository.save(entity);
+		});
+	}
+
+	@Override
+	public List<String> getAllTestMethods() {
+		logger.info("Fetching all test methods");
+		return externalMechanicalCustRepository.getAllTestMethods();
+	}
+
+}

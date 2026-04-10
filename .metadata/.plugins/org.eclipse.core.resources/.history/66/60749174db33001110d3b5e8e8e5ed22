@@ -1,0 +1,311 @@
+package com.hindindustec.fluenta.sales.common;
+
+public class OfsConstants {
+
+	public static final String ORDER_BY = " ORDER BY ";
+	public static final String NOT_LIKE = " NOT LIKE ";
+	public static final String LIKE = " LIKE ";
+	public static final String ENDSWITH = "endswith";
+	public static final String STARTSWITH = "startswith";
+	public static final String NOTCONTAINS = "notcontains";
+	public static final String CONTAINS = "contains";
+	public static final String ATTR_TYPE_CHEM = "CHEM";
+	public static final String USER_ADMIN = "admin";
+	public static final String MESSAGE = "message";
+	public static final String STATUS = "status";
+	public static final String EXTID = "extId";
+	public static final String SENDER_DC = "MH";
+	public static final String PLANT_CODE = "JSOL";
+	public static final String RECEIVER_DC = "H1";
+	public static final String FUNCTION_CODE = "D";
+	public static final String PDI_MHH101 = "MHH101";
+	public static final String PDI_MHH102 = "MHH102";
+	public static final String PDI_MHH103 = "MHH103";
+
+	public static final String PDI_MHH101_LEN = "00860";
+	public static final String PDI_MHH102_LEN = "00860";
+	public static final String PDI_MHH103_LEN = "42035";
+
+	//
+	public static final String RHF_SENDER_DC = "MH";
+	public static final String RHF_RECEIVER_DC = "H1";
+
+	public static final String RHF_MAIN_PDI_LEN = "0538";
+	public static final String RHF_DEL_PDI_LEN = "0048";
+
+	public static final String RHF_MAIN_PDI = "MF0001";
+	public static final String RHF_DEL_PDI = "MF0002";
+
+	public static final String F_C_SCALE = "F/C_SCALE";
+	public static final String MILL_SCALE = "MILL_SCALE";
+	public static final String COBBLE = "COBBLE";
+	public static final String END_CUT = "END_CUT";
+	public static final String MILL_CUT = "MILL_CUT";
+	public static final String SAMPLE = "SAMPLE";
+
+	public static final Integer STS_ACTIVE = 1;
+	public static final Integer STS_IN_ACTIVE = 0;
+
+	public static final String DATA_NOT_FOUND = "Data not found";
+	public static final String DUPLICATE_ENTRY_NOT_ALLOWED = "Duplicate record can't be allowed";
+
+	// sales
+
+	public static final String PRODUCT_TYPE = "FG";
+	public static final String SHIP_TO = "SHIP TO";
+	public static final String BILL_TO = "BILL TO";
+	public static final String FREE_STOCK = "Free Stock";
+
+	public static final String STD_TOL = "STD-TOL";
+	public static final String STD_DIM_TOL = "STD-DIM-TOL";
+	public static final String STD_DIM_TOL_DETAIL = "STD-DIM-TOL-DETAIL";
+
+	public static final String DISPATCHED = "DISPATCHED";
+
+	public static final String TENSILE_TEST = "Tensile Test";
+	public static final String BEND_TEST = "Bend";
+	public static final String DWTT = "DWTT";
+	public static final String IMPACT = "Impact";
+	public static final String HARDNESS = "Hardness";
+	public static final String HTTT = "High Temp Tensile";
+	public static final String INCLUSION_RATING = "Inclusion Rating";
+	public static final String SHT_CYCLES = "SHT Cycles";
+	public static final String Z_TEST = "Z Test";
+	public static final String GRAIN_SIZE = "Grain Size";
+	public static final String MICROSTRUCTURE = "Microstructure";
+	public static final String NACE_HIC = "NACE HIC";
+	public static final String NACE_SCC = "NACE SCC";
+	public static final String WBBT = "WBBT";
+	public static final String STRAIN_AGING = "Strain Aging";
+	public static final String FRACTURE_TEST = "Fracture Test";
+	public static final String BALLISTIC_TEST = "Ballistic Test";
+	public static final String CTOD = "CTOD";
+	public static final String WELDABILITY_TEST = "Weldability Test";
+	public static final String OTHR_TEST = "OTHR_TEST";
+
+	public static final String TEST_METHOD = "TEST METHOD";
+	public static final String TEST_METHOD_CAT_MECH = "MECHANICAL";
+
+	public static final String SHT_TYPE_N = "N";
+	public static final String SHT_TYPE_SR = "SR";
+
+	public static final String CHEMISTRY_CATEGORY = "CHEMICAL";
+
+	public static final String SALES_ENQUIRY_PREFIX = "EN";
+	public static final String TDC_EXECUTION_PREFIX = "EX";
+	public static final String TDC_WF_ID = "TDC APPROVAL FLOW";
+	public static final String TDC_ACTION_CREATE = "CREATE";
+	public static final String TDC_ACTION_SUBMIT = "SUBMIT";
+	public static final String TDC_ACTION_REJECT = "REJECT";
+	public static final String TDC_ACTION_APPROVE = "APPROVE";
+	public static final String TDC_REMARKS_CREATE = "TDC CREATED";
+	public static final String TDC_REMARKS_SUBMIT = "SENT FOR APPROVAL";
+
+	private OfsConstants() {
+		throw new IllegalStateException("Constants class");
+	}
+
+	public static final String TDCGENERALREQUESTDTO = "SELECT DISTINCT NEW com.hindindustec.ofs.hsm.modules.tdc.main.general.dto.TdcGeneralRequestDto";
+	public static final String TDCID_PREFIX = "JSPL/ANGUL/ TDC – HSM";
+	public static final String TDCENQDTO = "SELECT DISTINCT NEW com.hindindustec.ofs.hsm.modules.tdc.main.general.dto.TdcEnqJmDto";
+	public static final String DEFAULT_USER = "admin";
+
+	public static final String SALES_ENQUIRY_DTO = "SELECT DISTINCT NEW  com.hindindustec.fluenta.sales.dto.SalesEnquiryDto";
+	public static final String CUSTOMER_DTO = "SELECT DISTINCT NEW  com.hindindustec.fluenta.sales.dto.CustomerDto";
+	public static final String INPROGRESSSTATUS_DTO = "SELECT DISTINCT NEW  com.hindindustec.fluenta.sales.dto.InProgressStatusDto";
+	public static final String INPREQUESTSTATUS_DTO = "SELECT DISTINCT NEW  com.hindindustec.fluenta.sales.dto.RequestedStatusDto";
+
+	public static final String ATTACHEDSTATUS_DTO = "SELECT DISTINCT NEW  com.hindindustec.fluenta.sales.dto.AttachedStatusDto";
+
+	public static final String CONFIRMEDSTATUS_DTO = "SELECT DISTINCT NEW  com.hindindustec.fluenta.sales.dto.ConfirmedStatusDto";
+	public static final String REMARKS_DTO = "SELECT NEW  com.hindindustec.fluenta.sales.dto.RemarksDto";
+	public static final String SALES_ENQUIRY_ITEM_DTO = "SELECT DISTINCT NEW  com.hindindustec.fluenta.sales.dto.SalesEnquiryItemDto";
+
+	public static final String TDC_MAIN_REQUEST_DTO = "SELECT DISTINCT NEW  com.hindindustec.fluenta.sales.dto.TdcMainRequest";
+	public static final String SALES_ENQ_HEADER_DTO = "SELECT DISTINCT NEW  com.hindindustec.fluenta.sales.dto.SalesEnqHeaderDto";
+	public static final String SALES_ENQ_ITEM_DTO = "SELECT DISTINCT NEW  com.hindindustec.fluenta.sales.dto.SalesEnqItemDto";
+
+	public static final String BEARER = "Bearer ";
+	public static final String AUTHORIZATION = "Authorization";
+	public static final String V3_API_DOCS = "/v3/api-docs";
+	public static final String SWAGGER_UI = "/swagger-ui";
+	public static final String SWAGGER_RESOURCES = "/swagger-resources";
+	public static final String ERROR = "Missing or invalid Authorization header";
+	public static final String EXCEPTION = "Invalid token: Access Denied";
+	public static final String UNKNOWN = "unknown";
+
+	public static final String PROD_TYPE_HRCOIL = "HRCOIL";
+	public static final String PROD_TYPE_SLAB = "SLAB";
+
+	public static final String PP_RT_STS_COMPLETED = "COMPLETE";
+	public static final String PP_RT_STS_PENDING = "PENDING";
+
+	public static final String PRODUCT_TYPE_FG = "FG";
+	public static final String PRODUCT_TYPE_WIP = "WIP";
+
+	public static final String SALES_ORDER_ID = "soId";
+	public static final String SALES_ITEM_NUMBER = "solId";
+
+	public static final String SO_NUMBER = "soNumber";
+	public static final String ITEM = "item";
+	public static final String CUSTOMER_NAME = "customerName";
+	public static final String PROMIS_WEEK_FROM = "promisWeekFrom";
+	public static final String PROMIS_WEEK_TO = "promisWeekTo";
+	public static final String PLAN_WEEK_FROM = "planWeekFrom";
+	public static final String PLAN_WEEK_TO = "planWeekTo";
+	public static final String PRODUCT = "product";
+	public static final String SO_STATUS = "soStatus";
+	public static final String WDT_MIN = "wdtmin";
+	public static final String WDT_MAX = "wdtmax";
+	public static final String THK_MIN = "thkmin";
+	public static final String THK_MAX = "thkmax";
+	public static final String PLANTCODE = "plantCode";
+	public static final String PPRT_STS_COMPLETED = "Completed";
+	public static final String BATCH_DISPATCHED = "Dispatched";
+	public static final String BATCH_DISPATCH = "batchStsDispatched";
+	public static final String BATCH_READY_FOR_DISPATCH = "ReadyForDispatch";
+	public static final String BATCH_STS_RFD = "batchStsRfd";
+	public static final String BATCH_STS_AVAILABLE = "batchStsAvailable";
+	public static final String BATCH_AVAILABLE = "Available";
+	public static final String PROD_TYPE = "prodType";
+	public static final String STATUS_FLAG = "statusFlag";
+	public static final String START_WITH = "startswith";
+	public static final String STOCK_STATUS_LIST = "stockStatusList";
+
+	// Keys for fieldTypes map
+	public static final String SOID = "soid";
+	public static final String SOLID = "solid";
+	public static final String PRDID = "prdid";
+	public static final String SOQTY = "soqty";
+	public static final String SOQTYMAX = "soqtymax";
+	public static final String TDCID = "tdcid";
+	public static final String STCUSTNM = "stcustnm";
+	public static final String PRDCDEID = "prdcdeid";
+	public static final String SORELDT = "sorelDt";
+	public static final String DOCTY = "docty";
+	public static final String ERPSOSTS = "erpsosts";
+	public static final String SOLMODCTR = "solmodctr";
+	public static final String SOPROMDT = "sopromDt";
+	public static final String CUSTREQDT = "custreqDt";
+	public static final String INCOTERM = "incoterm";
+	public static final String FRTTERM = "frtterm";
+	public static final String MARKINSTN = "markinstn";
+	public static final String PACKINSTN = "packinstn";
+	public static final String LOADINSTN = "loadinstn";
+	public static final String EQSPEC = "eqSpec";
+	public static final String EQSPECGROUP = "eqSpecGroup";
+	public static final String EQSPECSUBGROUP = "eqSpecSubGroup";
+	public static final String LCEXPDT = "lcexpDt";
+	public static final String SOSEGMT = "sosegmt";
+	public static final String THKAIM = "thkaim";
+	public static final String WDT_AIM = "wdtaim";
+	public static final String LENAIM = "lenaim";
+	public static final String GRDID = "grdid";
+	public static final String BTCUSTID = "btcustid";
+	public static final String STID = "stid";
+	public static final String SOSTS = "sosts";
+	public static final String ADDCDE = "addcde";
+	public static final String ADDLINM = "addlinm";
+	public static final String ADDLIVAL = "addlival";
+	public static final String CLOSEREM = "closerem";
+	public static final String SCHDID = "schdid";
+	public static final String ERPSTID = "erpStid";
+	public static final String WGT = "wgt";
+	public static final String EQSPEC2 = "eqSpec"; // Duplicated, adjust as necessary
+	public static final String EQSPECGROUP2 = "eqSpecGroup"; // Duplicated, adjust as necessary
+	public static final String EQSPECSUBGROUP2 = "eqSpecSubGroup"; // Duplicated, adjust as necessary
+	public static final String WDTAIM = "wdtaim";
+
+	// Prefixes for field mappings
+	public static final String SOL_PREFIX = "sol.";
+	public static final String SOB_PREFIX = "sob.";
+	public static final String SOH_PREFIX = "soh.";
+	public static final String CS_PREFIX = "cs.";
+	public static final String CUST_PREFIX = "cust.";
+	public static final String HSM_PREFIX = "hsm.id.";
+	public static final String PH_PREFIX = "ph.";
+
+	public static final String SEID = "seid";
+	public static final String BTCUSTNM = "btcustnm";
+	public static final String SEDT = "seDt";
+	public static final String SECONFDT = "seconfDt";
+	public static final String CUSTCNTNO = "custcntno";
+	public static final String SESTS = "sests";
+	public static final String BRN = "brn";
+	public static final String CRBY = "crBy";
+	public static final String CRDT = "crDt";
+	public static final String CRMACADDR = "crMacAddr";
+	public static final String CUSTCNTPRSN = "custcntprsn";
+	public static final String CUSTTY = "custty";
+	public static final String CUSTZONE = "custzone";
+	public static final String DISCHANNEL = "dischannel";
+	public static final String DISPSEID = "dispseid";
+	public static final String ENTRPRISE = "entrprise";
+	public static final String HDRRMKS = "hdrrmks";
+	public static final String INTSALESAGNT = "intsalesagnt";
+	public static final String ISACTV = "isactv";
+	public static final String KAMID = "kamid";
+	public static final String MOBY = "moBy";
+	public static final String MODT = "moDt";
+	public static final String MOMACADDR = "moMacAddr";
+	public static final String MRKTSEG = "mrktseg";
+	public static final String PODT = "poDt";
+	public static final String PROJTY = "projty";
+	public static final String REFPUROID = "refpuroid";
+	public static final String SALESGRP = "salesgrp";
+	public static final String SETY = "sety";
+	public static final String QUANTITY = "quantity";
+	public static final String APPROVER = "approver";
+	
+	// Prefix for SEHST table fields
+	public static final String SEHST_PREFIX = "sehSt.";
+
+	public static final String SO_STATUS_OPEN = "OPEN";
+
+	public static final String GROUPING_PAGESTORE = "pageStore";
+	public static final String GROUPING_LATEST_GROUP_COUNT = "latestGroupCount";
+	public static final String GROUPING_STATUS = "status";
+	public static final String GROUPING_SKIP = "skip";
+	public static final String GROUPING_TAKE = "take";
+	public static final String GROUPING_FILTER = "filter";
+	public static final String GROUPING_SORT = "sort";
+	public static final String GROUPING_SEARCH_VALUE = "searchValue";
+	public static final String GROUPING_GROUP = "group";
+	public static final String GROUPING_REQUIRE_TOTAL_COUNT = "requireTotalCount";
+	public static final String GROUPING_REQUIRE_GROUP_COUNT = "requireGroupCount";
+	public static final String UTF_8 = "UTF-8";
+	public static final String DESC = " DESC";
+	public static final String ASC = "ASC";
+	public static final String SELECT = " SELECT ";
+	public static final String COUNT_DISTINCT = " COUNT( DISTINCT ";
+	public static final String TDC_STATUS_DTO = "SELECT DISTINCT NEW com.hindindustec.fluenta.sales.dto.TdcStatusDto";
+	public static final String QUERY = "query";
+	public static final String SDEPT = "dept";
+	public static final String DEPARTMENT = "department";
+	public static final String TDC_STATUS_USER_DTO = "SELECT DISTINCT new com.hindindustec.fluenta.sales.dto.UserIdUserNmDto";
+	public static final String TDC_STATUS_EMAIL_RESPONSE_DTO = "SELECT DISTINCT new com.hindindustec.fluenta.sales.dto.EmailResponseDto";
+	public static final String FROM_DATE = "fromDate";
+	public static final String TO_DATE = "toDate";
+
+	public static String getCommonFieldList() {
+		return "(selSt.id.seid, selSt.id.selid, selSt.crBy, selSt.crDt, selSt.crMacAddr, "
+				+ "selSt.creditty, selSt.custid, selSt.custreqDt, selSt.diaaim, selSt.diamax, "
+				+ "selSt.diamin, selSt.docty, selSt.dstn, selSt.edgecond, selSt.enduse, "
+				+ "selSt.entrprise, selSt.eqSpec, selSt.eqSpecGroup, selSt.eqSpecSubGroup, "
+				+ "selSt.extgrdnm, selSt.grdid, selSt.idmax, selSt.idmin, selSt.isactv, "
+				+ "selSt.lenaim, selSt.lenmax, selSt.lenmin, selSt.lentolstd, selSt.loadcde, "
+				+ "selSt.loadinstn, selSt.logotyonlabl, selSt.markcde, selSt.markinstn, "
+				+ "selSt.moBy, selSt.moDt, selSt.moMacAddr, selSt.mot, selSt.noofpcs, "
+				+ "selSt.odmax, selSt.odmin, selSt.ordcls, selSt.packcde, selSt.packinstn, "
+				+ "selSt.paymethod, selSt.payterm, selSt.prdcdeid, selSt.prdid, "
+				+ "selSt.reserve01, selSt.reserve02, selSt.reserve03, selSt.reserve04, "
+				+ "selSt.reserve05, selSt.revid, selSt.seqclvl, selSt.seqty, selSt.seqtymax, "
+				+ "selSt.seqtymin, selSt.serelDt, selSt.sests, selSt.sety, selSt.sevaluptoDt, "
+				+ "selSt.specialreq, selSt.stdid, selSt.suppcon, selSt.tcty, selSt.tdcid, "
+				+ "selSt.tdcty, selSt.thkaim, selSt.thkmax, selSt.thkmin, selSt.thktolstd, "
+				+ "selSt.tpiinstn, selSt.tpinspflag, selSt.uom, selSt.utlevel, selSt.vdflag, "
+				+ "selSt.wdtaim, selSt.wdtmax, selSt.wdtmin, selSt.wdttolstd, selSt.wgtmax, "
+				+ "selSt.wgtmin, selSt.overdeltol)";
+	}
+
+}

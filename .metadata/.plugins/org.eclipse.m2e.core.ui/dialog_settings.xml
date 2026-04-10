@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="MavenProjectImportWizardPage">
+		<list key="rootDirectory">
+			<item value="D:\Hind\FLUENTA\UAT BUILD UI"/>
+			<item value="D:\Hind\FLUENTA\fluenta-infopanel-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-workflow-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-sms-quality-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-sms-masters-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-sms2-production-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-hsm-scheduling-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-hsm-sapinterface-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-hsm-reports-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-hsm-quality-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-hsm-production-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-hsm-logistics-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-hsm-sales-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-hsm-tdc-service"/>
+			<item value="D:\Hind\FLUENTA\fluenta-utility-service"/>
+		</list>
+		<list key="projectNameTemplate">
+			<item value="[artifactId]"/>
+			<item value="[artifactId]-TRUNK"/>
+			<item value="[artifactId]-[version]"/>
+			<item value="[groupId].[artifactId]"/>
+			<item value="[groupId].[artifactId]-[version]"/>
+			<item value="[name]"/>
+		</list>
+	</section>
+	<section name="org.eclipse.m2e.core.pom.overview">
+	</section>
+	<section name="org.eclipse.m2e.core.pom.dependencies">
+	</section>
+</section>

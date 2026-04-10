@@ -1,0 +1,51 @@
+package com.hindindustec.fluenta.hsm.masters.customrepository;
+
+import java.util.List;
+
+import org.springframework.stereotype.Repository;
+
+import com.hindindustec.fluenta.hsm.masters.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.masters.dto.TransferBarThicknessMasterDto;
+import com.hindindustec.fluenta.hsm.masters.dto.TransferBarThicknessMasterRequest;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+
+@Repository
+public class TransferBarThicknessMasterCustRepository {
+
+	private final EntityManager entityManager;
+
+    public TransferBarThicknessMasterCustRepository(EntityManager entityManager) {
+        this.entityManager = entityManager;
+    }
+	
+	public List<TransferBarThicknessMasterDto> getTransferBarThicknessMasterDetails(TransferBarThicknessMasterRequest request) {
+		
+		TypedQuery<TransferBarThicknessMasterDto> q = entityManager
+				.createQuery(OfsConstants.TRANSFER_BAR_THICKNESS_MASTER_DTO+"("
+						  +"hsmTBCm.id.plid,"
+						  +"hsmTBCm.id.hrthkmin,"
+						  +"hsmTBCm.id.hrwdtmin,"
+						  +"hsmTBCm.hrthkmax,"
+						  +"hsmTBCm.hrwdtmax,"
+						  +"hsmTBCm.isactv,"
+						  +"hsmTBCm.trnbarthk,"
+						  +"hsmTBCm.crDt"
+						+ ")"
+						+ " FROM HsmtrnbarCm hsmTBCm "
+						+ " WHERE (:selectedProductionLine is null or hsmTBCm.id.plid = :selectedProductionLine)"
+						+ " ORDER BY hsmTBCm.crDt DESC"
+						, TransferBarThicknessMasterDto.class);
+
+		           q.setParameter("selectedProductionLine", request.getProductionLine());
+			       return q.getResultList();
+	} 
+	
+	public List<String> getProductionLine() {
+	    TypedQuery<String> q = entityManager.createQuery(
+	        "SELECT DISTINCT p.plid FROM  PlCm p "
+	        , String.class);
+	    return q.getResultList();
+	}
+}

@@ -1,0 +1,63 @@
+package com.hindindustec.fluenta.hsm.masters.controller;
+
+import java.util.List;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.hindindustec.fluenta.hsm.masters.dto.CapabilityRequestDto;
+import com.hindindustec.fluenta.hsm.masters.dto.CatalogMasterDto;
+import com.hindindustec.fluenta.hsm.masters.dto.CatalogueJmDto;
+import com.hindindustec.fluenta.hsm.masters.dto.IntGrdCapabilityDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ProdCatalogDto;
+import com.hindindustec.fluenta.hsm.masters.entities.ProdCatalogueJmEntity;
+import com.hindindustec.fluenta.hsm.masters.service.ExternalGrdCatalogService;
+
+@RestController
+@RequestMapping("/masters/external-grade/catalog")
+public class ExternalGrdCatalogController {
+
+	private ExternalGrdCatalogService externalCatlogService;
+
+	public ExternalGrdCatalogController(ExternalGrdCatalogService externalCatlogService) {
+		this.externalCatlogService = externalCatlogService;
+	}
+
+	@PostMapping("/catalog-ids")
+	public ProdCatalogDto getCatalogIds(@RequestBody catalogRequestDto dto) {
+		return externalCatlogService.getCatalogIds(dto.getExternalGrade());
+	}
+
+	@PostMapping("/catalogidAndextgrdname/save")
+	public ProdCatalogueJmEntity saveExtGrdAndCatalogMapping(@RequestBody ProdCatalogDto request) {
+		return externalCatlogService.saveExtGrdAndCatalogMapping(request);
+	}
+
+	@PostMapping("/capabilities")
+	public List<CatalogueJmDto> getCapabilities(@RequestBody CapabilityRequestDto dto) {
+		return externalCatlogService.getCapabilities(dto.getCatalogid());
+	}
+
+	@PostMapping("/internal-spec-mapping/save")
+	public String saveInternalSpecMapping(@RequestBody List<IntGrdCapabilityDto> request) {
+		return externalCatlogService.saveInternalSpecMapping(request);
+	}
+
+	@PostMapping("/capabilities/save")
+	public String saveCatpabilities(@RequestBody List<CatalogueJmDto> request) {
+		return externalCatlogService.saveCatpabilities(request);
+	}
+
+	@PostMapping("/getInternalSpecOnCapability")
+	public List<String> getInternalSpecOnCapability(@RequestBody CapabilityRequestDto dto) {
+		return externalCatlogService.getInternalSpecOnCapability(dto.getCatalogid());
+	}
+
+	@GetMapping("/allCatalogIds")
+	public List<CatalogMasterDto> allCatalogIds() {
+		return externalCatlogService.allCatlogIds();
+	}
+}

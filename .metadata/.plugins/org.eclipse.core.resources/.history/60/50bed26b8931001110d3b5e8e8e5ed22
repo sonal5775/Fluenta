@@ -1,0 +1,320 @@
+package com.hindindustec.fluenta.hsm.masters.repository;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Repository;
+
+import com.hindindustec.fluenta.hsm.masters.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.masters.dto.DelayAgencyDto;
+import com.hindindustec.fluenta.hsm.masters.dto.DelayAgencyTypeDto;
+import com.hindindustec.fluenta.hsm.masters.dto.DelayAreaDto;
+import com.hindindustec.fluenta.hsm.masters.dto.DelayAreaTypeDto;
+import com.hindindustec.fluenta.hsm.masters.dto.DelayDto;
+import com.hindindustec.fluenta.hsm.masters.dto.DelayEquipmentDto;
+import com.hindindustec.fluenta.hsm.masters.dto.DelayEquipmentTypeDto;
+import com.hindindustec.fluenta.hsm.masters.dto.DelayNameDto;
+import com.hindindustec.fluenta.hsm.masters.dto.DelayTypeDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ERProdDto;
+import com.hindindustec.fluenta.hsm.masters.dto.EquipResDto;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+
+@Repository
+public class DelayMasterRepository {
+
+	private static final Logger logger = LoggerFactory.getLogger(DelayMasterRepository.class);
+
+
+    private EntityManager entityManager;
+
+    public DelayMasterRepository(EntityManager entityManager) {
+               this.entityManager = entityManager;
+    }
+
+    public List<DelayDto> fetchDelayCat() {
+        logger.info("DelayMasterRepository: Fetching all Delay data");
+        StringBuilder queryString = new StringBuilder();
+        
+        queryString.append("SELECT new ").append(DelayDto.class.getName()).append("(")
+            .append("dcc.dcatId, ")
+            .append("dcc.catCtr, ")
+            .append("dcc.catDesc, ")
+            .append("dcc.catNm, ")
+            .append("dcc.crBy, ")
+            .append("dcc.crDt, ")
+            .append("dcc.crMacAddr, ")
+            .append("dcc.isActv, ")
+            .append("dcc.isPm, ")
+            .append("dcc.moBy, ")
+            .append("dcc.moDt, ")
+            .append("dcc.moMacAddr, ")
+            .append("dcc.reserve2, ")
+            .append("dcc.reserve3, ")
+            .append("dcc.reserve4, ")
+            .append("dcc.reserve5, ")
+            .append("dcc.stId ")
+            .append(") ")
+            .append("FROM DelaycatCm dcc ")
+            .append("ORDER BY dcc.crDt");
+
+        TypedQuery<DelayDto> q = entityManager.createQuery(queryString.toString(), DelayDto.class);
+        logger.info("Number of results fetchAllDelay: {}", q.getResultList().size());
+        return q.getResultList();
+    }
+    
+    public List<DelayNameDto> fetchDelayNames() {
+    	logger.info("DelayMasterRepository: Fetching all Delay names data");
+        
+    	StringBuilder queryBuilder = new StringBuilder();
+    	queryBuilder.append("SELECT new ").append(DelayNameDto.class.getName()).append("(")
+    	    .append("type.delayTypeName, ")
+    	    .append("type.createdBy, ")
+    	    .append("type.createdDate, ")
+    	    .append("type.createdMacAddress, ")
+    	    .append("type.delayDescription, ")
+    	    .append("type.isActive, ")
+    	    .append("type.modifiedBy, ")
+    	    .append("type.modifiedDate, ")
+    	    .append("type.modifiedMacAddress ")
+    	    .append(") ")
+    	    .append("FROM DelaynmCm type ")
+    	    .append("ORDER BY type.createdDate");
+
+    	TypedQuery<DelayNameDto> q = entityManager.createQuery(queryBuilder.toString(), DelayNameDto.class);
+    	return q.getResultList();
+
+	}
+
+    public List<DelayTypeDto> fetchDelayTypeData() {
+        logger.info("DelayMasterRepository: Fetching all Delay Type data:");
+        
+        StringBuilder queryBuilder = new StringBuilder();
+        queryBuilder.append("SELECT new ").append(DelayTypeDto.class.getName()).append("(")
+            .append("dtc.id.artyId, ")
+            .append("dtc.id.dcatId, ")
+            .append("dtc.id.delayTyNm, ")
+            .append("dtc.crBy, ")
+            .append("dtc.crDt, ")
+            .append("dtc.crMacAddr, ")
+            .append("dtc.delayTyCtr, ")
+            .append("dtc.delayTyDesc, ")
+            .append("dtc.isActv, ")
+            .append("dtc.mapSts, ")
+            .append("dtc.moBy, ")
+            .append("dtc.moDt, ")
+            .append("dtc.moMacAddr ")
+            .append(") ")
+            .append("FROM DelaytyCm dtc ")
+            .append("ORDER BY dtc.crDt");
+
+        TypedQuery<DelayTypeDto> q = entityManager.createQuery(queryBuilder.toString(), DelayTypeDto.class);
+        logger.info("Number of results in DelayTypeDto: {}", q.getResultList().size());
+        return q.getResultList();
+    }
+
+    public List<EquipResDto> fetchAllEquipRes(ERProdDto erpdto) {
+        logger.info("DelayMasterRepository: Fetching all Equip Res data: {}", erpdto);
+        TypedQuery<EquipResDto> q = entityManager.createQuery(OfsConstants.EQUIP_RES_DTO+"("
+            + "erc.eqreid,"
+            + "erc.eqrenm,"
+            + "erc.eqredesc,"
+            + "erc.delaytyid,"
+            + "erc.plid,"
+            + "erc.isactv,"
+            + "erc.crDt,"
+            + "erc.crBy,"
+            + "erc.crMacAddr"
+            + ") FROM EqredtlCm erc WHERE erc.plid = :plid AND erc.delaytyid = :delaytyid ORDER BY erc.crDt",
+            EquipResDto.class
+        );
+        q.setParameter("plid", erpdto.getPlid());
+        q.setParameter("delaytyid", erpdto.getDelaytyid());
+        logger.info("Number of results fetchAllDelayType in EquipResDto: {}", q.getResultList().size());
+        return q.getResultList();
+    }
+
+    public List<String> fetchAllProdline() {
+        logger.info("Fetching all Prodline data");
+        TypedQuery<String> q = entityManager.createQuery("Select distinct pc.plid FROM PlCm pc",
+            String.class
+        );
+        logger.info("Number of results fetchAllProdline: {}", q.getResultList().size());
+        return q.getResultList();
+    }
+    
+    public List<String> fetchAllArId() {
+		logger.info("Fetching all Arid data");
+        TypedQuery<String> q = entityManager.createQuery("Select distinct ar.arid FROM ArCs ar",
+            String.class
+        );
+        logger.info("Number of results fetchAllArId: {}", q.getResultList().size());
+        return q.getResultList();
+	}
+    
+    public List<String> fetchAllDelayArId() {
+    	logger.info("Fetching all Delay ArId data");
+        TypedQuery<String> q = entityManager.createQuery("Select distinct ar.delayAreaId FROM DelayareaCm ar where ar.isActive = 1 ",
+            String.class
+        );
+        logger.info("Number of results fetchAllDelayArId: {}", q.getResultList().size());
+        return q.getResultList();
+	}
+
+	public List<DelayAreaDto> fetchDelayArea() {
+		 logger.info("DelayMasterRepository: Fetching all Delay Area data:");
+	        
+		 StringBuilder queryBuilder = new StringBuilder();
+		 queryBuilder.append("SELECT new ").append(DelayAreaDto.class.getName()).append("(")
+		     .append("ar.delayAreaId, ")
+		     .append("ar.areaCtr, ")
+		     .append("ar.createdBy, ")
+		     .append("ar.createdDate, ")
+		     .append("ar.createdMacAddress, ")
+		     .append("ar.delayAreaTypeId, ")
+		     .append("ar.isActive, ")
+		     .append("ar.modifiedBy, ")
+		     .append("ar.modifiedDate, ")
+		     .append("ar.modifiedMacAddress, ")
+		     .append("ar.plId ")
+		     .append(") ")
+		     .append("FROM DelayareaCm ar ")
+		     .append("ORDER BY ar.createdDate");
+
+		 TypedQuery<DelayAreaDto> q = entityManager.createQuery(queryBuilder.toString(), DelayAreaDto.class);
+		 logger.info("Number of results in DelayAreaDto: {}", q.getResultList().size());
+		 return q.getResultList();
+
+	}
+
+	public List<DelayAreaTypeDto> fetchDelayAreaType() {
+		logger.info("DelayMasterRepository: Fetching all Delay Area Type data:");
+        
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT new ").append(DelayAreaTypeDto.class.getName()).append("(")
+		    .append("arTy.delayAreaTypeId, ")
+		    .append("arTy.areaTypeDescription, ")
+		    .append("arTy.areaTypeName, ")
+		    .append("arTy.createdBy, ")
+		    .append("arTy.createdDate, ")
+		    .append("arTy.createdMacAddress, ")
+		    .append("arTy.isActive, ")
+		    .append("arTy.modifiedBy, ")
+		    .append("arTy.modifiedDate, ")
+		    .append("arTy.modifiedMacAddress ")
+		    .append(") ")
+		    .append("FROM DelayareatyCm arTy ")
+		    .append("ORDER BY arTy.createdDate");
+
+		TypedQuery<DelayAreaTypeDto> q = entityManager.createQuery(queryBuilder.toString(), DelayAreaTypeDto.class);
+		logger.info("Number of results in DelayAreaTypeDto: {}", q.getResultList().size());
+		return q.getResultList();
+
+
+	}
+
+	public List<DelayAgencyDto> fetchDelayAgency() {
+		logger.info("DelayMasterRepository: Fetching all Delay Agency data:");
+        
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT new ").append(DelayAgencyDto.class.getName()).append("(")
+		    .append("agency.agencyId, ")
+		    .append("agency.agencyDescription, ")
+		    .append("agency.agencyName, ")
+		    .append("agency.createdBy, ")
+		    .append("agency.createdDate, ")
+		    .append("agency.createdMacAddress, ")
+		    .append("agency.isActive, ")
+		    .append("agency.modifiedBy, ")
+		    .append("agency.modifiedDate, ")
+		    .append("agency.modifiedMacAddress")
+		    .append(") ")
+		    .append("FROM DelayagcyCm agency ")
+		    .append("ORDER BY agency.createdDate");
+
+		TypedQuery<DelayAgencyDto> q = entityManager.createQuery(queryBuilder.toString(), DelayAgencyDto.class);
+		logger.info("Number of results in DelayAgencyDto: {}", q.getResultList().size());
+		return q.getResultList();
+
+	}
+
+	public List<DelayAgencyTypeDto> fetchDelayAgencyType() {
+       logger.info("DelayMasterRepository: Fetching all Delay Agency Type data:");
+        
+       StringBuilder queryBuilder = new StringBuilder();
+       queryBuilder.append("SELECT new ").append(DelayAgencyTypeDto.class.getName()).append("(")
+           .append("agTy.id.arId, ")
+           .append("agTy.id.agcyId, ")
+           .append("agTy.createdBy, ")
+           .append("agTy.createdDate, ")
+           .append("agTy.createdMacAddress, ")
+           .append("agTy.isActive, ")
+           .append("agTy.modifiedBy, ")
+           .append("agTy.modifiedDate, ")
+           .append("agTy.modifiedMacAddress ")
+           .append(") ")
+           .append("FROM AgcyareamapCm agTy ")
+           .append("ORDER BY agTy.createdDate");
+
+       TypedQuery<DelayAgencyTypeDto> q = entityManager.createQuery(queryBuilder.toString(), DelayAgencyTypeDto.class);
+       logger.info("Number of results in DelayAgencyTypeDto: {}", q.getResultList().size());
+       return q.getResultList();
+
+	}
+
+	public List<DelayEquipmentDto> fetchDelayEquipment() {
+		 logger.info("DelayMasterRepository: Fetching all Delay Equipment data:");
+	        
+		 StringBuilder queryBuilder = new StringBuilder();
+		 queryBuilder.append("SELECT new ").append(DelayEquipmentDto.class.getName()).append("(")
+		     .append("eqi.eqtyId, ")
+		     .append("eqi.createdBy, ")
+		     .append("eqi.createdDate, ")
+		     .append("eqi.createdMacAddress, ")
+		     .append("eqi.equipmentDescription, ")
+		     .append("eqi.equipmentName, ")
+		     .append("eqi.isActive, ")
+		     .append("eqi.modifiedBy, ")
+		     .append("eqi.modifiedDate, ")
+		     .append("eqi.modifiedMacAddress")
+		     .append(") ")
+		     .append("FROM DelayeqtyCm eqi ")
+		     .append("ORDER BY eqi.createdDate");
+
+		 TypedQuery<DelayEquipmentDto> q = entityManager.createQuery(queryBuilder.toString(), DelayEquipmentDto.class);
+		 logger.info("Number of results in DelayEquipmentDto: {}", q.getResultList().size());
+		 return q.getResultList();
+
+	}
+
+	public List<DelayEquipmentTypeDto> fetchDelayEquipmentType() {
+		 logger.info("DelayMasterRepository: Fetching all Delay Equipment Type data:");
+	        
+		 StringBuilder queryBuilder = new StringBuilder();
+		 queryBuilder.append("SELECT new ").append(DelayEquipmentTypeDto.class.getName()).append("(")
+		     .append("eqTy.eqId, ")
+		     .append("eqTy.crBy, ")
+		     .append("eqTy.crDt, ")
+		     .append("eqTy.crMacAddr, ")
+		     .append("eqTy.delayAreaId, ")
+		     .append("eqTy.eqCtr, ")
+		     .append("eqTy.eqTyId, ")
+		     .append("eqTy.isActv, ")
+		     .append("eqTy.mapSts, ")
+		     .append("eqTy.moBy, ")
+		     .append("eqTy.moDt, ")
+		     .append("eqTy.moMacAddr ")
+		     .append(") ")
+		     .append("FROM EqareamapCm eqTy ")
+		     .append("ORDER BY eqTy.crDt");
+
+		 TypedQuery<DelayEquipmentTypeDto> q = entityManager.createQuery(queryBuilder.toString(), DelayEquipmentTypeDto.class);
+		 logger.info("Number of results in DelayEquipmentTypeDto: {}", q.getResultList().size());
+		 return q.getResultList();
+
+	}
+
+
+}

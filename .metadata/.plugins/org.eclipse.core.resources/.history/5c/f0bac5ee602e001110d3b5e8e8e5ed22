@@ -1,0 +1,1185 @@
+package com.hindindustec.fluenta.hsm.quality.service.impl;
+
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.quality.client.SapServiceClient;
+import com.hindindustec.fluenta.hsm.quality.common.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.quality.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.quality.common.DevExtGridFilterUtils;
+import com.hindindustec.fluenta.hsm.quality.common.JsonUtil;
+import com.hindindustec.fluenta.hsm.quality.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.quality.common.exception.CustomException;
+import com.hindindustec.fluenta.hsm.quality.common.exception.TransactionException;
+import com.hindindustec.fluenta.hsm.quality.common.response.FluentaApiResponse;
+import com.hindindustec.fluenta.hsm.quality.common.response.FluentaPaginatedResponse;
+import com.hindindustec.fluenta.hsm.quality.common.response.Group;
+import com.hindindustec.fluenta.hsm.quality.common.response.GroupedDataResponse;
+import com.hindindustec.fluenta.hsm.quality.common.response.ResponseUtil;
+import com.hindindustec.fluenta.hsm.quality.constants.QualityConstants;
+import com.hindindustec.fluenta.hsm.quality.dto.CoilClearanceListDto;
+import com.hindindustec.fluenta.hsm.quality.dto.CoilClearanceRequestDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HsmQualityUDDecisionDto;
+import com.hindindustec.fluenta.hsm.quality.dto.JsonFormatUDSapDto;
+import com.hindindustec.fluenta.hsm.quality.model.Inventory;
+import com.hindindustec.fluenta.hsm.quality.model.PostProdTaskMtEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PostProdTaskMtPKEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PpInspCharEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PpInspCharEntityPK;
+import com.hindindustec.fluenta.hsm.quality.model.TdcJmEntity;
+import com.hindindustec.fluenta.hsm.quality.repository.CoilClearanceCustRepo;
+import com.hindindustec.fluenta.hsm.quality.repository.PostProdTaskMtRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PpInspCharRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PphMtRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PpqcmassbalQtRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.QualityScheduleLineItemRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.TdcJmRepository;
+import com.hindindustec.fluenta.hsm.quality.service.CoilClearanceService;
+import com.hindindustec.fluenta.hsm.quality.service.SapInterface;
+
+@Service
+public class CoilClearanceServiceImpl implements CoilClearanceService {
+
+    private static final Logger logger = LoggerFactory.getLogger(CoilClearanceServiceImpl.class);
+
+    private static final String ENDSWITH = "endswith";
+    private static final String STARTSWITH = "startswith";
+    private static final String NOTCONTAINS = "notcontains";
+    private static final String CONTAINS = "contains";
+    private static final String NOT_LIKE = " NOT LIKE ";
+    private static final String LIKE = " LIKE ";
+    private static final String ORDER_BY = " ORDER BY ";
+    private static final String HSMQC = "HSMQC";
+
+    private CoilClearanceCustRepo custRepo;
+    private PostProdTaskMtRepository masterRepo;
+    private PphMtRepository pphMtRepository;
+    private DBSessionService dbSessionService;
+    private SapServiceClient sapServiceClient;
+    private SapInterface sapInterface;
+    private PpqcmassbalQtRepository ppqcmassbalQtRepository;
+    private PpInspCharRepository ppInspCharRepository;
+    private QualityScheduleLineItemRepository qualityScheduleLineItemRepository;
+    private TdcJmRepository tdcJmRepository;
+    public CoilClearanceServiceImpl(CoilClearanceCustRepo custRepo, PostProdTaskMtRepository masterRepo,
+                                    PphMtRepository pphMtRepository, DBSessionService dbSessionService, SapServiceClient sapServiceClient,
+                                    SapInterface sapInterface,PpqcmassbalQtRepository ppqcmassbalQtRepository,PpInspCharRepository ppInspCharRepository,
+                                    QualityScheduleLineItemRepository qualityScheduleLineItemRepository, TdcJmRepository tdcJmRepository) {
+        super();
+        this.custRepo = custRepo;
+        this.masterRepo = masterRepo;
+        this.pphMtRepository = pphMtRepository;
+        this.dbSessionService = dbSessionService;
+        this.sapServiceClient = sapServiceClient;
+        this.sapInterface = sapInterface;
+        this.ppqcmassbalQtRepository = ppqcmassbalQtRepository;
+        this.ppInspCharRepository = ppInspCharRepository;
+        this.qualityScheduleLineItemRepository = qualityScheduleLineItemRepository;
+        this.tdcJmRepository = tdcJmRepository;
+    }
+
+    @Override
+    public FluentaPaginatedResponse<CoilClearanceListDto> getCoilClearanceDetails(CoilClearanceRequestDto request,
+                                                                                  int page, int size, String filterPathString, String sort) {
+        List<String> filterList = DevExtGridFilterUtils.extractElements(filterPathString);
+        List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);
+        logger.info("Request Data: {}", request);
+        if (!filterList.isEmpty()) {
+            boolean isNumber = DevExtGridFilterUtils.isNumberOrStringCheck(filterList.get(2));
+
+            if (filterList.contains("or") && !isNumber) {
+                filterList = DevExtGridFilterUtils.removeNumberFieldsFromString(filterList, CoilClearanceListDto.class);
+            }
+
+        }
+
+        String query = custRepo.getAllPaginatedHSMCoilClearanceInString();
+        String countQuery = custRepo.getAllPaginatedHSMCoilClearanceInStringForCount();
+        logger.info("FilterList: {}", filterList);
+        if (!filterList.isEmpty()) {
+
+            String valueForSearch = null;
+            boolean isSalesOrderNo = false;
+            for (String s : filterList) {
+                if (s.equals("soItemNo")) {
+                    int indexOfField = filterList.indexOf("soItemNo");
+                    valueForSearch = filterList.get(indexOfField + 2);
+                    String tempStringValue = null;
+                    if (valueForSearch.contains("-")) {
+                        String[] arr = valueForSearch.split("-");
+                        tempStringValue = arr[0];
+                    } else {
+                        tempStringValue = valueForSearch;
+                    }
+
+                    filterList.set(indexOfField, "soId");
+                    filterList.set(indexOfField + 2, tempStringValue);
+                    isSalesOrderNo = true;
+                }
+            }
+
+            if (isSalesOrderNo) {
+                String tempStringValue = null;
+                if (valueForSearch.contains("-")) {
+                    String[] arr = valueForSearch.split("-");
+                    tempStringValue = arr[1];
+                } else {
+                    tempStringValue = valueForSearch;
+                }
+                filterList.add(" or ");
+                filterList.add(QualityConstants.SOLID);
+                filterList.add("=");
+                if (isNumber(tempStringValue)) {
+                    filterList.add(tempStringValue);
+                } else {
+                    filterList.add("0");
+                }
+
+            }
+
+            query = filterQueryUsingFilterList(filterList, query);
+            countQuery = filterQueryUsingFilterList(filterList, countQuery);
+
+        }
+
+        Map<String, String> columnAlise = checkClassAleasWithNoStop();
+
+        if (!sortList.isEmpty()) {
+            if (sortList.get(3).equals("true")) {
+                query = query + ORDER_BY + columnAlise.get(sortList.get(1)) + QualityConstants.DESC;
+            } else {
+                query = query + ORDER_BY + columnAlise.get(sortList.get(1));
+            }
+        }
+
+        Page<CoilClearanceListDto> response = custRepo.getCoilClearanceDetails(request, page, size, query, countQuery);
+        logger.info("response: {}", response);
+        FluentaPaginatedResponse<CoilClearanceListDto> paginatedResponse = new FluentaPaginatedResponse<CoilClearanceListDto>(
+                response.getContent(), response.getTotalElements(), response.getTotalPages());
+        return paginatedResponse;
+    }
+
+    /**
+     * @param request
+     */
+    @Override
+    @Transactional(rollbackFor = TransactionException.class)
+    public void updateCoilRecords(CoilClearanceRequestDto request) throws CustomException {
+        logger.info("request data: {}", request);
+        dbSessionService.setSessionInfo(this.getClass().getName());
+
+        for (CoilClearanceListDto record : request.getTData()) {
+            Optional<Inventory> pphmtOpt = pphMtRepository.findByPpId(record.getPpid().trim());
+            if (pphmtOpt.isPresent()) {
+                Inventory pphmtRecord = pphmtOpt.get();
+
+                String coilDecision = (record.getManualDecision() != null && !record.getManualDecision().isEmpty())
+                        ? record.getManualDecision().trim()
+                        : request.getUserDefinedStatus().trim();
+                if (coilDecision != null) {
+					coilDecision = coilDecision.split("-")[0].trim();
+				}
+				logger.info("coilDecision update coil Data: {}", coilDecision);
+                switch (coilDecision) {
+                    case "FGP1", "HCRM", "HCTL", "HRSP", "HSLT" -> {
+                        pphmtRecord.setModifiedDate(new Date());
+                        pphmtRecord.setModifiedBy(record.getDecisionBy());
+                        pphmtRecord.setUserDefinedStatus(coilDecision);
+                        pphmtRecord.setProductionPlanStatus(QualityConstants.COIL_CLEARANCE_READY_TO_DISPATCH);
+                    }
+
+                    case "FGP2", "FGP3", "AUS1" -> {
+                        pphmtRecord.setModifiedDate(new Date());
+                        pphmtRecord.setPurchaseOrderId(BigDecimal.valueOf(100));
+                        pphmtRecord.setPopReactor(BigDecimal.valueOf(10));
+                        pphmtRecord.setModifiedBy(record.getDecisionBy());
+                        pphmtRecord.setUserDefinedStatus(coilDecision);
+                        pphmtRecord.setProductionPlanStatus(QualityConstants.COIL_CLEARANCE_FREE_STOCK);
+                    }
+
+                    case "HCSL", "HLD", "TPIP" -> {
+                        pphmtRecord.setModifiedDate(new Date());
+                        pphmtRecord.setModifiedBy(record.getDecisionBy());
+                        pphmtRecord.setUserDefinedStatus(coilDecision);
+                        pphmtRecord.setProductionPlanStatus(QualityConstants.COIL_CLEARANCE_HOLD);
+                    }
+
+                    default -> throw new CustomException(QualityConstants.UNSUPPORTEDCOILDECISION + coilDecision);
+                }
+                logger.info("pphmtRecord: {}", pphmtRecord);
+                pphMtRepository.save(pphmtRecord);
+                processPostProduction(record, coilDecision, request);
+            }
+        }
+    }
+
+    private void processPostProduction(CoilClearanceListDto record, String coilDecision,
+                                       CoilClearanceRequestDto request) throws CustomException {
+        PostProdTaskMtEntity ppPostProdTasksEntity = masterRepo.getTasksByPpidAndPrid(record.getPpid(), HSMQC,QualityConstants.INSP_FLAG_YES)
+                .orElseThrow(() -> new CustomException(QualityConstants.NORECORDFOUNDFORCOILID + record.getPpid()));
+
+        logger.info("record: {}", record);
+        switch (coilDecision) {
+            case "FGP1", "FGP3", "HCRM", "HCTL", "HRSP", "HSLT", "AUS1" -> {
+                ppPostProdTasksEntity.setTaskStatus(QualityConstants.STATUS_COMPLETE);
+                ppPostProdTasksEntity.setDecisionDate(new Date());
+                ppPostProdTasksEntity.setDecisionBy(record.getDecisionBy());
+                ppPostProdTasksEntity.setReleaseRemark(record.getQaRemark());
+                ppPostProdTasksEntity.setDivertReason(record.getSelectedReason());
+                ppPostProdTasksEntity.setManualDecision(coilDecision);
+            }
+
+            case "FGP2", "TPIP" -> {
+                ppPostProdTasksEntity.setDecisionDate(new Date());
+                ppPostProdTasksEntity.setDecisionBy(record.getDecisionBy());
+                ppPostProdTasksEntity.setReleaseRemark(record.getQaRemark());
+                ppPostProdTasksEntity.setManualDecision(coilDecision);
+                ppPostProdTasksEntity.setDivertReason(record.getSelectedReason());
+            }
+            case "HCSL" -> {
+                ppPostProdTasksEntity.setDecisionDate(new Date());
+                ppPostProdTasksEntity.setDecisionBy(record.getDecisionBy());
+                ppPostProdTasksEntity.setReleaseRemark(record.getQaRemark());
+                ppPostProdTasksEntity.setManualDecision(coilDecision);
+                Optional<PostProdTaskMtEntity> taskOptional = masterRepo.getTasksByPpidAndPrid(record.getPpid(),
+                        QualityConstants.HSM_INSP,QualityConstants.INSP_FLAG_YES);
+                if (taskOptional.isPresent()) {
+                    PostProdTaskMtEntity tasksEntity = taskOptional.get();
+                    tasksEntity.setTaskStatus(QualityConstants.PENDING);
+                    tasksEntity.setCutType(QualityConstants.CUT_TYPE_SALVAGE);
+                    tasksEntity.setCutFlag(QualityConstants.INSP_FLAG_YES);
+                    masterRepo.save(tasksEntity);
+                }
+                Optional<PostProdTaskMtEntity> newTaskOptional = masterRepo.getTasksByPpidAndPrid(record.getPpid(),
+                        QualityConstants.REWORK,QualityConstants.INSP_FLAG_YES);
+                if (newTaskOptional.isEmpty()) {
+                    PostProdTaskMtEntity tasksEntity = new PostProdTaskMtEntity();
+                    PostProdTaskMtPKEntity taskMtPKEntity = new PostProdTaskMtPKEntity();
+                    Long latestTaskStepIdByCoilId = masterRepo.findHighestTaskStepIdByCoilId(record.getPpid());
+                    latestTaskStepIdByCoilId = latestTaskStepIdByCoilId + 10;
+                    taskMtPKEntity.setTaskstepId(latestTaskStepIdByCoilId);
+                    taskMtPKEntity.setPpId(record.getPpid());
+                    taskMtPKEntity.setPpCtr(0);
+                    tasksEntity.setId(taskMtPKEntity);
+                    tasksEntity.setTpiRequired(QualityConstants.REWORK);
+                    tasksEntity.setTaskSource(QualityConstants.TASK_SOURCE_QUALITY);
+                    tasksEntity.setIsActive(BigDecimal.ONE);
+                    tasksEntity.setCreatedBy(ClientIpUtils.getClient());
+                    tasksEntity.setCreatedDate(new Date());
+                    tasksEntity.setCreatedMacAddress(ClientIpUtils.getClientIpAddress());
+                    tasksEntity.setTaskStatus(QualityConstants.STATUS_PENDING);
+                    tasksEntity.setLatestFlag(QualityConstants.INSP_FLAG_YES);
+                    masterRepo.save(tasksEntity);
+                } else {
+                    PostProdTaskMtEntity postProdTaskMtEntity = newTaskOptional.get();
+                    postProdTaskMtEntity.setLatestFlag(QualityConstants.INSP_FLAG_NO);
+                    masterRepo.save(postProdTaskMtEntity);
+                    PostProdTaskMtEntity tasksEntity = new PostProdTaskMtEntity();
+                    PostProdTaskMtPKEntity taskMtPKEntity = new PostProdTaskMtPKEntity();
+                    Long latestTaskStepIdByCoilId = masterRepo.findHighestTaskStepIdByCoilId(record.getPpid());
+                    latestTaskStepIdByCoilId = latestTaskStepIdByCoilId + 10;
+                    taskMtPKEntity.setTaskstepId(latestTaskStepIdByCoilId);
+                    taskMtPKEntity.setPpId(record.getPpid());
+                    taskMtPKEntity.setPpCtr(0);
+                    tasksEntity.setId(taskMtPKEntity);
+                    tasksEntity.setTpiRequired(QualityConstants.REWORK);
+                    tasksEntity.setTaskSource(QualityConstants.TASK_SOURCE_QUALITY);
+                    tasksEntity.setIsActive(BigDecimal.ONE);
+                    tasksEntity.setCreatedBy(ClientIpUtils.getClient());
+                    tasksEntity.setCreatedDate(new Date());
+                    tasksEntity.setCreatedMacAddress(ClientIpUtils.getClientIpAddress());
+                    tasksEntity.setTaskStatus(QualityConstants.STATUS_PENDING);
+                    tasksEntity.setLatestFlag(QualityConstants.INSP_FLAG_YES);
+                    masterRepo.save(tasksEntity);
+                }
+            }
+
+            case "HLD" -> {
+                Optional<PostProdTaskMtEntity> taskOptional = masterRepo.getTasksByPpidAndPrid(record.getPpid(),
+                        QualityConstants.HSM_INSP,QualityConstants.INSP_FLAG_YES);
+                if (taskOptional.isPresent()) {
+                    PostProdTaskMtEntity tasksEntity = taskOptional.get();
+                    tasksEntity.setTaskStatus(QualityConstants.PENDING);
+                    masterRepo.save(tasksEntity);
+                }
+
+                ppPostProdTasksEntity.setDecisionDate(new Date());
+                ppPostProdTasksEntity.setDecisionBy(record.getDecisionBy());
+                ppPostProdTasksEntity.setManualDecision(coilDecision);
+                ppPostProdTasksEntity.setHoldRemark(record.getQaRemark());
+                ppPostProdTasksEntity.setHoldReason(record.getSelectedReason());
+            }
+
+            default -> throw new CustomException(QualityConstants.UNSUPPORTEDCOILDECISION + coilDecision);
+        }
+
+        masterRepo.save(ppPostProdTasksEntity);
+ 
+    }
+
+    private void updatePpInspChars(String ppid, Long latestTaskStepId) {
+        PostProdTaskMtEntity activeByCoilIdAndPrid = masterRepo.findActiveByCoilIdAndPrid(ppid, "REWORK", "PENDING", QualityConstants.CUT_TYPE_SALVAGE);
+        if (activeByCoilIdAndPrid == null) return;
+        Long previousTaskStepId = masterRepo.findPreviousTaskStepId(ppid, "REWORK", "COMPLETE", activeByCoilIdAndPrid.getId().getTaskstepId());
+        if (previousTaskStepId == null) return;
+        List<PpInspCharEntity> byPpId = ppInspCharRepository.findByPpId(ppid, previousTaskStepId);
+        List<PpInspCharEntity> records = byPpId.stream().map(orig -> {
+            PpInspCharEntity newEntity = new PpInspCharEntity();
+
+            // create a new record with the new taskStepId.
+            PpInspCharEntityPK newId = new PpInspCharEntityPK();
+            newId.setPpid(ppid);
+            newId.setTaskstepid(latestTaskStepId);
+            newId.setPpctr(orig.getId().getPpctr());
+            newId.setAtrid(orig.getId().getAtrid());
+            newEntity.setId(newId);
+
+            // set other fields
+            newEntity.setCrBy(ClientIpUtils.getClient());
+            newEntity.setCrDt(new Date());
+            newEntity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+            newEntity.setIsactv(BigDecimal.ONE);
+            newEntity.setNumval(orig.getNumval());
+            newEntity.setStrval(orig.getStrval());
+            newEntity.setInsprslt(orig.getInsprslt());
+            return newEntity;
+        }).collect(Collectors.toList());
+        ppInspCharRepository.saveAll(records);
+    }
+
+    public String filterQueryUsingFilterList(List<String> filterList, String query) {
+        query = query + " AND (";
+
+        List<String> columnNames = DevExtGridFilterUtils.getAllFields(CoilClearanceListDto.class);
+
+        Map<String, String> columnDataTypesKeyValuePair = DevExtGridFilterUtils
+                .getAllFieldsWithTypes(CoilClearanceListDto.class);
+        Map<String, String> columnAlise = checkClassAleas();
+        boolean isClobObject = false;
+        boolean isStringObject = false;
+        boolean isDateObject = false;
+        boolean isContains = false;
+        boolean isNotContains = false;
+        boolean isStartWith = false;
+        boolean isEndWith = false;
+        for (int i = 0; i < filterList.size(); i++) {
+            String item = filterList.get(i);
+            if (columnNames.contains(item)) {
+                if (columnDataTypesKeyValuePair.get(item).equals("CLOB")) {
+                    query = query + "DBMS_LOB.INSTR(" + columnAlise.get(item) + ",";
+                    isClobObject = true;
+                } else if (columnDataTypesKeyValuePair.get(item).equals("DATE")) {
+                    query = query + " TO_CHAR(" + columnAlise.get(item) + ", 'YYYY-MM-DD')";
+                    isDateObject = true;
+                } else if (columnDataTypesKeyValuePair.get(item).equals("VARCHAR2")) {
+                    if (item.equals("concatSoItem")) {
+                        query = query + " (CONCAT(qcschdl.soId, '-', qcschdl.solId) ";
+                    } else {
+                        query = query + "(UPPER(TRIM(" + columnAlise.get(item) + "" + "))";
+                    }
+                    isStringObject = true;
+                } else {
+
+                    query = query + columnAlise.get(item);
+
+                }
+            } else if (item.equals(CONTAINS) || item.equals(NOTCONTAINS) || item.equals(STARTSWITH)
+                    || item.equals(ENDSWITH)) {
+                if (isClobObject) {
+
+                } else if (isDateObject) {
+
+                    query = query + LIKE;
+
+                } else {
+                    if (item.equals(CONTAINS)) {
+                        query = query + LIKE;
+                        isContains = true;
+                    } else if (item.equals(NOTCONTAINS)) {
+                        query = query + NOT_LIKE;
+                        isNotContains = true;
+
+                    } else if (item.equals(STARTSWITH)) {
+                        query = query + LIKE;
+                        isStartWith = true;
+                    } else if (item.equals(ENDSWITH)) {
+                        query = query + LIKE;
+                        isEndWith = true;
+                    } else {
+                        query = query + " = ";
+                    }
+
+                }
+
+            } else if (item.equals("or") || item.equals("and")) {
+                query = query + " " + item + " ";
+            } else if (item.equals("=")) {
+                query = query + " " + item;
+
+            } else if (item.equals("<>")) {
+                query = query + " " + item;
+            } else if (item.equals(">=")) {
+                query = query + " " + item;
+            } else if (item.equals("<")) {
+                query = query + " " + item;
+            } else if (item.equals(">")) {
+                query = query + " " + item;
+            } else {
+                if (isClobObject) {
+                    query = query + "'" + item + "') > 0";
+                    isClobObject = false;
+                } else if (isStringObject) {
+                    if (isContains) {
+                        query = query + QualityConstants.UPPERTRIM + item + "%'" + ")))";
+                        isContains = false;
+                    } else if (isNotContains) {
+                        query = query + QualityConstants.UPPERTRIM + item + "%')))";
+                        isNotContains = false;
+
+                    } else if (isStartWith) {
+                        query = query + " UPPER(TRIM('" + item + "%')))";
+                        isStartWith = false;
+                    } else if (isEndWith) {
+                        query = query + QualityConstants.UPPERTRIM + item + "')))";
+                        isEndWith = false;
+                    } else {
+                        query = query + " UPPER(TRIM('" + item + "')))";
+                    }
+                    isStringObject = false;
+                } else if (isDateObject) {
+                    DateTimeFormatter formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+                    OffsetDateTime dateTime = OffsetDateTime.parse(item, formatter);
+                    String dateOnly = dateTime.toLocalDate().toString();
+                    query = query + " '" + dateOnly + "'";
+                    isDateObject = false;
+                } else {
+                    query = query + " " + item + "";
+                }
+
+            }
+        }
+        query = query + ")";
+
+        return query;
+    }
+
+    public Map<String, String> checkClassAleas() {
+        Map<String, String> fieldTypes = new HashMap<>();
+        fieldTypes.put("schdId", "qcschdl.id.schdId");
+        fieldTypes.put("ppid", "pppost.id.ppId");
+        fieldTypes.put("thickness", "inventory.thickness");
+        fieldTypes.put("width", "inventory.width");
+        fieldTypes.put("weight", "inventory.weight");
+        fieldTypes.put("parentPpId", "qcschdl.parentPpId");
+        fieldTypes.put("heatId", "qcschdl.heatId");
+        fieldTypes.put("extGrdNm", "qcschdl.extGrdNm");
+        fieldTypes.put("grdId", "qcschdl.grdId");
+        fieldTypes.put("custNm", "qcschdl.custNm");
+        fieldTypes.put("tdcId", "qcschdl.tdcId");
+        fieldTypes.put("crDt", "qcschdl.crDt");
+        fieldTypes.put("manualDecision", "inventory.userDefinedStatus");
+        fieldTypes.put("modifiedBy", "inventory.modifiedBy");
+        fieldTypes.put("productionPlanStatus", "inventory.productionPlanStatus");
+        fieldTypes.put("decisionBy", "pppost.decisionBy");
+        fieldTypes.put("qaRemark",
+                " (CASE WHEN pppost.manualDecision = 'HLD' THEN pppost.holdRemark ELSE pppost.releaseRemark END) ");
+        fieldTypes.put("soId", "qcschdl.soId");
+        fieldTypes.put(QualityConstants.SOLID, "qcschdl.solId");
+        fieldTypes.put("decisionDate", "pppost.decisionDate");
+        fieldTypes.put("labFinalResult", "lab.finalResult");
+        fieldTypes.put("onlineInspFinalResult", "onlineInsp.finalResult");
+        fieldTypes.put("processInspFinalResult", "processInsp.finalResult");
+        fieldTypes.put("tpi", "tpiInsp.finalResult");
+        fieldTypes.put("tpiReq", " (CASE WHEN tpi.id.ppId IS NOT NULL THEN 'YES' ELSE 'NO' END) ");
+        return fieldTypes;
+    }
+
+    public Map<String, String> checkClassAleasWithNoStop() {
+        Map<String, String> fieldTypes = new HashMap<>();
+        fieldTypes.put("schdId", "qcschdl.id.schdId");
+        fieldTypes.put("ppid", "pppost.id.ppId");
+        fieldTypes.put("thickness", "inventory.thickness");
+        fieldTypes.put("width", "inventory.width");
+        fieldTypes.put("weight", "inventory.weight");
+        fieldTypes.put("parentPpId", "qcschdl.parentPpId");
+        fieldTypes.put("heatId", "qcschdl.heatId");
+        fieldTypes.put("extGrdNm", "qcschdl.extGrdNm");
+        fieldTypes.put("grdId", "qcschdl.grdId");
+        fieldTypes.put("custNm", "qcschdl.custNm");
+        fieldTypes.put("tdcId", "qcschdl.tdcId");
+        fieldTypes.put("crDt", "qcschdl.crDt");
+        fieldTypes.put("manualDecision", "inventory.userDefinedStatus");
+        fieldTypes.put("modifiedBy", "inventory.modifiedBy");
+        fieldTypes.put("productionPlanStatus", "inventory.productionPlanStatus");
+        fieldTypes.put("decisionBy", "pppost.decisionBy");
+        fieldTypes.put("qaRemark",
+                " (CASE WHEN pppost.manualDecision = 'HLD' THEN pppost.holdRemark ELSE pppost.releaseRemark END) ");
+        fieldTypes.put("soId", "qcschdl.soId");
+        fieldTypes.put(QualityConstants.SOLID, "qcschdl.solId");
+        fieldTypes.put("decisionDate", "pppost.decisionDate");
+        fieldTypes.put("labFinalResult", "lab.finalResult");
+        fieldTypes.put("onlineInspFinalResult", "onlineInsp.finalResult");
+        fieldTypes.put("processInspFinalResult", "processInsp.finalResult");
+        fieldTypes.put("tpi", "tpiInsp.finalResult");
+        fieldTypes.put("tpiReq", " (CASE WHEN tpi.id.ppId IS NOT NULL THEN 'YES' ELSE 'NO' END) ");
+        return fieldTypes;
+    }
+
+    public String processSqlQuery(String sql) {
+        if (sql.trim().endsWith("or")) {
+            sql = sql.substring(0, sql.length() - 2);
+            sql = sql.trim().substring(0, sql.length() - 2).trim();
+        } else if (sql.trim().endsWith(" or")) {
+            sql = sql.substring(0, sql.length() - 2);
+            sql = sql.trim().substring(0, sql.length() - 3).trim();
+        }
+
+        sql = sql.replaceAll("h\\.isactv\\s*=\\s*'Active'", "h.isactv = 1");
+        sql = sql.replaceAll("h\\.isactv\\s*=\\s*'Inactive'", "h.isactv = 0");
+        return sql;
+    }
+
+    public boolean isNumber(String str) {
+        return str.matches("^[+-]?\\d*(\\.\\d+)?([eE][+-]?\\d+)?$");
+    }
+
+    @Override
+    public ResponseEntity<FluentaApiResponse<List<String>>> getHeatId() {
+        List<String> heatId = custRepo.getHeatId();
+        return ResponseUtil.createResponse(heatId, "Fetching Heat Ids", true);
+    }
+    
+    @Override
+	public List<String> getMatchingHeatIds(String query) {
+		Pageable pageable = PageRequest.of(0, 10);
+		return qualityScheduleLineItemRepository.getMatchingHeatIds(pageable,"%"+query+"%");
+	}
+
+    @Override
+    public <T> T getCoilClearanceDetails(CoilClearanceRequestDto request, String status, int pageNumber, int pageSize,
+                                         String filter, String sort, String group, int skip, boolean requireTotalCount, boolean requireGroupCount,
+                                         String searchValue, Integer pageStore, Integer latestGroupCount) {
+        List<String> filterList = DevExtGridFilterUtils.extractElements(filter);
+
+        // new
+        int[] pageSizeArr = processPageAndSize(pageNumber, pageSize, pageStore);
+        pageNumber = pageSizeArr[0];
+        pageSize = pageSizeArr[1];
+
+        List<String> groupList = DevExtGridFilterUtils.getSortListFromString(group);
+
+        List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);
+
+        if (DevExtGridFilterUtils.isGroupWithoutFilterOrSort(group, filter, sort)) {
+            return handleGroupOnly(request, groupList, pageNumber, pageSize, skip, status, pageStore, latestGroupCount);
+        }
+
+        if (DevExtGridFilterUtils.isGroupWithFilterOrSort(group, filter, sort)) {
+            return handleGroupWithFilterOrSort(request, groupList, filterList, sortList, pageNumber, pageSize, skip,
+                    requireTotalCount, status, pageStore, latestGroupCount);
+        }
+
+        if (DevExtGridFilterUtils.isFilterOrSortOnly(group, filter, sort)) {
+            return handleFilterOrSort(request, filterList, sortList, pageNumber, pageSize, skip, requireTotalCount,
+                    status, pageStore, latestGroupCount);
+        }
+        return null;
+    }
+
+    /**
+     * @param request
+     * @return ResponseEntity<FluentaApiResponse < String>>
+     */
+    @Override
+    public ResponseEntity<FluentaApiResponse<String>> fetchSampleIdOfSelectedRow(CoilClearanceListDto request) {
+        String tpiValue = QualityConstants.YES.equals(request.getTpiReq()) ? QualityConstants.HSM_TPI
+                : QualityConstants.HSM_LAB;
+        String mapSampleIdByPpIdAndPrId = masterRepo.findMapSampleIdByPpIdAndPrId(request.getPpid().trim(),
+                tpiValue.trim());
+        return ResponseUtil.createResponse(mapSampleIdByPpIdAndPrId, "Get", false);
+    }
+
+    @Override
+    @Transactional(rollbackFor = TransactionException.class)
+    public void saveCoilRecords(CoilClearanceRequestDto request) {
+        dbSessionService.setSessionInfo(this.getClass().getName());
+
+        for (CoilClearanceListDto record : request.getTData()) {
+            PostProdTaskMtEntity ppPostProdTasksEntity = masterRepo.getTasksByPpidAndPrid(record.getPpid(), HSMQC,QualityConstants.INSP_FLAG_YES)
+                    .orElseThrow(() -> new CustomException(QualityConstants.NORECORDFOUNDFORCOILID + record.getPpid()));
+
+            String coilDecision = (record.getManualDecision() != null && !record.getManualDecision().isEmpty())
+                    ? record.getManualDecision().trim()
+                    : request.getUserDefinedStatus().trim();
+            if (coilDecision != null) {
+				coilDecision = coilDecision.split("-")[0].trim();
+			}
+			logger.info("coilDecision save coil Data: {}", coilDecision);
+            switch (coilDecision) {
+                case "FGP1", "FGP3", "HCRM", "HCTL", "HRSP", "HSLT", "AUS1", "FGP2", "TPIP" -> {
+                    ppPostProdTasksEntity.setDecisionDate(new Date());
+                    ppPostProdTasksEntity.setDecisionBy(record.getDecisionBy());
+                    ppPostProdTasksEntity.setReleaseRemark(record.getQaRemark());
+                    ppPostProdTasksEntity.setDivertReason(record.getSelectedReason());
+                    ppPostProdTasksEntity.setManualDecision(coilDecision);
+                }
+
+                case "HCSL" -> {
+                    ppPostProdTasksEntity.setDecisionDate(new Date());
+                    ppPostProdTasksEntity.setDecisionBy(record.getDecisionBy());
+                    ppPostProdTasksEntity.setReleaseRemark(record.getQaRemark());
+                    ppPostProdTasksEntity.setManualDecision(coilDecision);
+                    Optional<PostProdTaskMtEntity> newTaskOptional = masterRepo.getTasksByPpidAndPrid(record.getPpid(),
+                            QualityConstants.REWORK,QualityConstants.INSP_FLAG_YES);
+                    if (newTaskOptional.isEmpty()) {
+                        PostProdTaskMtEntity tasksEntity = new PostProdTaskMtEntity();
+                        PostProdTaskMtPKEntity taskMtPKEntity = new PostProdTaskMtPKEntity();
+                        Long latestTaskStepIdByCoilId = masterRepo.findHighestTaskStepIdByCoilId(record.getPpid());
+                        latestTaskStepIdByCoilId = latestTaskStepIdByCoilId + 10;
+                        taskMtPKEntity.setTaskstepId(latestTaskStepIdByCoilId);
+                        taskMtPKEntity.setPpId(record.getPpid());
+                        taskMtPKEntity.setPpCtr(0);
+                        tasksEntity.setId(taskMtPKEntity);
+                        tasksEntity.setTpiRequired(QualityConstants.REWORK);
+                        tasksEntity.setTaskSource(QualityConstants.TASK_SOURCE_QUALITY);
+                        tasksEntity.setIsActive(BigDecimal.ONE);
+                        tasksEntity.setCreatedBy(ClientIpUtils.getClient());
+                        tasksEntity.setCreatedDate(new Date());
+                        tasksEntity.setCreatedMacAddress(ClientIpUtils.getClientIpAddress());
+                        tasksEntity.setTaskStatus(QualityConstants.STATUS_PENDING);
+                        tasksEntity.setCutType(QualityConstants.CUT_TYPE_SALVAGE);
+                        tasksEntity.setLatestFlag(QualityConstants.INSP_FLAG_YES);
+                        tasksEntity.setDecisionDate(new Date());
+                        tasksEntity.setDecisionBy(record.getDecisionBy());
+                        tasksEntity.setReleaseRemark(record.getQaRemark());
+                        tasksEntity.setManualDecision(coilDecision);
+                        masterRepo.save(tasksEntity);
+                    } else {
+                        PostProdTaskMtEntity postProdTaskMtEntity = newTaskOptional.get();
+                        postProdTaskMtEntity.setLatestFlag(QualityConstants.INSP_FLAG_NO);
+                        masterRepo.save(postProdTaskMtEntity);
+                        PostProdTaskMtEntity tasksEntity = new PostProdTaskMtEntity();
+                        PostProdTaskMtPKEntity taskMtPKEntity = new PostProdTaskMtPKEntity();
+                        Long latestTaskStepIdByCoilId = masterRepo.findHighestTaskStepIdByCoilId(record.getPpid());
+                        latestTaskStepIdByCoilId = latestTaskStepIdByCoilId + 10;
+                        taskMtPKEntity.setTaskstepId(latestTaskStepIdByCoilId);
+                        taskMtPKEntity.setPpId(record.getPpid());
+                        taskMtPKEntity.setPpCtr(0);
+                        tasksEntity.setId(taskMtPKEntity);
+                        tasksEntity.setTpiRequired(QualityConstants.REWORK);
+                        tasksEntity.setTaskSource(QualityConstants.TASK_SOURCE_QUALITY);
+                        tasksEntity.setIsActive(BigDecimal.ONE);
+                        tasksEntity.setCreatedBy(ClientIpUtils.getClient());
+                        tasksEntity.setCreatedDate(new Date());
+                        tasksEntity.setCreatedMacAddress(ClientIpUtils.getClientIpAddress());
+                        tasksEntity.setTaskStatus(QualityConstants.STATUS_PENDING);
+                        tasksEntity.setCutType(QualityConstants.CUT_TYPE_SALVAGE);
+                        tasksEntity.setLatestFlag(QualityConstants.INSP_FLAG_YES);
+                        tasksEntity.setDecisionDate(new Date());
+                        tasksEntity.setDecisionBy(record.getDecisionBy());
+                        tasksEntity.setReleaseRemark(record.getQaRemark());
+                        tasksEntity.setManualDecision(coilDecision);
+                        masterRepo.save(tasksEntity);
+                        updatePpInspChars(record.getPpid(),latestTaskStepIdByCoilId);
+                    }
+                }
+
+                case "HLD","HRCA" -> {
+                    ppPostProdTasksEntity.setDecisionDate(new Date());
+                    ppPostProdTasksEntity.setDecisionBy(record.getDecisionBy());
+                    ppPostProdTasksEntity.setManualDecision(coilDecision);
+                    ppPostProdTasksEntity.setHoldRemark(record.getQaRemark());
+                    ppPostProdTasksEntity.setHoldReason(record.getSelectedReason());
+                }
+
+                default -> throw new CustomException(QualityConstants.UNSUPPORTEDCOILDECISION + coilDecision);
+            }
+
+            masterRepo.save(ppPostProdTasksEntity);
+        
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = TransactionException.class)
+    public String releasedCoilRecords(CoilClearanceRequestDto request) {
+        dbSessionService.setSessionInfo(this.getClass().getName());
+
+        for (CoilClearanceListDto record : request.getTData()) {
+            Optional<Inventory> pphmtOpt = pphMtRepository.findByPpId(record.getPpid().trim());
+            PostProdTaskMtEntity ppPostProdTasksEntity = masterRepo.getTasksByPpidAndPrid(record.getPpid(), HSMQC,QualityConstants.INSP_FLAG_YES)
+                    .orElseThrow(() -> new CustomException(QualityConstants.NORECORDFOUNDFORCOILID + record.getPpid()));
+
+			// Fetch sample and salvage tasks
+			PostProdTaskMtEntity salvageTask = masterRepo.findActiveByCoilIdAndPrid(record.getPpid(),
+					QualityConstants.REWORK, QualityConstants.PENDING, QualityConstants.CUT_TYPE_SALVAGE);
+			PostProdTaskMtEntity sampleTask = masterRepo.findActiveByCoilIdAndPrid(record.getPpid(),
+					QualityConstants.HSM_INSP, QualityConstants.PENDING, QualityConstants.CUT_TYPE_SAMPLE);
+			Optional<TdcJmEntity> tdcOptional = tdcJmRepository.findByTdcIdAndSourceType(record.getTdcId());
+			// Check if sample or salvage records exist
+			boolean sampleExists = sampleTask != null;
+			boolean salvageExists = salvageTask != null;
+ 
+			if ((sampleExists && tdcOptional.isPresent()) || salvageExists) {
+				StringBuilder message = new StringBuilder("failed,Mass balancing is pending for ");
+				if (sampleExists  && tdcOptional.isPresent()) {
+					message.append("sample");
+				}
+				if ((sampleExists  && tdcOptional.isPresent()) && salvageExists) {
+					message.append(" and ");
+				}
+				if (salvageExists) {
+					message.append("salvage");
+				}
+				message.append(".");
+				return message.toString();
+			}
+
+            if (pphmtOpt.isPresent()) {
+                Inventory pphmtRecord = pphmtOpt.get();
+                String productionCodeId = pphmtRecord.getProductionCodeId();
+                String coilDecision = (record.getManualDecision() != null && !record.getManualDecision().isEmpty())
+                        ? record.getManualDecision().trim()
+                        : request.getUserDefinedStatus().trim();
+                if (coilDecision != null) {
+					coilDecision = coilDecision.split("-")[0].trim();
+				}
+				logger.info("coilDecision release coil Data: {}", coilDecision);
+                switch (coilDecision) {
+                    case "FGP1", "HCRM", "HCTL", "HRSP", "HSLT" -> {
+                        pphmtRecord.setModifiedDate(new Date());
+                        pphmtRecord.setModifiedBy(record.getDecisionBy());
+                        pphmtRecord.setUserDefinedStatus(coilDecision);
+                        pphmtRecord.setProductionPlanStatus(QualityConstants.COIL_CLEARANCE_READY_TO_DISPATCH);
+                        ppPostProdTasksEntity.setTaskStatus(QualityConstants.RELEASED);
+                    }
+
+                    case "FGP2", "FGP3", "AUS1","AUS1 - Auction" -> {
+                        pphmtRecord.setModifiedDate(new Date());
+                        pphmtRecord.setPurchaseOrderId(BigDecimal.valueOf(100));
+                        pphmtRecord.setPopReactor(BigDecimal.valueOf(10));
+                        pphmtRecord.setModifiedBy(record.getDecisionBy());
+                        pphmtRecord.setUserDefinedStatus(coilDecision);
+                        pphmtRecord.setProductionPlanStatus(QualityConstants.COIL_CLEARANCE_FREE_STOCK);
+                        ppPostProdTasksEntity.setTaskStatus(QualityConstants.RELEASED);
+                    }
+
+                    /* below case handle in front-end(record will not relased with below case)
+*                    case "HCSL", "TPIP" -> {
+*                        pphmtRecord.setModifiedDate(new Date());
+*                        pphmtRecord.setModifiedBy(record.getDecisionBy());
+*                        pphmtRecord.setUserDefinedStatus(coilDecision);
+*                        pphmtRecord.setProductionPlanStatus(QualityConstants.COIL_CLEARANCE_HOLD);
+*                        ppPostProdTasksEntity.setTaskStatus(QualityConstants.RELEASED);
+                   }
+
+ */                  default -> throw new CustomException(QualityConstants.UNSUPPORTEDCOILDECISION + coilDecision);
+                }
+                logger.info("pphmtRecord: {}", pphmtRecord);
+               pphMtRepository.save(pphmtRecord);
+                
+                /*
+                 * SAP CODE FOR UDDECISION DATA
+                 */
+                List<HsmQualityUDDecisionDto> payload = new ArrayList<>();
+                HsmQualityUDDecisionDto dtoUDDataSAP = new HsmQualityUDDecisionDto();
+                HsmQualityUDDecisionDto dtoUDData = sapInterface.buildHsmQualityUDDto(dtoUDDataSAP, record, coilDecision,
+                        request, ppPostProdTasksEntity.getDecisionDate(), productionCodeId);
+                logger.info(
+                        "Sending UD Decision dtoUDData data to SAP--------------------------------------- | dtoUDData={} | productionCodeId={}",
+                        dtoUDData,productionCodeId
+                );
+                payload.add(dtoUDData);
+                try {
+                    JsonFormatUDSapDto jsonFormatUDSapDto = new JsonFormatUDSapDto();
+                    jsonFormatUDSapDto.setUdDto(payload);
+                    String convertObjectToJson = JsonUtil.convertObjectToJson(jsonFormatUDSapDto);
+                
+                    logger.info(
+                            "Sending UD Decision data to SAP--------------------------------------- | CoilNo={} | Payload={}",
+                            coilDecision,
+                            convertObjectToJson
+                    );
+
+                    sapServiceClient.sendHsmCoilClearanceUdDesicionData(convertObjectToJson);
+
+                    logger.info(
+                            "UD Decision data sent successfully------------------------ | CoilNo={}",
+                            coilDecision
+                    );
+                
+                    
+
+                } catch (Exception e) {
+                	 logger.error(
+                	            "Error while sending UD Decision data to SAP -----------------------| CoilNo={}",
+                	            coilDecision,
+                	            e
+                	    );
+
+                }
+            }
+        }
+        return "success,Records released successfully.";
+    }
+
+    private int[] processPageAndSize(Integer pageNumber, Integer pageSize, Integer pageStore) {
+        if (pageNumber == null) {
+            pageNumber = 0;
+        }
+        if (pageSize == null) {
+            pageSize = pageStore;
+        }
+        return new int[]{pageNumber, pageSize};
+    }
+
+   
+    private <T> T handleGroupOnly(CoilClearanceRequestDto request, List<String> groupList, int pageNumber, int pageSize,
+                                  int skip, String status, Integer pageStore, Integer latestGroupCount) {
+        pageSize = pageNumber + pageSize;
+        pageNumber = 0;
+
+        String groupQuery = getQueryForGrouping(groupList, status);
+        String groupCountQuery = getQueryForGroupingCount(groupList, status);
+        String mainCountQuery = getMainCoilClearanceQueryCount(status);
+        Long mainQueryCount = custRepo.getMainCoilClearanceQueryCount(request, mainCountQuery, status);
+        Page<Object[]> groupingListData = custRepo.getGroupingListData(groupQuery, groupCountQuery, pageNumber,
+                pageSize, skip, request, status);
+        Long totalDistCount = custRepo.groupCountQuery(groupCountQuery, request, status);
+        return buildGroupedDataResponse(groupingListData, mainQueryCount, totalDistCount);
+    }
+
+    private String getQueryForGrouping(List<String> groupList, String status) {
+        if (groupList == null || groupList.isEmpty()) {
+            throw new IllegalArgumentException("groupList cannot be null or empty");
+        }
+
+        String desc = groupList.get(3);
+        String groupColumn = groupList.get(1);
+        StringBuilder query = new StringBuilder();
+        query.append(QualityConstants.SELECT).append(checkClassAleas().get(groupColumn)).append(" ,COUNT(*").append(")")
+                .append(QualityConstants.FROMQUALITYSCHEDULELINESENTITY)
+                .append(" LEFT JOIN TdcJmEntity tdcjm ON TRIM(tdcjm.id.tdcId) = TRIM(qcschdl.tdcId) AND tdcjm.crBy <> 'SAP' ")
+                .append(" JOIN PostProdTaskMtEntity pppost ON TRIM(qcschdl.ppId) = TRIM(pppost.id.ppId)")
+                .append(" AND pppost.tpiRequired = 'HSMQC' AND pppost.taskStatus = 'PENDING' AND pppost.latestFlag = 'Y' ")
+                .append(" JOIN Inventory inventory ON TRIM(pppost.id.ppId) = TRIM(inventory.id.ppid)")
+/*             .append(" JOIN H1mh01Hm1millPdoLi pdo ON TRIM(pppost.id.ppId) = TRIM(pdo.id.coilid)")*/
+                .append(" LEFT JOIN PostProdTaskMtEntity tpi ON TRIM(qcschdl.ppId) = TRIM(tpi.id.ppId)")
+                .append(" AND tpi.tpiRequired = 'HSMTPI' AND tpi.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity insp ON TRIM(qcschdl.ppId) = TRIM(insp.id.ppId)")
+                .append(" AND insp.tpiRequired = 'HSMINSP' AND insp.latestFlag = 'Y' ")
+/*                .append(" LEFT JOIN PpInspCharEntity charthk ON TRIM(charthk.id.ppid) = TRIM(insp.id.ppId) AND charthk.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charthk.id.taskstepid = insp.id.taskstepId AND charthk.id.atrid = 'AVG COIL THK'")
+*                .append(" LEFT JOIN PpInspCharEntity charwgt ON TRIM(charwgt.id.ppid) = TRIM(insp.id.ppId) AND charwgt.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charwgt.id.taskstepid = insp.id.taskstepId AND charwgt.id.atrid = 'COIL WGT'")
+*                .append(" LEFT JOIN PpInspCharEntity charwdt ON TRIM(charwdt.id.ppid) = TRIM(insp.id.ppId) AND charwdt.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charwdt.id.taskstepid = insp.id.taskstepId AND charwdt.id.atrid = 'AVG COIL WIDTH'")
+*/                .append(" LEFT JOIN SampleQualityEntity tpiSamp ON TRIM(tpiSamp.sampleId) = TRIM(tpi.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity lab ON TRIM(qcschdl.ppId) = TRIM(lab.id.ppId)")
+                .append(" AND lab.tpiRequired = 'HSMLAB' AND lab.taskStatus = 'COMPLETE' AND lab.latestFlag = 'Y' ")
+                .append(" LEFT JOIN SampleQualityEntity labSamp ON TRIM(labSamp.sampleId) = TRIM(lab.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity onlineInsp ON TRIM(qcschdl.ppId) = TRIM(onlineInsp.id.ppId)")
+                .append(" AND onlineInsp.tpiRequired = 'ONLINEINSP' AND onlineInsp.taskStatus = 'COMPLETE' AND onlineInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity processInsp ON TRIM(qcschdl.ppId) = TRIM(processInsp.id.ppId)")
+                .append(" AND processInsp.tpiRequired = 'PROCESSINSP' AND processInsp.taskStatus = 'COMPLETE' AND processInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity tpiInsp ON TRIM(qcschdl.ppId) = TRIM(tpiInsp.id.ppId)")
+                .append(" AND tpiInsp.tpiRequired = 'HSMTPIINSP' AND tpiInsp.taskStatus = 'COMPLETE' AND tpiInsp.latestFlag = 'Y' ")
+                .append(" WHERE (:heatId IS NULL OR TRIM(qcschdl.heatId) = TRIM(:heatId))")
+                .append(" AND (:coilIdFrom IS NULL AND :coilIdTo IS NULL ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)))");
+
+        query.append(" GROUP BY " + checkClassAleas().get(groupColumn) + " ");
+
+        if ("true".equals(desc)) {
+            query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn)).append(QualityConstants.DESC);
+        } else {
+            query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn));
+        }
+        return query.toString();
+    }
+
+    private String getQueryForGroupingCount(List<String> groupList, String status) {
+        String groupColumn = groupList.get(1); // Assuming the second element is the group column
+        StringBuilder query = new StringBuilder();
+        query.append(QualityConstants.SELECT).append("COUNT( DISTINCT ").append(checkClassAleas().get(groupColumn)).append(")")
+                .append(QualityConstants.FROMQUALITYSCHEDULELINESENTITY)
+                .append(" LEFT JOIN TdcJmEntity tdcjm ON TRIM(tdcjm.id.tdcId) = TRIM(qcschdl.tdcId) AND tdcjm.crBy <> 'SAP' ")
+                .append(" JOIN PostProdTaskMtEntity pppost ON TRIM(qcschdl.ppId) = TRIM(pppost.id.ppId)")
+                .append(" AND pppost.tpiRequired = 'HSMQC' AND pppost.taskStatus = 'PENDING' AND pppost.latestFlag = 'Y' ")
+                .append(" JOIN Inventory inventory ON TRIM(pppost.id.ppId) = TRIM(inventory.id.ppid)")
+/*               .append(" JOIN H1mh01Hm1millPdoLi pdo ON TRIM(pppost.id.ppId) = TRIM(pdo.id.coilid)")*/
+                .append(" LEFT JOIN PostProdTaskMtEntity tpi ON TRIM(qcschdl.ppId) = TRIM(tpi.id.ppId)")
+                .append(" AND tpi.tpiRequired = 'HSMTPI' AND tpi.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity insp ON TRIM(qcschdl.ppId) = TRIM(insp.id.ppId)")
+                .append(" AND insp.tpiRequired = 'HSMINSP' AND insp.latestFlag = 'Y' ")
+/*               .append(" LEFT JOIN PpInspCharEntity charthk ON TRIM(charthk.id.ppid) = TRIM(insp.id.ppId) AND charthk.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charthk.id.taskstepid = insp.id.taskstepId AND charthk.id.atrid = 'AVG COIL THK'")
+*                .append(" LEFT JOIN PpInspCharEntity charwgt ON TRIM(charwgt.id.ppid) = TRIM(insp.id.ppId) AND charwgt.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charwgt.id.taskstepid = insp.id.taskstepId AND charwgt.id.atrid = 'COIL WGT'")
+*                .append(" LEFT JOIN PpInspCharEntity charwdt ON TRIM(charwdt.id.ppid) = TRIM(insp.id.ppId) AND charwdt.id.ppctr = insp.id.ppCtr")
+*               .append(" AND charwdt.id.taskstepid = insp.id.taskstepId AND charwdt.id.atrid = 'AVG COIL WIDTH'")
+*/                .append(" LEFT JOIN SampleQualityEntity tpiSamp ON TRIM(tpiSamp.sampleId) = TRIM(tpi.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity lab ON TRIM(qcschdl.ppId) = TRIM(lab.id.ppId)")
+                .append(" AND lab.tpiRequired = 'HSMLAB' AND lab.taskStatus = 'COMPLETE' AND lab.latestFlag = 'Y' ")
+                .append(" LEFT JOIN SampleQualityEntity labSamp ON TRIM(labSamp.sampleId) = TRIM(lab.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity onlineInsp ON TRIM(qcschdl.ppId) = TRIM(onlineInsp.id.ppId)")
+                .append(" AND onlineInsp.tpiRequired = 'ONLINEINSP' AND onlineInsp.taskStatus = 'COMPLETE' AND onlineInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity processInsp ON TRIM(qcschdl.ppId) = TRIM(processInsp.id.ppId)")
+                .append(" AND processInsp.tpiRequired = 'PROCESSINSP' AND processInsp.taskStatus = 'COMPLETE' AND processInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity tpiInsp ON TRIM(qcschdl.ppId) = TRIM(tpiInsp.id.ppId)")
+                .append(" AND tpiInsp.tpiRequired = 'HSMTPIINSP' AND tpiInsp.taskStatus = 'COMPLETE' AND tpiInsp.latestFlag = 'Y' ")
+                .append(" WHERE (:heatId IS NULL OR TRIM(qcschdl.heatId) = TRIM(:heatId))")
+                .append(" AND (:coilIdFrom IS NULL AND :coilIdTo IS NULL ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)))");
+
+
+        return query.toString();
+    }
+
+    public String getMainCoilClearanceQueryCount(String status) {
+        StringBuilder countQuery = new StringBuilder();
+        countQuery.append("SELECT COUNT(distinct qcschdl.ppId) ")
+                .append(QualityConstants.FROMQUALITYSCHEDULELINESENTITY)
+                .append(" LEFT JOIN TdcJmEntity tdcjm ON TRIM(tdcjm.id.tdcId) = TRIM(qcschdl.tdcId)")
+                .append(" JOIN PostProdTaskMtEntity pppost ON TRIM(qcschdl.ppId) = TRIM(pppost.id.ppId)")
+                .append(" AND pppost.tpiRequired = 'HSMQC' AND pppost.taskStatus = 'PENDING' AND pppost.latestFlag = 'Y' ")
+                .append(" JOIN Inventory inventory ON TRIM(pppost.id.ppId) = TRIM(inventory.id.ppid)")
+/*              .append(" JOIN H1mh01Hm1millPdoLi pdo ON TRIM(pppost.id.ppId) = TRIM(pdo.id.coilid)")*/
+                .append(" LEFT JOIN PostProdTaskMtEntity tpi ON TRIM(qcschdl.ppId) = TRIM(tpi.id.ppId)")
+                .append(" AND tpi.tpiRequired = 'HSMTPI' AND tpi.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity insp ON TRIM(qcschdl.ppId) = TRIM(insp.id.ppId)")
+                .append(" AND insp.tpiRequired = 'HSMINSP' AND insp.latestFlag = 'Y' ")
+/*               .append(" LEFT JOIN PpInspCharEntity charthk ON TRIM(charthk.id.ppid) = TRIM(insp.id.ppId) AND charthk.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charthk.id.taskstepid = insp.id.taskstepId AND charthk.id.atrid = 'AVG COIL THK'")
+*                .append(" LEFT JOIN PpInspCharEntity charwgt ON TRIM(charwgt.id.ppid) = TRIM(insp.id.ppId) AND charwgt.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charwgt.id.taskstepid = insp.id.taskstepId AND charwgt.id.atrid = 'COIL WGT'")
+*                .append(" LEFT JOIN PpInspCharEntity charwdt ON TRIM(charwdt.id.ppid) = TRIM(insp.id.ppId) AND charwdt.id.ppctr = insp.id.ppCtr")
+*               .append(" AND charwdt.id.taskstepid = insp.id.taskstepId AND charwdt.id.atrid = 'AVG COIL WIDTH'")
+*/                .append(" LEFT JOIN SampleQualityEntity tpiSamp ON TRIM(tpiSamp.sampleId) = TRIM(tpi.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity lab ON TRIM(qcschdl.ppId) = TRIM(lab.id.ppId)")
+                .append(" AND lab.tpiRequired = 'HSMLAB' AND lab.taskStatus = 'COMPLETE' AND lab.latestFlag = 'Y' ")
+                .append(" LEFT JOIN SampleQualityEntity labSamp ON TRIM(labSamp.sampleId) = TRIM(lab.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity onlineInsp ON TRIM(qcschdl.ppId) = TRIM(onlineInsp.id.ppId)")
+                .append(" AND onlineInsp.tpiRequired = 'ONLINEINSP' AND onlineInsp.taskStatus = 'COMPLETE' AND onlineInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity processInsp ON TRIM(qcschdl.ppId) = TRIM(processInsp.id.ppId)")
+                .append(" AND processInsp.tpiRequired = 'PROCESSINSP' AND processInsp.taskStatus = 'COMPLETE' AND processInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity tpiInsp ON TRIM(qcschdl.ppId) = TRIM(tpiInsp.id.ppId)")
+                .append(" AND tpiInsp.tpiRequired = 'HSMTPIINSP' AND tpiInsp.taskStatus = 'COMPLETE' AND tpiInsp.latestFlag = 'Y' ")
+                .append(" WHERE (:heatId IS NULL OR TRIM(qcschdl.heatId) = TRIM(:heatId))")
+                .append(" AND (:coilIdFrom IS NULL AND :coilIdTo IS NULL ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)))");
+
+
+        return countQuery.toString();
+    }
+
+    private <T> T buildGroupedDataResponse(Page<Object[]> groupingListData, Long mainQueryCount, Long totalDistCount) {
+        GroupedDataResponse<CoilClearanceRequestDto> result = new GroupedDataResponse<>(null, 0L, 0L);
+        List<Group<CoilClearanceRequestDto>> list = new ArrayList<>();
+
+        for (Object[] row : groupingListData) {
+            String groupKey = row[0] instanceof BigDecimal ? ((BigDecimal) row[0]).toPlainString()
+                    : String.valueOf(row[0]);
+            Long count = row[1] instanceof BigDecimal ? ((BigDecimal) row[1]).longValue() : (Long) row[1];
+            list.add(new Group<>(groupKey, null, count));
+        }
+
+        result.setData(list);
+        result.setTotalCount(mainQueryCount);
+        result.setGroupCount(totalDistCount);
+        return (T) result;
+    }
+
+  
+    private <T> T handleGroupWithFilterOrSort(CoilClearanceRequestDto request, List<String> groupList,
+                                              List<String> filterList, List<String> sortList, Integer page, Integer size, Integer skip,
+                                              boolean requireTotalCount, String status, Integer pageStore, Integer latestGroupCounts) {
+        if (requireTotalCount && size == null) {
+            size = pageStore;
+        } else {
+            size = page + size;
+            page = 0;
+        }
+
+        String queryForGrouping = getCoilClearanceQueryForGroupingAndFiltering(groupList, filterList, status);
+        String queryForGroupingAndFilteringCount = getCoilClearanceQueryForGroupingAndFilteringCount(groupList,
+                filterList, sortList, status);
+        String mainCountQuery = getMainCoilClearanceQueryCount(status);
+        Long mainQueryCount = custRepo.getMainCoilClearanceQueryCount(request, mainCountQuery, status);
+        Page<Object[]> groupingListData = custRepo.getGroupingListData(queryForGrouping,
+                queryForGroupingAndFilteringCount, page, size, skip, request, status);
+        Long totalDistCount = custRepo.groupCountQuery(queryForGroupingAndFilteringCount, request, status);
+        return buildGroupedDataResponse(groupingListData, mainQueryCount,
+                (totalDistCount != null && totalDistCount != 0) ? totalDistCount : latestGroupCounts);
+
+    }
+
+    public String getCoilClearanceQueryForGroupingAndFiltering(List<String> groupList, List<String> filterList,
+                                                               String status) {
+        String groupColumn = groupList.get(1);
+        String desc = groupList.get(3);
+        StringBuilder query = new StringBuilder();
+        query.append(QualityConstants.SELECT).append(checkClassAleas().get(groupColumn)).append(" ,COUNT(*")
+                .append(")")
+                .append(QualityConstants.FROMQUALITYSCHEDULELINESENTITY)
+                .append(" LEFT JOIN TdcJmEntity tdcjm ON TRIM(tdcjm.id.tdcId) = TRIM(qcschdl.tdcId) AND tdcjm.crBy <> 'SAP' ")
+                .append(" JOIN PostProdTaskMtEntity pppost ON TRIM(qcschdl.ppId) = TRIM(pppost.id.ppId)")
+                .append(" AND pppost.tpiRequired = 'HSMQC' AND pppost.taskStatus = 'PENDING' AND pppost.latestFlag = 'Y' ")
+                .append(" JOIN Inventory inventory ON TRIM(pppost.id.ppId) = TRIM(inventory.id.ppid)")
+/*                .append(" JOIN H1mh01Hm1millPdoLi pdo ON TRIM(pppost.id.ppId) = TRIM(pdo.id.coilid)")*/
+                .append(" LEFT JOIN PostProdTaskMtEntity tpi ON TRIM(qcschdl.ppId) = TRIM(tpi.id.ppId)")
+                .append(" AND tpi.tpiRequired = 'HSMTPI' AND tpi.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity insp ON TRIM(qcschdl.ppId) = TRIM(insp.id.ppId)")
+                .append(" AND insp.tpiRequired = 'HSMINSP' AND insp.latestFlag = 'Y' ")
+/*                .append(" LEFT JOIN PpInspCharEntity charthk ON TRIM(charthk.id.ppid) = TRIM(insp.id.ppId) AND charthk.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charthk.id.taskstepid = insp.id.taskstepId AND charthk.id.atrid = 'AVG COIL THK'")
+*                .append(" LEFT JOIN PpInspCharEntity charwgt ON TRIM(charwgt.id.ppid) = TRIM(insp.id.ppId) AND charwgt.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charwgt.id.taskstepid = insp.id.taskstepId AND charwgt.id.atrid = 'COIL WGT'")
+*                .append(" LEFT JOIN PpInspCharEntity charwdt ON TRIM(charwdt.id.ppid) = TRIM(insp.id.ppId) AND charwdt.id.ppctr = insp.id.ppCtr")
+*               .append(" AND charwdt.id.taskstepid = insp.id.taskstepId AND charwdt.id.atrid = 'AVG COIL WIDTH'")
+ */               .append(" LEFT JOIN SampleQualityEntity tpiSamp ON TRIM(tpiSamp.sampleId) = TRIM(tpi.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity lab ON TRIM(qcschdl.ppId) = TRIM(lab.id.ppId)")
+                .append(" AND lab.tpiRequired = 'HSMLAB' AND lab.taskStatus = 'COMPLETE' AND lab.latestFlag = 'Y' ")
+                .append(" LEFT JOIN SampleQualityEntity labSamp ON TRIM(labSamp.sampleId) = TRIM(lab.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity onlineInsp ON TRIM(qcschdl.ppId) = TRIM(onlineInsp.id.ppId)")
+                .append(" AND onlineInsp.tpiRequired = 'ONLINEINSP' AND onlineInsp.taskStatus = 'COMPLETE' AND onlineInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity processInsp ON TRIM(qcschdl.ppId) = TRIM(processInsp.id.ppId)")
+                .append(" AND processInsp.tpiRequired = 'PROCESSINSP' AND processInsp.taskStatus = 'COMPLETE' AND processInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity tpiInsp ON TRIM(qcschdl.ppId) = TRIM(tpiInsp.id.ppId)")
+                .append(" AND tpiInsp.tpiRequired = 'HSMTPIINSP' AND tpiInsp.taskStatus = 'COMPLETE' AND tpiInsp.latestFlag = 'Y' ")
+                .append(" WHERE (:heatId IS NULL OR TRIM(qcschdl.heatId) = TRIM(:heatId))")
+                .append(" AND (:coilIdFrom IS NULL AND :coilIdTo IS NULL ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)))");
+
+
+        String filterQueryUsingFilterList = query.toString();
+
+        if (!filterList.isEmpty()) {
+            filterQueryUsingFilterList = filterQueryUsingFilterList(filterList, query.toString());
+        }
+        filterQueryUsingFilterList = filterQueryUsingFilterList + " " + "GROUP BY " + checkClassAleas().get(groupColumn)
+                + " " + "ORDER BY " + checkClassAleas().get(groupColumn) + "";
+        if ("true".equals(desc)) {
+            filterQueryUsingFilterList = filterQueryUsingFilterList + QualityConstants.DESC;
+        }
+
+        return filterQueryUsingFilterList;
+
+    }
+
+    public String getCoilClearanceQueryForGroupingAndFilteringCount(List<String> groupList, List<String> filterList,
+                                                                    List<String> sortList, String status) {
+        String filterQueryUsingFilterList = null;
+        String groupColumn = groupList.get(1);
+        StringBuilder query = new StringBuilder();
+        query.append(QualityConstants.SELECT).append("COUNT( DISTINCT ").append(checkClassAleas().get(groupColumn))
+               .append(")")
+                .append(QualityConstants.FROMQUALITYSCHEDULELINESENTITY)
+                .append(" LEFT JOIN TdcJmEntity tdcjm ON TRIM(tdcjm.id.tdcId) = TRIM(qcschdl.tdcId) AND tdcjm.crBy <> 'SAP' ")
+                .append(" JOIN PostProdTaskMtEntity pppost ON TRIM(qcschdl.ppId) = TRIM(pppost.id.ppId)")
+                .append(" AND pppost.tpiRequired = 'HSMQC' AND pppost.taskStatus = 'PENDING' AND pppost.latestFlag = 'Y' ")
+                .append(" JOIN Inventory inventory ON TRIM(pppost.id.ppId) = TRIM(inventory.id.ppid)")
+/*               .append(" JOIN H1mh01Hm1millPdoLi pdo ON TRIM(pppost.id.ppId) = TRIM(pdo.id.coilid)")*/
+                .append(" LEFT JOIN PostProdTaskMtEntity tpi ON TRIM(qcschdl.ppId) = TRIM(tpi.id.ppId)")
+                .append(" AND tpi.tpiRequired = 'HSMTPI' AND tpi.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity insp ON TRIM(qcschdl.ppId) = TRIM(insp.id.ppId)")
+                .append(" AND insp.tpiRequired = 'HSMINSP' AND insp.latestFlag = 'Y' ")
+/*                .append(" LEFT JOIN PpInspCharEntity charthk ON TRIM(charthk.id.ppid) = TRIM(insp.id.ppId) AND charthk.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charthk.id.taskstepid = insp.id.taskstepId AND charthk.id.atrid = 'AVG COIL THK'")
+*                .append(" LEFT JOIN PpInspCharEntity charwgt ON TRIM(charwgt.id.ppid) = TRIM(insp.id.ppId) AND charwgt.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charwgt.id.taskstepid = insp.id.taskstepId AND charwgt.id.atrid = 'COIL WGT'")
+*                .append(" LEFT JOIN PpInspCharEntity charwdt ON TRIM(charwdt.id.ppid) = TRIM(insp.id.ppId) AND charwdt.id.ppctr = insp.id.ppCtr")
+*                .append(" AND charwdt.id.taskstepid = insp.id.taskstepId AND charwdt.id.atrid = 'AVG COIL WIDTH'")
+*/                .append(" LEFT JOIN SampleQualityEntity tpiSamp ON TRIM(tpiSamp.sampleId) = TRIM(tpi.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity lab ON TRIM(qcschdl.ppId) = TRIM(lab.id.ppId)")
+                .append(" AND lab.tpiRequired = 'HSMLAB' AND lab.taskStatus = 'COMPLETE' AND lab.latestFlag = 'Y' ")
+                .append(" LEFT JOIN SampleQualityEntity labSamp ON TRIM(labSamp.sampleId) = TRIM(lab.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity onlineInsp ON TRIM(qcschdl.ppId) = TRIM(onlineInsp.id.ppId)")
+                .append(" AND onlineInsp.tpiRequired = 'ONLINEINSP' AND onlineInsp.taskStatus = 'COMPLETE' AND onlineInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity processInsp ON TRIM(qcschdl.ppId) = TRIM(processInsp.id.ppId)")
+                .append(" AND processInsp.tpiRequired = 'PROCESSINSP' AND processInsp.taskStatus = 'COMPLETE' AND processInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity tpiInsp ON TRIM(qcschdl.ppId) = TRIM(tpiInsp.id.ppId)")
+                .append(" AND tpiInsp.tpiRequired = 'HSMTPIINSP' AND tpiInsp.taskStatus = 'COMPLETE' AND tpiInsp.latestFlag = 'Y' ")
+                .append(" WHERE (:heatId IS NULL OR TRIM(qcschdl.heatId) = TRIM(:heatId))")
+                .append(" AND (:coilIdFrom IS NULL AND :coilIdTo IS NULL ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)))");
+
+        filterQueryUsingFilterList = query.toString();
+        if (!filterList.isEmpty()) {
+            filterQueryUsingFilterList = filterQueryUsingFilterList(filterList, query.toString());
+        }
+
+        return filterQueryUsingFilterList;
+
+    }
+
+    private <T> T handleFilterOrSort(CoilClearanceRequestDto request, List<String> filterList, List<String> sortList,
+                                     Integer page, Integer size, Integer skip, boolean requireTotalCount, String status, Integer pageStore,
+                                     Integer latestGroupCount) {
+        if (!requireTotalCount) {
+            size = page + size;
+            page = 0;
+        }
+
+        String query = custRepo.getAllPaginatedHSMCoilClearanceInString();
+        String countQuery = getMainCoilClearanceQueryCount(status);
+        if (!filterList.isEmpty()) {
+            query = filterQueryUsingFilterList(filterList, query);
+            countQuery = filterQueryUsingFilterList(filterList, countQuery);
+        }
+
+        query = applySorting(sortList, query);
+        Page<CoilClearanceListDto> coilClearance = custRepo.getCoilClearance(request, status, page, size, query,
+                countQuery, skip);
+        return (T) new FluentaPaginatedResponse<>(coilClearance.getContent(), coilClearance.getTotalElements());
+    }
+
+    private String applySorting(List<String> sortList, String query) {
+        if (!sortList.isEmpty()) {
+            Map<String, String> columnAlias = checkClassAleasWithNoStop();
+            if (sortList.get(3).equals("true")) {
+                query += QualityConstants.ORDER_BY + columnAlias.get(sortList.get(1)) + QualityConstants.DESC;
+            } else {
+                query += QualityConstants.ORDER_BY + columnAlias.get(sortList.get(1));
+            }
+        } else {
+            query += OfsConstants.COIL_CLEARANCE_ORDER_BY;
+        }
+        return query;
+    }
+
+    @Override
+	public List<String> getCoilIdList() {
+		 logger.info("Fetching coil list");
+		return custRepo.getCoilIdList();
+	}
+	
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<String>>> searchMatchingCoils(String query) {
+		List<String> list = custRepo.searchMatchingCoils(query);
+		return ResponseUtil.createResponse(list, "Fetching heat", true);
+	}
+	
+}

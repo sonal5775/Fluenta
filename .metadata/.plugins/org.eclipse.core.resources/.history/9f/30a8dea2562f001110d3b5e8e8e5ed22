@@ -1,0 +1,246 @@
+package com.hindindustec.fluenta.hsm.masters.common;
+
+public class OfsConstants {
+
+	private OfsConstants() {
+		throw new IllegalStateException("Constants class");
+	}
+
+	public static final Integer STS_ACTIVE = 1;
+	public static final Integer STS_IN_ACTIVE = 0;
+	public static final String UNKNOWN = "unknown";
+	public static final String MESSAGE = "message";
+	public static final String DUPLICATE_RECORD = "Duplicate record can't be allowed";
+	public static final String USER_ADMIN = "admin";
+	public static final String CHEMISTRY_CATEGORY = "CHEMICAL";
+	public static final String NORMID = "normid";
+	public static final String SALES_APPROVAL_ROLE = "SALES PERSON";
+	public static final String TDC_EXECUTION_PREFIX = "EX";
+	public static final String SALES_ENQUIRY_PREFIX = "EN";
+	public static final String ADMIN = "admin";
+	public static final String RELEASED = "RELEASED";
+	public static final String PENDING = "PENDING";
+	public static final String STATUS = "status";
+	
+	
+	public static final String TEST_METHOD = "TEST METHOD";
+	public static final String TEST_METHOD_CAT_MECH = "MECHANICAL";
+	public static final String INT_SPEC_WF_ID = "IS APPROVAL FLOW";
+	public static final String INITIATOR = "Initiator";
+	public static final String TDC_WF_ID = "TDC APPROVAL FLOW";
+	public static final String IS_ACTION_APPROVE = "APPROVE";
+	public static final String IS_ACTION_REJECT = "REJECT";
+	public static final String IS_INVALID_RESPONSE = "VALIDATION FAILED FOR INTERNAL SPEC PLEASE COMPLETE ALL THE PARAMETERS BEFORE RELEASE";
+	
+	public static final String TENSILE_TEST = "Tensile Test";
+	public static final String BEND_TEST = "Bend";
+	public static final String DWTT = "DWTT";
+	public static final String IMPACT = "Impact";
+	public static final String HARDNESS = "Hardness";
+	public static final String HTTT = "High Temp Tensile";
+	public static final String INCLUSION_RATING = "Inclusion Rating";
+	public static final String SHT_CYCLES = "SHT Cycles";
+	public static final String Z_TEST = "Z Test";
+	public static final String GRAIN_SIZE = "Grain Size";
+	public static final String MICROSTRUCTURE = "Microstructure";
+	public static final String NACE_HIC = "NACE HIC";
+	public static final String NACE_SCC = "NACE SCC";
+	public static final String WBBT = "WBBT";
+	public static final String STRAIN_AGING = "Strain Aging";
+	public static final String FRACTURE_TEST = "Fracture Test";
+	public static final String BALLISTIC_TEST = "Ballistic Test";
+	public static final String CTOD = "CTOD";
+	public static final String WELDABILITY_TEST = "Weldability Test";
+	public static final String OTHR_TEST = "OTHR_TEST";
+
+	public static final String SYSTEM_GROUP_CODE_DTL_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.SystemGrpCodeDtlDto";
+	public static final String SYSTEM_GROUP_CODE_SCR_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.SystemGroupCodeScrnDto";
+	public static final String SYSTEM_CODE_ATTRIBUTE_SCR_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.SystemCodeAttributeScrnDto";
+	public static final String USER_GROUP_CODE_DTL_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.UserGrpCodeDtlDto";
+	public static final String USER_GROUP_CODE_SCR_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.UserGroupCodeScrnDto";
+	public static final String USER_CODE_ATTRIBUTE_SCR_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.UserCodeAttributeScrnDto";
+	public static final String SO_SWAP_CONFIGURATOR = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.SoSwapConfiguratorDto";
+	public static final String TRANSFER_BAR_THICKNESS_MASTER_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.TransferBarThicknessMasterDto";
+	public static final String HSM_PDI_GRADE_MASTER_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.HsmPdiGradeMasterDto";
+	public static final String HSM_PDI_GRADE_MASTER_FILTER_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.HsmPdiGradeMasterFilterDto";
+	public static final String SHIFT_DEFINATION_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ShiftDefinationDto";
+	public static final String WEEK_DEFINATION_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.WeekDefinationDto";
+	public static final String DELAY_DTO = "SELECT new com.hindindustec.fluenta.hsm.masters.dto.DelayDto";
+	public static final String DELAY_TYPE_DTO = "SELECT new com.hindindustec.fluenta.hsm.masters.dto.DelayTypeDto";
+	public static final String EQUIP_RES_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.EquipResDto";
+	public static final String DELAY_MASTER_COMP_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.DelayMasterCompDto";
+	public static final String DELAY_MASTER_PROD_DTO = "SELECT new com.hindindustec.fluenta.hsm.masters.dto.DelayMasterProdDto";
+	public static final String DELAY_MASTER_PLANT_DTO = "SELECT new com.hindindustec.fluenta.hsm.masters.dto.DelayMasterPlantDto";
+	public static final String INTERNAL_SPEC_CHEMISTRY_TABLE_REPO_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ChemistryTableRepoDto";
+	public static final String INTERNAL_SPEC_ATRLCS_TABLE_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.AtrlcsTableDto";
+	public static final String INTERNAL_SPEC_HSM_PDI_GRADE_MASTER_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.InternalSpecHsmPdiGradeMasterDto";
+	public static final String INTERNAL_SPEC_GRADE_DESC_AND_TYPE_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.GradedescAndGradetype";
+	public static final String INTERNAL_SPEC_PRODUCT_CODE_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ProductCodeDto";
+	public static final String INTERNAL_SPEC_RHF_PDI_GRADE_MASTER_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.InternalSpecRhfPdiGrdMastDto";
+	public static final String INTERNAL_SPEC_HSM_PDI_TEMP_MASTER_REPO_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.InternalSpecHsmPdiTempMasterRepoDto";
+	public static final String INTERNAL_SPEC_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.InternalSpecDto";
+	
+	public static final String PATTERN_LIST_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.PatternListDto";
+	public static final String PATTERN_CONSTRAINTS_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.PatternConstraintsDto";
+	public static final String SCHEDULE_SECTION_TYPE_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ScheduleSectionTypeDto";
+	public static final String END_USE_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.EndUseDto";
+	public static final String LENGTH_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.LengthDto";
+	public static final String THICKNESS_CHANGE_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ThicknessChangeDto";
+	public static final String WIDTH_CHANGE_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.WidthChangeDto";
+	public static final String ATTRIBUTE_MASTER_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.AttributeMasterDto";
+	public static final String ATTRIBUTE_MASTER_CAT_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.AttributeMasterCatDto";
+	public static final String ATTRIBUTE_MASTER_MAP_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.AttributeMastermapDto";
+	public static final String PRDID = "prdid";
+	public static final String CATID = "catid";
+	public static final String HSM_SQUEEZ_MASTER_DTL_DTO = "SELECT DISTINCT NEW com.hindindustec.fluenta.hsm.masters.dto.HsmSqueezMasterTableDto";
+	public static final String PRODUCT_DEFINATION_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ProductDefinitionDto";
+	public static final String PRODUCT_CODE_DETAILS_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ProductCodeDetailsDto";
+	public static final String EXTERNAL_GRADE_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ExternalGradeDto";
+	public static final String FORCAST_CODE_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ForcastCodeDto";
+	public static final String RHF_PDI_GRADE_MASTER_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.RhfPdiGrdMastDto";
+	public static final String STD_DIM_TOL_DTL_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.StandardDimToleranceDto";
+	public static final String STD_DIM_TOL_ATR_DTL_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.AttributeDto";
+	public static final String STD_DIM_THK_WDT_DTL_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ThickWdtToleranceDto";
+	public static final String HSM_PDI_TEMP_MASTER_DTL_DTO = "SELECT DISTINCT NEW com.hindindustec.fluenta.hsm.masters.dto.HsmPdiTempMasterDto";
+	public static final String PROD_RATE_COMPLEX_DTL_DTO = "SELECT DISTINCT NEW com.hindindustec.fluenta.hsm.masters.dto.ComplexDto";
+	public static final String PROD_RATE_VERSION_HISTORY_DTL_DTO = "SELECT DISTINCT NEW com.hindindustec.fluenta.hsm.masters.dto.ProductionRateDto";
+	public static final String PROD_RATE_DTL_DTO = "SELECT DISTINCT NEW com.hindindustec.fluenta.hsm.masters.dto.ProductionRateVersionDto";
+
+	public static final String CUSTOMER_MASTER_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.CustomerMasterDto";
+	public static final String CUSTOMER_MASTER_REPRESTV_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.CustomerMasterRepstvDto";
+	public static final String CUSTOMER_ADD_TY_NM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.CustomerAddTyNmDto";
+	public static final String ADDRESSLINE_TYPE_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.AddressLineTypeDto";
+	public static final String CUSTOMER_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.CustomerDto";
+
+	public static final String DT_NORMS_CM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.DtnormsCmDto";
+	public static final String DT_PLAN_CM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.DtplanCmDto";
+	public static final String EXT_GRD_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ExtgrdJmDTO";
+	public static final String EGMULTIGRD_LIST_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.EgmultigrdlistJmDTO";
+	public static final String NORM_CHEM_JM_REPO_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.NormchemJmRepoDTO";
+
+	public static final String EXTERNAL_GRADE_MASTER_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ExternalGradeMasterDto";
+	public static final String CHEMISTRY_POPUP_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ChemistryPopUpDto";
+	public static final String EXTERNALGRADE_MECH_THICKNESS_POPUP_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ExternalGradeMechThicknessPopUpDto";
+	public static final String MECHANICAL_TEST_POPUP_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.MechanicalTestPopUpDto";
+	public static final String ATRID_AND_ATRNM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.AtridAndAtrnmDto";
+
+	public static final String CATALOG_MASTER_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.CatalogMasterDto";
+	public static final String PROD_CATALOG_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ProdCatalogDto";
+
+	public static final String CHEMISTRY_FETCH_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ChemistryFetchDto";
+	public static final String NORM_TENSILE_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.NormtensileJmDTO";
+	public static final String NORM_BEND_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.NormbendJmDTO";
+
+	public static final String NORM_DWTT_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.NormdwttJmDTO";
+	public static final String NORM_IMPACT_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.NormimpactJmDTO";
+	public static final String NORM_HARDNESS_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.NormhardnessJmDTO";
+	public static final String NORM_HTTT_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.NormhtttJmDto";
+	public static final String NORM_MOTHR_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.NormothrJmDTO";
+	public static final String NORM_INCLUSION_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.NorminclusionJmDTO";
+	public static final String NORM_SHT_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.NormshtJmDTO";
+	public static final String NORM_ZTEST_JM_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.NormztestJmDTO";
+
+	public static final String PROD_LINE_PRODUCT_MAP_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.ProdlineProductMapDto";
+	public static final String CAPABILITY_MATRIX_DTO = "SELECT distinct new com.hindindustec.fluenta.hsm.masters.dto.CapabilityMatrixDto";
+	
+	public static final String BEARER = "Bearer ";
+	public static final String AUTHORIZATION = "Authorization";
+	public static final String V3_API_DOCS = "/v3/api-docs";
+	public static final String SWAGGER_UI = "/swagger-ui";
+	public static final String SWAGGER_RESOURCES = "/swagger-resources";
+	public static final String ERROR = "Missing or invalid Authorization header";
+	public static final String EXCEPTION = "Invalid token: Access Denied";
+	public static final String SELECT_OPTION = "Select an Option";
+
+	public static final String IN_PROGRESS = "IN PROGRESS";
+	public static final String NEW_REQUEST = "NEW REQUEST";
+	public static final String INTERNAL_SPEC_APPROVAL = "APPROVAL";
+
+	public static final String IN_PROGRESS_PARAMETER = "inprogress";
+	public static final String NEW_REQUEST_PARAMETER = "newreq";
+	public static final String INTERNAL_SPEC_APPROVAL_PARAMETER = "approval";
+	
+	  public static final String GROUPING_PAGESTORE = "pageStore";
+      public static final String GROUPING_LATEST_GROUP_COUNT = "latestGroupCount";
+      public static final String GROUPING_STATUS = "status";
+      public static final String GROUPING_SKIP = "skip";
+      public static final String GROUPING_TAKE = "take";
+      public static final String GROUPING_FILTER = "filter";
+      public static final String GROUPING_SORT = "sort";
+      public static final String GROUPING_SEARCH_VALUE = "searchValue";
+      public static final String GROUPING_GROUP = "group";
+      public static final String GROUPING_REQUIRE_TOTAL_COUNT = "requireTotalCount";
+      public static final String GROUPING_REQUIRE_GROUP_COUNT = "requireGroupCount";
+      public static final String UTF_8 = "UTF-8";
+      public static final String SELECT = "SELECT";
+      public static final String GROUP_BY = "GROUP BY";
+      public static final String SOID = "soid";
+  	public static final String UPPER_TRIM_LIKE_PREFIX = " UPPER(TRIM('%";
+  	public static final String UPPER_TRIM_START_WITH = " UPPER(TRIM('";
+  	public static final String UPPER_TRIM_SUFFIX = "%'))";
+  	public static final String UPPER_TRIM_PREFIX = "(UPPER(TRIM(";
+	public static final String GROUP = "group=";
+	public static final String CLOB = "CLOB";
+	public static final String DATE = "DATE";
+	public static final String VARCHAR2 = "VARCHAR2";
+	public static final String ORDER_BY = " ORDER BY ";
+	public static final String NOT_LIKE = " NOT LIKE ";
+	public static final String LIKE = " LIKE ";
+	public static final String ENDSWITH = "endswith";
+	public static final String STARTSWITH = "startswith";
+	public static final String NOTCONTAINS = "notcontains";
+	public static final String CONTAINS = "contains";
+	public static final String OR = "or";
+	public static final String AND = "and";
+	public static final String DESC = " DESC ";
+	public static final String RANGE_CODE = "rangeCode";
+	public static final String VERSION = "version";
+	public static final String COUNT_DISTINCT = "COUNT( DISTINCT ";
+	public static final String PRODUCTGARANTEECODE = "productGaranteeCode";
+	 
+	    public static final String CURRENT_VERSION = "currentVersion";
+	   
+	    public static final String MOD_ITEM_STAMP = "modItemStamp";
+	    public static final String THICKNESS_MIN = "thicknessMin";
+	    public static final String THICKNESS_MIN_OPERATOR = "thicknessMinOperator";
+	    public static final String THICKNESS_MAX_OPERATOR = "thicknessMaxOperator";
+	    public static final String THICKNESS_MAX = "thicknessMax";
+	    public static final String WIDTH_MIN = "widthMin";
+	    public static final String WIDTH_MIN_OPERATOR = "widthMinOperator";
+	    public static final String WIDTH_MAX_OPERATOR = "widthMaxOperator";
+	    public static final String WIDTH_MAX = "widthMax";
+	    public static final String VALID_PG_CODE = "validPgCode";
+	    public static final String IS_ACTIVE = "isActive";
+	    public static final String CREATED_DATE = "createdDate";
+	    public static final String CREATED_BY = "createdBy";
+	    public static final String MODIFIED_DATE = "modifiedDate";
+	    public static final String MODIFIED_BY = "modifiedBy";
+	    public static final String CREATED_MAC_ADDRESS = "createdMacAddress";
+	    public static final String MODIFIED_MAC_ADDRESS = "modifiedMacAddress";
+	    public static final String MODIFICATION_TIMESTAMP = "modificationTimestamp";
+	    public static final String INPUT_UNIT_POSITIVE = "inputUnitPositive";
+	    public static final String INPUT_UNIT_NEGATIVE = "inputUnitNegative";
+	    public static final String CR_RANGE_CODE = "cr.rangeCode";
+	    public static final String CR_CURRENT_VERSION = "cr.currentVersion";
+	    public static final String FR_VERSION = "fr.id.version";
+	    public static final String FR_MOD_ITEM_STAMP = "fr.modItemStamp";
+	    public static final String FR_THICKNESS_MIN = "fr.thicknessMin";
+	    public static final String FR_THICKNESS_MIN_OPERATOR = "fr.thicknessMinOperator";
+	    public static final String FR_THICKNESS_MAX_OPERATOR = "fr.thicknessMaxOperator";
+	    public static final String FR_THICKNESS_MAX = "fr.thicknessMax";
+	    public static final String FR_WIDTH_MIN = "fr.widthMin";
+	    public static final String FR_WIDTH_MIN_OPERATOR = "fr.widthMinOperator";
+	    public static final String FR_WIDTH_MAX_OPERATOR = "fr.widthMaxOperator";
+	    public static final String FR_WIDTH_MAX = "fr.widthMax";
+	    public static final String FR_VALID_PG_CODE = "fr.validPgCode";
+	    public static final String FR_IS_ACTIVE = "fr.isActive";
+	    public static final String FR_CREATED_DATE = "fr.createdDate";
+	    public static final String FR_CREATED_BY = "fr.createdBy";
+	    public static final String FR_MODIFIED_DATE = "fr.modifiedDate";
+	    public static final String FR_MODIFIED_BY = "fr.modifiedBy";
+	    public static final String FR_CREATED_MAC_ADDRESS = "fr.createdMacAddress";
+	    public static final String FR_MODIFIED_MAC_ADDRESS = "fr.modifiedMacAddress";
+
+	
+
+}

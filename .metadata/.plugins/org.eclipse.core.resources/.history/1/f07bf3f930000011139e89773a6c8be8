@@ -1,0 +1,834 @@
+package com.hindindustec.fluenta.hsm.quality.service.impl;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.quality.client.SapServiceClient;
+import com.hindindustec.fluenta.hsm.quality.common.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.quality.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.quality.common.JsonUtil;
+import com.hindindustec.fluenta.hsm.quality.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.quality.common.exception.ResourceNotFoundException;
+import com.hindindustec.fluenta.hsm.quality.common.exception.TransactionException;
+import com.hindindustec.fluenta.hsm.quality.common.response.FluentaApiResponse;
+import com.hindindustec.fluenta.hsm.quality.common.response.MessageType;
+import com.hindindustec.fluenta.hsm.quality.common.response.ResponseUtil;
+import com.hindindustec.fluenta.hsm.quality.constants.QualityConstants;
+import com.hindindustec.fluenta.hsm.quality.dto.BendResultLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.ChemicalTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.DWTTResultLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HardnessLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HighTempTensileTestResultLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HsmQualityChemicalDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HsmQualityMechanicalDto;
+import com.hindindustec.fluenta.hsm.quality.dto.ImpactResultDto;
+import com.hindindustec.fluenta.hsm.quality.dto.JsonFormatMechSapDto;
+import com.hindindustec.fluenta.hsm.quality.dto.JsonFormatSapDto;
+import com.hindindustec.fluenta.hsm.quality.dto.MechanicalTestDto;
+import com.hindindustec.fluenta.hsm.quality.dto.MechanicalTestResultDto;
+import com.hindindustec.fluenta.hsm.quality.dto.OtherTestResultDto;
+import com.hindindustec.fluenta.hsm.quality.dto.OtherTestResultLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.SampleDetailsDto;
+import com.hindindustec.fluenta.hsm.quality.dto.SampleDetailsMechDto;
+import com.hindindustec.fluenta.hsm.quality.dto.SampleRequestDto;
+import com.hindindustec.fluenta.hsm.quality.dto.TensileLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.dto.ZTestResultLabTestingDto;
+import com.hindindustec.fluenta.hsm.quality.model.ChemResultQtEntity;
+import com.hindindustec.fluenta.hsm.quality.model.ChemResultQtPkEntity;
+import com.hindindustec.fluenta.hsm.quality.model.OtherTestResultQualityTransactionEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PostProdTaskMtEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PpspecimanmapQtEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PpspecimanmapQtPKEntity;
+import com.hindindustec.fluenta.hsm.quality.model.SpecimenQualityTransactionEntity;
+import com.hindindustec.fluenta.hsm.quality.model.TestOrderLineQualityListEntity;
+import com.hindindustec.fluenta.hsm.quality.repository.ChemResultQtRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.MechanicalTestRecordsCustRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.OtherTestResultQualityTransactionRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PostProdTaskMtRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PpspecimanMapQtRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.QualityScheduleLineRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.SampleQtMasterRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.SpecimenQualityTransactionRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.TestordlQtRepository;
+import com.hindindustec.fluenta.hsm.quality.service.MechanicalTestRecordsService;
+import com.hindindustec.fluenta.hsm.quality.service.SapInterface;
+
+@Service
+public class MechanicalTestRecordsServiceImpl implements MechanicalTestRecordsService {
+
+	private static final Logger logger = LoggerFactory.getLogger(MechanicalTestRecordsServiceImpl.class);
+
+	private MechanicalTestRecordsCustRepository custRepository;
+
+	private LabTestingServiceImpl labTestingServiceImpl;
+
+	private OtherTestResultQualityTransactionRepository otherTestResultQualityTransactionRepository;
+
+	private SpecimenQualityTransactionRepository specimenQualityTransactionRepository;
+
+	private QualityScheduleLineRepository qualityScheduleLineRepository;
+
+	private DBSessionService dbSessionService;
+
+	private PostProdTaskMtRepository postProdTaskMtEntityJpaRepository;
+
+	private ChemResultQtRepository chemResultQtRepository;
+
+	private SampleQtMasterRepository sampleQtMasterRepository;
+
+	private PpspecimanMapQtRepository ppspecimanMapQtRepository;
+
+	private TestordlQtRepository testordlQtRepository;
+
+	private SapServiceClient sapServiceClient;
+
+	private SapInterface sapInterface;
+
+	public MechanicalTestRecordsServiceImpl(MechanicalTestRecordsCustRepository custRepository,
+			LabTestingServiceImpl labTestingServiceImpl,
+			OtherTestResultQualityTransactionRepository otherTestResultQualityTransactionRepository,
+			SpecimenQualityTransactionRepository specimenQualityTransactionRepository,
+			QualityScheduleLineRepository qualityScheduleLineRepository, DBSessionService dbSessionService,
+			PostProdTaskMtRepository postProdTaskMtEntityJpaRepository, ChemResultQtRepository chemResultQtRepository,
+			SampleQtMasterRepository sampleQtMasterRepository, PpspecimanMapQtRepository ppspecimanMapQtRepository,
+			TestordlQtRepository testordlQtRepository, SapServiceClient sapServiceClient, SapInterface sapInterface) {
+		super();
+		this.custRepository = custRepository;
+		this.labTestingServiceImpl = labTestingServiceImpl;
+		this.otherTestResultQualityTransactionRepository = otherTestResultQualityTransactionRepository;
+		this.specimenQualityTransactionRepository = specimenQualityTransactionRepository;
+		this.qualityScheduleLineRepository = qualityScheduleLineRepository;
+		this.dbSessionService = dbSessionService;
+		this.postProdTaskMtEntityJpaRepository = postProdTaskMtEntityJpaRepository;
+		this.chemResultQtRepository = chemResultQtRepository;
+		this.sampleQtMasterRepository = sampleQtMasterRepository;
+		this.ppspecimanMapQtRepository = ppspecimanMapQtRepository;
+		this.testordlQtRepository = testordlQtRepository;
+		this.sapServiceClient = sapServiceClient;
+		this.sapInterface = sapInterface;
+	}
+
+	@Override
+	public List<String> getCoilIdList() {
+		logger.info("Fetching coil ID list...");
+
+		return qualityScheduleLineRepository.coilIdList();
+	}
+
+	@Override
+	public List<SampleDetailsMechDto> getSampleDetails(SampleRequestDto request) {
+		logger.info("Fetching sample details for request: {}", request);
+
+		return custRepository.getSampleDetails(request);
+	}
+
+	@Override
+	public MechanicalTestResultDto getMechanicalTestResult(String sampleId, BigDecimal coilThk) {
+		logger.info("Fetching mechanical test result for sampleId: {}", sampleId);
+
+		List<MechanicalTestDto> mechanicalTestList = custRepository.getMechanicalTestList(sampleId);
+		logger.info("Mechanical test list: {}", mechanicalTestList);
+
+		MechanicalTestResultDto response = new MechanicalTestResultDto();
+
+		for (MechanicalTestDto dto : mechanicalTestList) {
+			logger.info("Processing testType: {}", dto.getTestType());
+
+			switch (dto.getTestType()) {
+			case OfsConstants.TENSILE:
+				List<TensileLabTestingDto> tensileResult = custRepository.getTensileResult(dto.getSpecimenId());
+				List<TensileLabTestingDto> validTensile = tensileResult.stream().filter(e -> dto.getTestSource() == null
+						|| isThicknessInRange(e.getThkaim(),e.getDimtolpve(),e.getDimtolnve(),e.getThkmin(), e.getMinopr(), e.getThkmax(), e.getMaxopr()))
+						.toList();
+				response.getTensileResult().addAll(validTensile);
+				break;
+			case OfsConstants.BEND:
+				List<BendResultLabTestingDto> bendtResult = custRepository.getBendtResult(dto.getSpecimenId());
+				List<BendResultLabTestingDto> validBend = bendtResult.stream().filter(e -> dto.getTestSource() == null
+						|| isThicknessInRange(e.getThkaim(),e.getDimtolpve(),e.getDimtolnve(), e.getThkmin(), e.getMinopr(), e.getThkmax(), e.getMaxopr()))
+						.toList();
+				response.getBendResult().addAll(validBend);
+				break;
+			case OfsConstants.IMPACT_CVN:
+				List<ImpactResultDto> cvn = custRepository.getImpactResult(dto.getSpecimenId(), "CVN");
+				logger.info("IMPACT_CVN data  testType:--------------- {}", cvn);
+				List<ImpactResultDto> validCvn = cvn.stream().filter(e -> dto.getTestSource() == null
+						|| isThicknessInRange(e.getThkaim(),e.getDimtolpve(),e.getDimtolnve(), e.getThkmin(), e.getMinopr(), e.getThkmax(), e.getMaxopr()))
+						.toList();
+				response.getImpactResultCvn().addAll(validCvn);
+				break;
+			case OfsConstants.IMPACT_CUN:
+				List<ImpactResultDto> cun = custRepository.getImpactResult(dto.getSpecimenId(), "CUN");
+				logger.info("IMPACT_CUN data  testType:--------------- {}", cun);
+				List<ImpactResultDto> validCun = cun.stream().filter(e -> dto.getTestSource() == null
+						|| isThicknessInRange(e.getThkaim(),e.getDimtolpve(),e.getDimtolnve(), e.getThkmin(), e.getMinopr(), e.getThkmax(), e.getMaxopr()))
+						.toList();
+				response.getImpactResultCun().addAll(validCun);
+				break;
+			case OfsConstants.HARDNESS:
+				List<HardnessLabTestingDto> hardnessResult = custRepository.getHardnessResult(dto.getSpecimenId());
+				logger.info("HARDNESS data  testType:----------- {}", hardnessResult);
+				List<HardnessLabTestingDto> validHardness = hardnessResult.stream()
+						.filter(e -> dto.getTestSource() == null || isThicknessInRange(e.getThkaim(),e.getDimtolpve(),e.getDimtolnve(), e.getThkmin(),
+								">=", e.getThkmax(), "<="))
+						.toList();
+				response.getHardnessResult().addAll(validHardness);
+				break;
+			case OfsConstants.HTTT:
+				List<HighTempTensileTestResultLabTestingDto> highTempTesnsileTestResult = custRepository
+						.getHighTempTesnsileTestResult(dto.getSpecimenId());
+				List<HighTempTensileTestResultLabTestingDto> validHttt = highTempTesnsileTestResult.stream()
+						.filter(e -> dto.getTestSource() == null || isThicknessInRange(e.getThkaim(),e.getDimtolpve(),e.getDimtolnve(), e.getThkmin(),
+								e.getMinopr(), e.getThkmax(), e.getMaxopr()))
+						.toList();
+				response.getHighTempTensileTestResult().addAll(validHttt);
+				break;
+			case OfsConstants.DWTT:
+				List<DWTTResultLabTestingDto> dwttResult = custRepository.getDWTTResult(dto.getSpecimenId());
+				logger.info("DWTT data  testType:--------------- {}", dwttResult);
+				List<DWTTResultLabTestingDto> validDwtt = dwttResult.stream().filter(e -> dto.getTestSource() == null
+						|| isThicknessInRange(e.getThkaim(),e.getDimtolpve(),e.getDimtolnve(), e.getThkmin(), e.getMinopr(), e.getThkmax(), e.getMaxopr()))
+						.toList();
+				response.getDwttResult().addAll(validDwtt);
+				break;
+			case OfsConstants.INCLUSION_RATING:
+				response.getInclusionRatingResult()
+						.addAll(custRepository.getInclusionRatingResult(dto.getSpecimenId()));
+				break;
+			case OfsConstants.Z_TEST:
+				List<ZTestResultLabTestingDto> zTestResult = custRepository.getZTestResult(dto.getSpecimenId());
+				logger.info("Z_TEST data  testType:--------------- {}", zTestResult);
+				List<ZTestResultLabTestingDto> validZtest = zTestResult.stream().filter(e -> dto.getTestSource() == null
+						|| isThicknessInRange(e.getThkaim(),e.getDimtolpve(),e.getDimtolnve(), e.getThkmin(), e.getMinopr(), e.getThkmax(), e.getMaxopr()))
+						.toList();
+				response.getZtestResult().addAll(validZtest);
+				break;
+			default:
+				logger.warn("Unhandled testType: {}", dto.getTestType());
+				break;
+			}
+		}
+		logger.info("Constructed MechanicalTestResultDto: {}", response);
+		return response;
+	}
+
+	private boolean isThicknessInRange(BigDecimal thickness, BigDecimal dimtolpve,BigDecimal dimtolnve,BigDecimal thkmin, String minopr, BigDecimal thkmax,
+			String maxopr) {
+		if (thkmax != null && dimtolpve != null) {
+		    thkmax = thkmax.add(dimtolpve);
+		}
+
+		if (thkmin != null && dimtolnve != null) {
+		    thkmin = thkmin.subtract(dimtolnve);
+		}
+		// Case 1: All null → Always true
+		if (thkmin == null && minopr == null && thkmax == null && maxopr == null) {
+			return true;
+		}
+
+		// Case 2: thkmin with ">" operator, others null
+		if (thkmin != null && ">".equals(minopr) && thkmax == null && maxopr == null) {
+			return thickness.compareTo(thkmin) > 0;
+		}
+
+		// Case 3: thkmin with ">=" operator, others null
+		if (thkmin != null && ">=".equals(minopr) && thkmax == null && maxopr == null) {
+			return thickness.compareTo(thkmin) >= 0;
+		}
+
+		// Case 4: thkmin with "=" operator, others null
+		if (thkmin != null && "=".equals(minopr) && thkmax == null && maxopr == null) {
+			return thickness.compareTo(thkmin) == 0;
+		}
+
+		// Case 5: thkmax with "<" operator, thkmin and minopr null
+		if (thkmin == null && minopr == null && thkmax != null && maxopr != null && "<".equals(maxopr)) {
+			return thickness.compareTo(thkmax) < 0;
+		}
+
+		// Case 6: thkmax with "<=" operator, thkmin and minopr null
+		if (thkmin == null && minopr == null && thkmax != null && maxopr != null && "<=".equals(maxopr)) {
+			return thickness.compareTo(thkmax) <= 0;
+		}
+
+		// Case 7: thkmax with "=" operator, others null
+		if (thkmin == null && minopr == null && thkmax != null && maxopr != null && "=".equals(maxopr)) {
+			return thickness.compareTo(thkmax) == 0;
+		}
+
+		// Case 8: Both thkmin and thkmax with valid operators
+		if (thkmin != null && minopr != null && thkmax != null && maxopr != null) {
+			boolean minCond = evaluateOperator(thickness, thkmin, minopr);
+			boolean maxCond = evaluateOperator(thickness, thkmax, maxopr);
+			return minCond && maxCond;
+		}
+
+		// Default fallback → If nothing matches, return false
+		return false;
+	}
+
+	private boolean evaluateOperator(BigDecimal thickness, BigDecimal limit, String operator) {
+		if (limit == null || operator == null) {
+			return true;
+		}
+
+		return switch (operator.trim()) {
+		case ">" -> thickness.compareTo(limit) > 0;
+		case ">=" -> thickness.compareTo(limit) >= 0;
+		case "<" -> thickness.compareTo(limit) < 0;
+		case "<=" -> thickness.compareTo(limit) <= 0;
+		case "=" -> thickness.compareTo(limit) == 0;
+		default -> false;
+		};
+	}
+
+	@Override
+	@Transactional
+	public MechanicalTestResultDto saveMechanicalTestResult(MechanicalTestResultDto request) {
+
+		logger.info("Saving mechanical test result...");
+
+		if (request.getTensileResult() != null && !request.getTensileResult().isEmpty()) {
+			labTestingServiceImpl.saveTensileResult(request.getTensileResult());
+		}
+
+		if (request.getImpactResultCun() != null && !request.getImpactResultCun().isEmpty()) {
+			labTestingServiceImpl.saveImpactResult(request.getImpactResultCun());
+
+		}
+		if (request.getImpactResultCvn() != null && !request.getImpactResultCvn().isEmpty()) {
+			labTestingServiceImpl.saveImpactResult(request.getImpactResultCvn());
+
+		}
+		if (request.getBendResult() != null && !request.getBendResult().isEmpty()) {
+			labTestingServiceImpl.saveBendResult(request.getBendResult());
+
+		}
+		if (request.getHighTempTensileTestResult() != null && !request.getHighTempTensileTestResult().isEmpty()) {
+			labTestingServiceImpl.saveHighTempTensileResult(
+
+					request.getHighTempTensileTestResult());
+
+		}
+		if (request.getZtestResult() != null && !request.getZtestResult().isEmpty()) {
+			labTestingServiceImpl.saveZTestResult(request.getZtestResult());
+
+		}
+		if (request.getInclusionRatingResult() != null && !request.getInclusionRatingResult().isEmpty()) {
+			labTestingServiceImpl.saveInclusionRatingResult(request.getInclusionRatingResult());
+
+		}
+		if (request.getDwttResult() != null && !request.getDwttResult().isEmpty()) {
+			labTestingServiceImpl.saveDWTTResult(request.getDwttResult());
+
+		}
+		if (request.getHardnessResult() != null && !request.getHardnessResult().isEmpty()) {
+			labTestingServiceImpl.saveHardnessResult(request.getHardnessResult());
+		}
+
+		logger.info("Mechanical test result saved successfully.");
+		return request;
+	}
+
+	@Override
+	public OtherTestResultDto getOtherTestResult(String sampleId) {
+		logger.info("Entering getOtherTestResult with sampleId: {}", sampleId);
+
+		List<MechanicalTestDto> mechanicalTestList = custRepository.getMechanicalTestList(sampleId);
+
+		OtherTestResultDto response = new OtherTestResultDto();
+		for (MechanicalTestDto dto : mechanicalTestList) {
+			if (dto.getTestType().equals(OfsConstants.GRAIN_SIZE)) {
+				response.setGrainSizeResult(custRepository.getOtherTest(dto.getSpecimenId(), OfsConstants.GRAIN_SIZE));
+			}
+			if (dto.getTestType().equals(OfsConstants.BALLISTIC_TEST)) {
+				response.setBallisticResult(
+						custRepository.getOtherTest(dto.getSpecimenId(), OfsConstants.BALLISTIC_TEST));
+			}
+			if (dto.getTestType().equals(OfsConstants.CTOD)) {
+				response.setCtodResult(custRepository.getOtherTest(dto.getSpecimenId(), OfsConstants.CTOD));
+			}
+			if (dto.getTestType().equals(OfsConstants.FRACTURE_TEST)) {
+				response.setFractureResult(
+						custRepository.getOtherTest(dto.getSpecimenId(), OfsConstants.FRACTURE_TEST));
+			}
+			if (dto.getTestType().equals(OfsConstants.NACE_HIC)) {
+				response.setNaceHicResult(custRepository.getOtherTest(dto.getSpecimenId(), OfsConstants.NACE_HIC));
+			}
+			if (dto.getTestType().equals(OfsConstants.WBBT)) {
+				response.setWbbtResult(custRepository.getOtherTest(dto.getSpecimenId(), OfsConstants.WBBT));
+			}
+			if (dto.getTestType().equals(OfsConstants.NACE_SCC)) {
+				response.setNaceSccResult(custRepository.getOtherTest(dto.getSpecimenId(), OfsConstants.NACE_SCC));
+			}
+			if (dto.getTestType().equals(OfsConstants.STRAIN_AGING)) {
+				response.setStrainAgingResult(
+						custRepository.getOtherTest(dto.getSpecimenId(), OfsConstants.STRAIN_AGING));
+			}
+			if (dto.getTestType().equals(OfsConstants.ERICHSEN_CUPPING)) {
+				response.setErichsenResult(
+						custRepository.getOtherTest(dto.getSpecimenId(), OfsConstants.ERICHSEN_CUPPING));
+			}
+			if (dto.getTestType().equals(OfsConstants.MICROSTRUCTURE)) {
+				response.setMicrostructureResult(
+						custRepository.getOtherTest(dto.getSpecimenId(), OfsConstants.MICROSTRUCTURE));
+			}
+			if (dto.getTestType().equals(OfsConstants.WELDABILITY_TEST)) {
+				response.setWeldabilityResult(
+						custRepository.getOtherTest(dto.getSpecimenId(), OfsConstants.WELDABILITY_TEST));
+			}
+		}
+		return response;
+	}
+
+	@Override
+	@Transactional
+	public List<OtherTestResultLabTestingDto> saveOtherTestResult(List<OtherTestResultLabTestingDto> request) {
+
+		logger.info("Entering saveOtherTestResult with request: {}", request);
+
+		for (OtherTestResultLabTestingDto dto : request) {
+			saveOtherTestResult(dto.getSpecimanId(), List.of(dto));
+
+		}
+		logger.info("Exiting saveOtherTestResult with response: {}", request);
+
+		return request;
+	}
+
+	public void saveOtherTestResult(String specimanId, List<OtherTestResultLabTestingDto> othrTestResult) {
+		logger.info("Entering saveOtherTestResult with specimenId: {}, otherTestResult: {}", specimanId,
+				othrTestResult);
+
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		for (OtherTestResultLabTestingDto item : othrTestResult) {
+			OtherTestResultQualityTransactionEntity othrTstRsltEntity = new OtherTestResultQualityTransactionEntity();
+			Optional<OtherTestResultQualityTransactionEntity> optional = otherTestResultQualityTransactionRepository
+					.findById(specimanId);
+			if (optional.isPresent()) {
+				othrTstRsltEntity = optional.get();
+			} else {
+				othrTstRsltEntity.setSpecimanId(specimanId);
+				othrTstRsltEntity.setCreatedDate(new Date());
+				othrTstRsltEntity.setCreatedBy(ClientIpUtils.getClient());
+				othrTstRsltEntity.setIsActive(BigDecimal.ONE);
+				othrTstRsltEntity.setCreatedMacAddress(ClientIpUtils.getClientIpAddress());
+			}
+			othrTstRsltEntity.setTestRemarks(item.getTestRemarks());
+			othrTstRsltEntity.setModifiedBy(ClientIpUtils.getClient());
+			othrTstRsltEntity.setModifiedDate(new Date());
+			othrTstRsltEntity.setModifiedMacAddress(ClientIpUtils.getClientIpAddress());
+			otherTestResultQualityTransactionRepository.save(othrTstRsltEntity);
+			updateSpecimanForOtherTest(specimanId, item);
+		}
+	}
+
+	private void updateSpecimanForOtherTest(String specimanId, OtherTestResultLabTestingDto item) {
+		SpecimenQualityTransactionEntity specimnQltyTrsnEntity = new SpecimenQualityTransactionEntity();
+		Optional<SpecimenQualityTransactionEntity> isCheckSpecimanId = specimenQualityTransactionRepository
+				.findById(specimanId);
+		if (isCheckSpecimanId.isPresent()) {
+			specimnQltyTrsnEntity = isCheckSpecimanId.get();
+			specimnQltyTrsnEntity.setSpecimenStatus(item.getSpecimenStatus());
+		} else {
+			specimnQltyTrsnEntity.setSpecimenId(specimanId);
+		}
+		specimnQltyTrsnEntity.setFinalResult(item.getFinalResult());
+		if (item.getManualDecision() != null && QualityConstants.PASS.equals(item.getManualDecision())) {
+			specimnQltyTrsnEntity.setReleaseRemark(item.getReleaseRemark());
+		} else {
+			specimnQltyTrsnEntity.setHoldRemark(item.getReleaseRemark());
+		}
+		specimnQltyTrsnEntity.setManualDecision(item.getManualDecision());
+		specimenQualityTransactionRepository.save(specimnQltyTrsnEntity);
+	}
+
+	@Transactional
+	@Override
+	public FluentaApiResponse<Void> retest(String sampleId, String specimanId, String baseSpecimenId) {
+		logger.info("Entering retest with sampleId: {}, specimenId: {}", sampleId, specimanId);
+
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		FluentaApiResponse<Void> response = new FluentaApiResponse<>();
+		SpecimenQualityTransactionEntity specimnQltyTrsnEntity;
+		Optional<SpecimenQualityTransactionEntity> isCheckSpecimanId = specimenQualityTransactionRepository
+				.findById(specimanId);
+
+		if (isCheckSpecimanId.isPresent()) {
+
+			specimnQltyTrsnEntity = isCheckSpecimanId.get();
+			specimnQltyTrsnEntity.setSpecimenStatus(QualityConstants.REJECTED);
+			specimenQualityTransactionRepository.save(specimnQltyTrsnEntity);
+			response.addMessage(MessageType.SUCCESS, "Resample Successfully Completed");
+
+		} else {
+			response.addMessage(MessageType.ERROR, "No valid testOrderId records found to update.");
+
+		}
+		List<SpecimenQualityTransactionEntity> findChildSpecimanId = specimenQualityTransactionRepository
+				.findChildBySpecimanId(baseSpecimenId);
+
+		if (!findChildSpecimanId.isEmpty()) {
+
+			for (SpecimenQualityTransactionEntity sqt : findChildSpecimanId) {
+				sqt.setSpecimenStatus(QualityConstants.REJECTED);
+				specimenQualityTransactionRepository.save(sqt);
+			}
+			response.addMessage(MessageType.SUCCESS, "Resample Successfully Completed");
+
+		} else {
+			response.addMessage(MessageType.ERROR, "No valid testOrderId records found to update.");
+
+		}
+
+		saveSpecimenGeneration(sampleId, specimanId, findChildSpecimanId);
+		return response;
+	}
+
+	public void saveSpecimenGeneration(String sampleId, String specimanId,
+			List<SpecimenQualityTransactionEntity> childSpecimanIdList) {
+		SpecimenQualityTransactionEntity data = null;
+
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		SpecimenQualityTransactionEntity specimanEntity = new SpecimenQualityTransactionEntity();
+
+		Optional<SpecimenQualityTransactionEntity> findById = specimenQualityTransactionRepository.findById(specimanId);
+		if (findById.isPresent()) {
+			data = findById.get();
+		}
+
+		BigDecimal specimenCounter = null;
+		if (sampleId != null) {
+			BigDecimal maxCount = specimenQualityTransactionRepository.findMaxSpecimenCounterBySampleId(sampleId);
+			specimanEntity.setSpecimenId(getNextId(specimanId));
+			specimenCounter = maxCount.add(BigDecimal.ONE);
+			specimanEntity.setSpecimenCounter(specimenCounter);
+		}
+
+		if (data != null) {
+			specimanEntity.setSampleId(data.getSampleId());
+			specimanEntity.setSpecification(data.getSpecification());
+			specimanEntity.setTestType(data.getTestType());
+			specimanEntity.setTestSpecimenType(data.getTestSpecimenType());
+			specimanEntity.setThickness(data.getThickness());
+			specimanEntity.setLength(data.getLength());
+			specimanEntity.setWidth(data.getWidth());
+			specimanEntity.setTestMethod(data.getTestMethod());
+			specimanEntity.setSpecimenStatus(QualityConstants.PENDING);
+			specimanEntity.setPreparationMethod(data.getPreparationMethod());
+			specimanEntity.setCondition(data.getCondition());
+			specimanEntity.setTestSource(data.getTestSource());
+			specimanEntity.setTemperature(data.getTemperature());
+			specimanEntity.setDirection(data.getDirection());
+			specimanEntity.setDegrees(data.getDegrees());
+
+		}
+
+		specimenQualityTransactionRepository.save(specimanEntity);
+
+		if (!childSpecimanIdList.isEmpty()) {
+
+			int size = childSpecimanIdList.size();
+
+			for (SpecimenQualityTransactionEntity sqt : childSpecimanIdList) {
+
+				SpecimenQualityTransactionEntity specimenety = new SpecimenQualityTransactionEntity();
+
+				String childSpecimenId = incrementLastNumber(sqt.getSpecimenId(), size);
+
+				specimenety.setSpecimenId(childSpecimenId);
+				if (specimenCounter != null) {
+					specimenCounter = specimenCounter.add(BigDecimal.ONE);
+
+				}
+				specimenety.setSpecimenCounter(specimenCounter);
+				specimenety.setSampleId(sqt.getSampleId());
+				specimenety.setSpecification(sqt.getSpecification());
+				specimenety.setTestType(sqt.getTestType());
+				specimenety.setTestSpecimenType(sqt.getTestSpecimenType());
+				specimenety.setThickness(sqt.getThickness());
+				specimenety.setLength(sqt.getLength());
+				specimenety.setWidth(sqt.getWidth());
+				specimenety.setTestMethod(sqt.getTestMethod());
+				specimenety.setSpecimenStatus(QualityConstants.PENDING);
+				specimenety.setPreparationMethod(sqt.getPreparationMethod());
+				specimenety.setCondition(sqt.getCondition());
+				specimenety.setTestSource(sqt.getTestSource());
+				specimenQualityTransactionRepository.save(specimenety);
+
+			}
+		}
+	}
+
+	private static String incrementLastNumber(String str, int size) {
+
+		int lastDotIndex = str.lastIndexOf('.');
+		String base = str.substring(0, lastDotIndex);
+		int lastNumber = Integer.parseInt(str.substring(lastDotIndex + 1));
+		String incrementedNumber = String.format("%02d", lastNumber + size);
+		return base + "." + incrementedNumber;
+	}
+
+	public static String getNextId(String currentId) {
+		String baseId;
+		int nextSuffix;
+
+		if (currentId.matches(".*R\\d+$")) {
+			baseId = currentId.substring(0, currentId.lastIndexOf('R'));
+			String suffixStr = currentId.substring(currentId.lastIndexOf('R') + 1);
+			int currentSuffix = Integer.parseInt(suffixStr);
+			nextSuffix = currentSuffix + 1;
+		} else {
+			baseId = currentId;
+			nextSuffix = 1;
+		}
+		return baseId + "R" + nextSuffix;
+	}
+
+	@Override
+	public PostProdTaskMtEntity getManualDecision(String ppid, String prid) {
+		Optional<PostProdTaskMtEntity> tasksByPpidAndPrid = postProdTaskMtEntityJpaRepository
+				.getTasksByPpidAndPrid(ppid, prid, QualityConstants.INSP_FLAG_YES);
+
+		if (tasksByPpidAndPrid.isPresent()) {
+			return tasksByPpidAndPrid.get();
+		}
+		return null;
+	}
+
+	@Override
+	@Transactional(rollbackFor = TransactionException.class)
+	public ResponseEntity<FluentaApiResponse<List<SampleDetailsDto>>> updateManualDecision(
+	        List<SampleDetailsDto> request) {
+
+	    long methodStart = System.currentTimeMillis();
+
+	    dbSessionService.setSessionInfo(this.getClass().getName());
+
+	    final String modifiedBy = ClientIpUtils.getClient();
+	    final String modifiedIp = ClientIpUtils.getClientIpAddress();
+	    final Date now = new Date();
+
+	    List<PostProdTaskMtEntity> tasksToSave = new ArrayList<>();
+	    List<PpspecimanmapQtEntity> specimenMapsToSave = new ArrayList<>();
+	    List<TestOrderLineQualityListEntity> testOrdersToSave = new ArrayList<>();
+
+	    List<HsmQualityChemicalDto> chemPayload = new ArrayList<>();
+	    List<HsmQualityMechanicalDto> mechPayload = new ArrayList<>();
+
+	    for (SampleDetailsDto dto : request) {
+
+	        long loopStart = System.currentTimeMillis();
+
+	        // ---------------- Fetch Task ----------------
+	        PostProdTaskMtEntity task = postProdTaskMtEntityJpaRepository
+	                .getTasksByPpidAndPrid(dto.getPpId(), dto.getTpiRequired(), QualityConstants.INSP_FLAG_YES)
+	                .orElseThrow(() -> new ResourceNotFoundException(
+	                        "PostProdTaskMtEntity", dto.getPpId(), null));
+
+	        task.setFinalResult(dto.getFinalResult());
+	        task.setManualDecision(dto.getManualDecision());
+	        task.setTaskStatus(QualityConstants.STATUS_COMPLETE);
+	        task.setModifiedBy(modifiedBy);
+	        task.setModifiedDate(now);
+	        task.setModifiedMacAddress(modifiedIp);
+	        task.setReleaseRemark(dto.getReleaseRemark());
+
+	        tasksToSave.add(task);
+
+	        // ---------------- Mapped Coils ----------------
+	        List<PostProdTaskMtEntity> mappedCoils =
+	                postProdTaskMtEntityJpaRepository.getTasksByMappedSampleId(
+	                        task.getId().getPpId(), task.getMapSampleId());
+
+	        for (PostProdTaskMtEntity coilTask : mappedCoils) {
+	            coilTask.setFinalResult(dto.getFinalResult());
+	            coilTask.setManualDecision(dto.getManualDecision());
+
+	            if (QualityConstants.PASS.equals(dto.getManualDecision())) {
+	                coilTask.setTaskStatus(QualityConstants.STATUS_COMPLETED);
+	            }
+
+	            coilTask.setModifiedBy(modifiedBy);
+	            coilTask.setModifiedDate(now);
+	            coilTask.setModifiedMacAddress(modifiedIp);
+	            coilTask.setReleaseRemark(dto.getReleaseRemark());
+	        }
+
+	        tasksToSave.addAll(mappedCoils);
+
+	        // ---------------- Sample Status ----------------
+	        sampleQtMasterRepository.findById(dto.getSampleId().trim())
+	                .ifPresent(sample ->
+	                        sample.setSampleStatus(QualityConstants.STATUS_COMPLETED));
+
+	        // ---------------- Specimen Maps ----------------
+	        List<String> specimenList = specimenQualityTransactionRepository
+	                .findSpecimenBySampleId(dto.getSampleId(), QualityConstants.STATUS_COMPLETE);
+
+	        for (String specimenId : specimenList) {
+
+	            PpspecimanmapQtPKEntity pk = new PpspecimanmapQtPKEntity();
+	            pk.setppId(dto.getPpId());
+	            pk.setspecimanId(specimenId);
+	            pk.setppCounter(dto.getPpCtr());
+
+	            PpspecimanmapQtEntity entity =
+	                    ppspecimanMapQtRepository.findById(pk)
+	                            .orElse(new PpspecimanmapQtEntity());
+
+	            entity.setId(pk);
+	            entity.setPpMapStatus(QualityConstants.STATUS_MAPPED);
+	            entity.setTaskStepId(dto.getTaskstepId());
+
+	            specimenMapsToSave.add(entity);
+	        }
+
+	        // ---------------- FAIL Logic ----------------
+	        if (QualityConstants.FAIL.equals(dto.getManualDecision())) {
+
+	            List<TestOrderLineQualityListEntity> orders =
+	                    testordlQtRepository.findTestOrdByPpId(dto.getPpId());
+
+	            if (!orders.isEmpty()) {
+	                TestOrderLineQualityListEntity order = orders.get(0);
+	                order.setTestppSts(QualityConstants.REJECTED);
+	                testOrdersToSave.add(order);
+
+	                List<TestOrderLineQualityListEntity> otherOrders =
+	                        testordlQtRepository.findTestOrderByIdAndStatus(
+	                                order.getId().gettestOrderId(),
+	                                QualityConstants.MAPPED);
+
+	                for (TestOrderLineQualityListEntity other : otherOrders) {
+
+	                    other.setTestppSts(QualityConstants.PENDING);
+
+	                    postProdTaskMtEntityJpaRepository
+	                            .getTasksByPpidAndPrid(
+	                                    other.getPpId(),
+	                                    dto.getTpiRequired(),
+	                                    QualityConstants.INSP_FLAG_YES)
+	                            .ifPresent(t -> t.setMapSampleId(null));
+
+	                    testOrdersToSave.add(other);
+	                }
+	            }
+	        }
+
+	        // ---------------- SAP Data Prep ----------------
+	        mechPayload.add(
+	                sapInterface.buildHsmQualityMechanicalDto(
+	                        new HsmQualityMechanicalDto(),
+	                        dto.getPpId(),
+	                        dto.getHeatId(),
+	                        dto.getSampleId()));
+
+	        chemPayload.add(
+	                sapInterface.buildHsmQualityChemicalDto(
+	                        new HsmQualityChemicalDto(),
+	                        dto.getPpId(),
+	                        dto.getSlabid(),
+	                        dto.getHeatId(),
+	                        dto.getSampleId()));
+
+	        logger.info("Processed PPID {} in {} ms----------------------",
+	                dto.getPpId(),
+	                System.currentTimeMillis() - loopStart);
+	    }
+
+	    // ---------------- Batch Save ----------------
+	    long dbStart = System.currentTimeMillis();
+
+	    postProdTaskMtEntityJpaRepository.saveAll(tasksToSave);
+	    ppspecimanMapQtRepository.saveAll(specimenMapsToSave);
+	    testordlQtRepository.saveAll(testOrdersToSave);
+
+	    long dbEnd = System.currentTimeMillis();
+	    logger.info("DB batch save time = {} ms--------------------", (dbEnd - dbStart));
+
+	    // ---------------- SAP Calls ----------------
+	    long sapStart = System.currentTimeMillis();
+
+	    try {
+	        sapServiceClient.sendHsmMechTestData(
+	                JsonUtil.convertObjectToJson(
+	                        new JsonFormatMechSapDto(mechPayload)));
+
+	        sapServiceClient.sendHsmChemTestData(
+	                JsonUtil.convertObjectToJson(
+	                        new JsonFormatSapDto(chemPayload)));
+
+	    } catch (Exception ex) {
+	        logger.info("Error while sending SAP Mech/Chem Test Data", ex);
+	    }
+
+	    long sapEnd = System.currentTimeMillis();
+	    logger.info("SAP call time = {} ms----------------", (sapEnd - sapStart));
+
+	    long methodEnd = System.currentTimeMillis();
+	    logger.info("updateManualDecision TOTAL time = {} ms for {} records--------------------",
+	            (methodEnd - methodStart), request.size());
+
+	    return ResponseUtil.createResponse(request, "Update", false);
+	}
+
+
+    @Override
+    public ResponseEntity<FluentaApiResponse<List<ChemicalTestingDto>>> fetchChemical(String internalGrd, String extGrd,
+                                                                                      String ppId, String slabId, String sampleId) {
+
+        List<MechanicalTestDto> testBySampleIdAndName = custRepository.getTestBySampleIdAndName(sampleId,
+                QualityConstants.SPECTRO_TEST);
+
+        List<ChemicalTestingDto> list = custRepository.fetchChemical(internalGrd, extGrd, ppId, slabId,
+                testBySampleIdAndName);
+
+        if (testBySampleIdAndName != null && !testBySampleIdAndName.isEmpty()) {
+            MechanicalTestDto mechanicalTestDto = testBySampleIdAndName.get(0);
+            list.forEach(dto -> dto.setSpecimanId(mechanicalTestDto.getSpecimenId()));
+        }
+        return ResponseUtil.createResponse(list, "Fetching Mapped Coils", true);
+
+    }
+
+	@Override
+	@Transactional(rollbackFor = TransactionException.class)
+	public void saveChemTesting(List<ChemicalTestingDto> dto) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+
+		if (dto != null && !dto.isEmpty()) {
+			for (ChemicalTestingDto chemicalTestingDto : dto) {
+				if (chemicalTestingDto.getElement() != null) {
+					ChemResultQtEntity existingEntity = chemResultQtRepository
+							.findBySpecAndEle(chemicalTestingDto.getElement(), chemicalTestingDto.getSpecimanId());
+					ChemResultQtPkEntity pk = new ChemResultQtPkEntity();
+					pk.setElement(chemicalTestingDto.getElement());
+					pk.setspecimanId(chemicalTestingDto.getSpecimanId());
+
+					if (existingEntity != null) {
+						existingEntity.setElementValue(chemicalTestingDto.getTpaRecValue());
+						chemResultQtRepository.save(existingEntity);
+					} else {
+						ChemResultQtEntity newEntity = new ChemResultQtEntity();
+						newEntity.setId(pk);
+						newEntity.setElementValue(chemicalTestingDto.getTpaRecValue());
+						chemResultQtRepository.save(newEntity);
+					}
+				}
+
+			}
+		}
+	}
+
+}

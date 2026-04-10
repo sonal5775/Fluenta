@@ -1,0 +1,61 @@
+package com.hindindustec.fluenta.hsm.masters.dto;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@NoArgsConstructor
+@Getter
+@Setter
+@AllArgsConstructor
+public class WfHierarchyDto {
+
+	private String wfid;
+	private long submitroleid;
+	private String submitrolenm;
+	private BigDecimal approveroleid;
+	private String approverolenm;
+	private long actionid;
+	private String actionnm;
+	private BigDecimal isactv;
+	private String crBy;
+	private Date crDt;
+	private String crMacAddr;
+	private String moBy;
+	private Date moDt;
+	private String moMacAddr;
+	private String oldwfid;
+	private long oldsubmitroleid;
+
+	private List<WfRoleHierarchyMapDto> roleList = new ArrayList<>();
+	private List<WfActionHierarchyMapDto> actionList = new ArrayList<>();
+
+	public WfHierarchyDto(String wfid, long submitroleid, String submitrolenm, BigDecimal approveroleid,
+			String approverolenm, long actionid, String actionnm, BigDecimal isactv, String crBy, Date crDt,
+			String crMacAddr, String moBy, Date moDt, String moMacAddr, String oldwfid, long oldsubmitroleid) {
+		super();
+		this.wfid = wfid;
+		this.submitroleid = submitroleid;
+		this.submitrolenm = submitrolenm;
+		this.approveroleid = approveroleid;
+		this.approverolenm = approverolenm;
+		this.actionid = actionid;
+		this.actionnm = actionnm;
+		this.isactv = isactv;
+		this.crBy = crBy;
+		this.crDt = crDt;
+		this.crMacAddr = crMacAddr;
+		this.moBy = moBy;
+		this.moDt = moDt;
+		this.moMacAddr = moMacAddr;
+		this.oldwfid = oldwfid;
+		this.oldsubmitroleid = oldsubmitroleid;
+	}
+
+}

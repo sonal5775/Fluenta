@@ -1,0 +1,674 @@
+
+
+package com.hindindustec.fluenta.utility.service.impl;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.utility.common.DBSessionService;
+import com.hindindustec.fluenta.utility.common.DevExtGridFilterUtils;
+import com.hindindustec.fluenta.utility.common.OfsConstants;
+import com.hindindustec.fluenta.utility.common.OfsStatusConstants;
+import com.hindindustec.fluenta.utility.common.response.FluentaApiResponse;
+import com.hindindustec.fluenta.utility.common.response.FluentaPaginatedResponse;
+import com.hindindustec.fluenta.utility.common.response.Group;
+import com.hindindustec.fluenta.utility.common.response.GroupedDataResponse;
+import com.hindindustec.fluenta.utility.common.response.MessageType;
+import com.hindindustec.fluenta.utility.constants.UtilityConstants;
+import com.hindindustec.fluenta.utility.dto.MaterialReInspectionDto;
+import com.hindindustec.fluenta.utility.dto.MaterialReInspectionRequest;
+import com.hindindustec.fluenta.utility.dto.MaterialReInspectionStatusDto;
+import com.hindindustec.fluenta.utility.model.PphMt;
+import com.hindindustec.fluenta.utility.model.PphMtPK;
+import com.hindindustec.fluenta.utility.repository.MaterialReInspectionCustRepository;
+import com.hindindustec.fluenta.utility.repository.PphMtRepository;
+import com.hindindustec.fluenta.utility.repository.ProductRepository;
+import com.hindindustec.fluenta.utility.service.MaterialReInspectionService;
+
+
+
+@Service
+public class MaterialReInspectionServiceImpl implements MaterialReInspectionService {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(MaterialReInspectionServiceImpl.class);
+	
+	@Autowired
+	private MaterialReInspectionCustRepository repository;
+	private PphMtRepository pphMtRepository;
+	private DBSessionService dbSessionService;
+	private ProductRepository productRepository;
+	
+	public MaterialReInspectionServiceImpl(MaterialReInspectionCustRepository repository,
+			PphMtRepository pphMtRepository, DBSessionService dbSessionService,ProductRepository productRepository) {
+		super();
+		this.repository = repository;
+		this.pphMtRepository = pphMtRepository;
+		this.dbSessionService = dbSessionService;
+		this.productRepository = productRepository;
+	}
+	
+	@Override
+	public List<String> getProductIdList(String query,String product) {
+		return repository.getProductIdList(query,product);
+	}
+
+	@Override
+	public List<String> getFirstProductIdList(String product) {
+		Pageable limit = PageRequest.of(0, 10);
+		return pphMtRepository.findAllProductIdsByProduct(limit,product);
+	}
+
+	@Override
+	public List<MaterialReInspectionStatusDto> getMaterialReInspectionStatus(MaterialReInspectionRequest request) {
+		List<MaterialReInspectionStatusDto> resultList = new ArrayList<>();
+	    addStatusDto(resultList, OfsStatusConstants.AVAILABLE, pphMtRepository.findSlabsByAvailableStatus(OfsStatusConstants.AVAILABLE,request.getProduct()), pphMtRepository.findSlabsWgtByAvailableStatus(OfsStatusConstants.AVAILABLE,request.getProduct()));
+	    addStatusDto(resultList, OfsStatusConstants.READY_TO_DISPATCH, pphMtRepository.findSlabsByRTDStatus(OfsStatusConstants.READY_TO_DISPATCH,request.getProduct()), pphMtRepository.findSlabsWgtByRTDStatus(OfsStatusConstants.READY_TO_DISPATCH,request.getProduct()));
+		addStatusDto(resultList, OfsStatusConstants.FREE_STOCK, pphMtRepository.findSlabsByFreeStockStatus(OfsStatusConstants.FREE_STOCK,request.getProduct()), pphMtRepository.findSlabsWgtByFreeStockStatus(OfsStatusConstants.FREE_STOCK,request.getProduct()));
+	    addStatusDto(resultList, OfsStatusConstants.TOTAL, pphMtRepository.findTotalSlabsCount(OfsStatusConstants.AVAILABLE,OfsStatusConstants.READY_TO_DISPATCH,OfsStatusConstants.FREE_STOCK,request.getProduct()), pphMtRepository.findTotalSlabsWgt(OfsStatusConstants.AVAILABLE,OfsStatusConstants.READY_TO_DISPATCH,request.getProduct()));
+	    return resultList;
+	}
+	private void addStatusDto(List<MaterialReInspectionStatusDto> resultList, String status, Long count, BigDecimal wgt) {
+		MaterialReInspectionStatusDto materialReInspectionStatusDto = new MaterialReInspectionStatusDto();
+		materialReInspectionStatusDto.setStatus(status);
+		materialReInspectionStatusDto.setCount(count != null ? count : 0);
+		materialReInspectionStatusDto.setColor("");
+		materialReInspectionStatusDto.setWgt(wgt);
+		resultList.add(materialReInspectionStatusDto);
+	}
+	@Override
+	@Transactional
+	public FluentaApiResponse<String> saveReInspectionData(List<MaterialReInspectionDto> list) {
+		FluentaApiResponse<String> response = new FluentaApiResponse<>();
+
+		try {
+			dbSessionService.setSessionInfo(this.getClass().getName());
+
+			for (MaterialReInspectionDto item : list) {
+				PphMt pphMt = new PphMt();
+				PphMtPK id = new PphMtPK();
+				id.setPpid(item.getPpid());
+				id.setPpctr(item.getPpctr());
+				pphMt.setId(id);
+
+				Optional<PphMt> obj = pphMtRepository.findById(id);
+				if (obj.isPresent()) {
+					PphMt existingObj = obj.get();
+					existingObj.setPpsts(OfsConstants.HOLD);
+					pphMtRepository.save(existingObj);
+					if (UtilityConstants.HRCOIL.equals(existingObj.getPrdid())) {
+						repository.createPostProdTaskForReInspectionForHrCoil(existingObj);//TO DO AFTER QUALITY COMPLETION
+					} else if (UtilityConstants.SLAB.equals(existingObj.getPrdid())) {
+						repository.createPostProdTaskForReInspectionForSlab(existingObj);
+					}
+
+				}
+			}
+
+			response.setStatus(FluentaApiResponse.Status.SUCCESS);
+			response.addMessage(MessageType.INFO, OfsConstants.RE_INSPECTION_SUCCESSFULLY);
+
+		} catch (Exception e) {
+			response.setStatus(FluentaApiResponse.Status.FAILURE);
+			response.addMessage(MessageType.ERROR, OfsConstants.RE_INSPECTION_FAILD + ": " + e.getMessage());
+			LOGGER.error(OfsConstants.RE_INSPECTION_FAILD, e);
+		}
+
+		return response;
+	}
+	
+
+	@Override
+	public List<String> getProductList() {
+		return productRepository.getProductList();
+	}
+	
+	@Override
+	public <T> T getSlabStocks(MaterialReInspectionRequest slabStockRequest, String status, int pageNumber, int pageSize,
+			String filter, String sort, String group, int skip, boolean requireTotalCount, boolean requireGroupCount,
+			String searchValue, Integer pageStore, Integer latestGroupCount) {
+		
+
+		
+		List<String> filterList = DevExtGridFilterUtils.extractElements(filter);
+
+		// new
+		int[] pageSizeArr = processPageAndSize(pageNumber, pageSize, pageStore);
+		pageNumber = pageSizeArr[0];
+		pageSize = pageSizeArr[1];
+
+		List<String> groupList = DevExtGridFilterUtils.getSortListFromString(group);
+
+		List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);
+		 if (DevExtGridFilterUtils.isGroupWithoutFilterOrSort(group, filter, sort)) {
+		     return handleGroupOnly(slabStockRequest, groupList, pageNumber, pageSize, skip,status,pageStore,latestGroupCount);
+		 }
+		 
+		 if (DevExtGridFilterUtils.isGroupWithFilterOrSort(group, filter, sort)) {
+		     return handleGroupWithFilterOrSort(slabStockRequest, groupList, filterList, sortList, pageNumber, pageSize, skip,requireTotalCount,status,pageStore,latestGroupCount);
+		 }
+
+		if (DevExtGridFilterUtils.isFilterOrSortOnly(group, filter, sort)) {
+			return handleFilterOrSort(slabStockRequest, filterList, sortList, pageNumber, pageSize, skip,
+					requireTotalCount, status, pageStore, latestGroupCount);
+		}
+
+		return null;
+		// old
+	}
+	
+	private int[] processPageAndSize(Integer pageNumber, Integer pageSize, Integer pageStore) {
+		if (pageNumber == null) {
+			pageNumber = 0;
+		}
+		if (pageSize == null) {
+			pageSize = pageStore;
+		}
+		return new int[] { pageNumber, pageSize };
+	}
+	
+	
+	@SuppressWarnings("unchecked")
+	private <T> T handleFilterOrSort(MaterialReInspectionRequest request, List<String> filterList, List<String> sortList,
+			Integer page, Integer size, Integer skip, boolean requireTotalCount, String status, Integer pageStore,
+			Integer latestGroupCount) {
+		if (!requireTotalCount) {
+			size = page + size;
+			page = 0;
+		}
+
+		String query = repository.mainQuery ;
+		String countQuery = repository.countMainQuery;
+		
+
+		if (!filterList.isEmpty()) {
+			query = filterQueryUsingFilterList(filterList, query);
+			countQuery = filterQueryUsingFilterList(filterList, countQuery);
+		}
+
+		query = applySorting(sortList, query);
+		if (!filterList.isEmpty()) {
+	        countQuery = (filterQueryUsingFilterList(filterList, countQuery.toString()));
+	        countQuery = (processSqlQuery(countQuery.toString()));
+	    }
+		Page<MaterialReInspectionDto> slabeStock = repository.getSlabStocks(request, status, page, size,
+				query, countQuery, skip);
+		for(MaterialReInspectionDto dto: slabeStock) {
+	        dto.setExtGrade(getExternalGrade(dto.getEqSpec(), dto.getEqSpecGroup(), dto.getEqSpecSubGroup()));
+        }
+		
+		return (T) new FluentaPaginatedResponse<>(slabeStock.getContent(), slabeStock.getTotalElements());
+	}
+	
+	
+
+	public String filterQueryUsingFilterList(List<String> filterList, String query) {
+		StringBuilder queryBuilder = new StringBuilder(query);
+		queryBuilder.append(" AND (");
+
+		List<String> columnNames = DevExtGridFilterUtils.getAllFields(MaterialReInspectionDto.class);
+
+		Map<String, String> columnDataTypesKeyValuePair = DevExtGridFilterUtils
+				.getAllFieldsWithTypes(MaterialReInspectionDto.class);
+		Map<String, String> columnAlise = checkClassAleas();
+		boolean isClobObject = false;
+		boolean isStringObject = false;
+		boolean isDateObject = false;
+		boolean isContains = false;
+		boolean isNotContains = false;
+		boolean isStartWith = false;
+		boolean isEndWith = false;
+		boolean isNullCheck = false;
+
+		for (int i = 0; i < filterList.size(); i++) {
+			String item = filterList.get(i);
+			if (columnNames.contains(item)) {
+				if (columnDataTypesKeyValuePair.get(item).equals("CLOB")) {
+					queryBuilder.append("DBMS_LOB.INSTR(").append(columnAlise.get(item)).append(item).append(",");
+					isClobObject = true;
+				} else if (columnDataTypesKeyValuePair.get(item).equals("DATE")) {
+					queryBuilder.append(" TO_CHAR(").append(columnAlise.get(item)).append(item)
+							.append(", 'YYYY-MM-DD')");
+					isDateObject = true;
+				} else if (columnDataTypesKeyValuePair.get(item).equals("VARCHAR2")) {
+
+					queryBuilder.append(columnAlise.get(item)).append(item);
+					int columnIndex = findIndexOfKey(filterList, item, i);
+
+					if ("null".equals(filterList.get(columnIndex + 2))) {
+
+						isNullCheck = true;
+					}
+					isStringObject = true;
+				} else {
+					queryBuilder.append(columnAlise.get(item)).append(item);
+
+				}
+
+			} else if (isNullCheck) {
+				queryBuilder.append(" IS NULL ");
+				i = i + 1;
+				isNullCheck = false;
+				isStringObject = false;
+
+			} else if (item.equals(OfsConstants.CONTAINS) || item.equals(OfsConstants.NOTCONTAINS)
+					|| item.equals(OfsConstants.STARTSWITH) || item.equals(OfsConstants.ENDSWITH)) {
+				if (isClobObject) {
+				} else if (isDateObject) {
+					queryBuilder.append(OfsConstants.LIKE);
+				} else {
+					if (item.equals(OfsConstants.CONTAINS)) {
+						queryBuilder.append(OfsConstants.LIKE);
+						isContains = true;
+					} else if (item.equals(OfsConstants.NOTCONTAINS)) {
+						queryBuilder.append(OfsConstants.NOT_LIKE);
+						isNotContains = true;
+					} else if (item.equals(OfsConstants.STARTSWITH)) {
+						queryBuilder.append(OfsConstants.LIKE);
+						isStartWith = true;
+					} else if (item.equals(OfsConstants.ENDSWITH)) {
+						queryBuilder.append(OfsConstants.LIKE);
+						isEndWith = true;
+					} else {
+						queryBuilder.append(" = ");
+					}
+				}
+			} else if (item.equals("or") || item.equals("and")) {
+				queryBuilder.append(" ").append(item).append(" ");
+			} else if (item.equals("=") || item.equals("<>") || item.equals(">=") || item.equals("<")
+					|| item.equals(">")) {
+				queryBuilder.append(" ").append(item);
+			} else {
+				if (isClobObject) {
+					queryBuilder.append("'").append(item).append("') > 0");
+					isClobObject = false;
+				} else if (isStringObject) {
+					if (isContains) {
+						queryBuilder.append(" '%").append(item.trim().toUpperCase()).append("%'");
+						isContains = false;
+					} else if (isNotContains) {
+						queryBuilder.append(" '%").append(item.trim().toUpperCase()).append("%'");
+						isNotContains = false;
+					} else if (isStartWith) {
+						queryBuilder.append(" '").append(item.trim().toUpperCase()).append("%'");
+						isStartWith = false;
+					} else if (isEndWith) {
+						queryBuilder.append(" '%").append(item.trim().toUpperCase()).append("'");
+						isEndWith = false;
+					} else {
+						queryBuilder.append(" '").append(item.trim().toUpperCase()).append("'");
+					}
+					isStringObject = false;
+				} else if (isDateObject) {
+					DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+					LocalDateTime dateTime = LocalDateTime.parse(item, formatter);
+					String dateOnly = dateTime.toLocalDate().toString();
+					queryBuilder.append(" '").append(dateOnly).append("'");
+					isDateObject = false;
+				} else {
+					queryBuilder.append(" ").append(item);
+				}
+			}
+		}
+		queryBuilder.append(" )");
+
+		return queryBuilder.toString();
+	}
+	
+	
+	private String applySorting(List<String> sortList, String query) {
+		if (!sortList.isEmpty()) {
+			Map<String, String> columnAlias = checkClassAleasWithNoStop();
+			if (sortList.get(3).equals("true")) {
+				query += OfsConstants.ORDER_BY + columnAlias.get(sortList.get(1))+ sortList.get(1)+ " DESC";
+			} else {
+				query += OfsConstants.ORDER_BY + columnAlias.get(sortList.get(1))+sortList.get(1);
+			}
+		} else {
+			query += " ORDER BY pp.prodDt DESC  ";
+		}
+		return query;
+	}
+	
+	
+	public int findIndexOfKey(List<String> list, String key, int targetIndex) {
+		int count = 0;
+		for (int i = 0; i < list.size(); i++) {
+			if (list.get(i).equals(key)) {
+				if (count == targetIndex) {
+					return i; // Return the index of the nth occurrence of the key
+				}
+				count++;
+			}
+		}
+		return targetIndex; // If the targetIndex doesn't match an occurrence, return targetIndex itself
+	}
+	
+	public static String getExternalGrade(String eqSpec,String eqSpecGroup,String eqSpecSubGroup) {
+		 String externalGrade = "";
+       if (eqSpec != null) {
+       	externalGrade = eqSpec;
+       }
+       if (eqSpecGroup != null) {
+       	externalGrade = externalGrade +"-"+eqSpecGroup;
+       }
+       if (eqSpecSubGroup != null) {
+       	externalGrade = externalGrade +"-"+eqSpecSubGroup;
+       }
+		return externalGrade;
+	}
+
+
+	public Map<String, String> checkClassAleasWithNoStop() {
+		Map<String, String> fieldTypes = new HashMap<>();
+		fieldTypes.put("ppid","pp.id.");
+		fieldTypes.put("ppctr","pp.id.");
+		fieldTypes.put("prdid","pp.");
+		fieldTypes.put("thk", "pp.");
+		fieldTypes.put("wdt", "pp.");
+		fieldTypes.put("len", "pp.");
+		fieldTypes.put("wgt", "pp.");
+		fieldTypes.put("grdid", "pp.");
+		fieldTypes.put("heatid", "pp.");
+		fieldTypes.put("prodDt", "pp.");
+		fieldTypes.put("plid", "pp.");
+		fieldTypes.put("tdcid", "pp.");
+		fieldTypes.put("prodrem", "pp.");
+		fieldTypes.put("qcrem", "pp.");
+		fieldTypes.put("slocid", "pp.");
+		fieldTypes.put("ppsts", "pp.");
+		fieldTypes.put("poid", "pp.");
+		fieldTypes.put("poprctr", "pp.");
+		fieldTypes.put("headwdt", "pp.");
+		fieldTypes.put("tailwdt", "pp.");
+		fieldTypes.put("soid", "poprlst.");
+		fieldTypes.put("solid", "poprlst.");
+		fieldTypes.put("eqSpec", "sol.");
+		fieldTypes.put("eqSpecGroup", "sol.");
+		fieldTypes.put("eqSpecSubGroup", "sol.");
+		fieldTypes.put("btcustnm", "soh.");	
+		fieldTypes.put("inspDt", "pp.");  
+		fieldTypes.put("udsts", "pp.");
+		return fieldTypes;
+	}
+	
+	public Map<String, String> checkClassAleas() {
+		Map<String, String> fieldTypes = new HashMap<>();
+		fieldTypes.put("ppid","pp.id.");
+		fieldTypes.put("ppctr","pp.id.");
+		fieldTypes.put("prdid","pp");
+		fieldTypes.put("thk", "pp.");
+		fieldTypes.put("wdt", "pp.");
+		fieldTypes.put("len", "pp.");
+		fieldTypes.put("wgt", "pp.");
+		fieldTypes.put("grdid", "pp.");
+		fieldTypes.put("heatid", "pp.");
+		fieldTypes.put("prodDt", "pp.");
+		fieldTypes.put("plid", "pp.");
+		fieldTypes.put("tdcid", "pp.");
+		fieldTypes.put("prodrem", "pp.");
+		fieldTypes.put("qcrem", "pp.");
+		fieldTypes.put("slocid", "pp.");
+		fieldTypes.put("ppsts", "pp.");
+		fieldTypes.put("poid", "pp.");
+		fieldTypes.put("poprctr", "pp.");
+		fieldTypes.put("headwdt", "pp.");
+		fieldTypes.put("tailwdt", "pp.");
+		fieldTypes.put("soid", "poprlst.");
+		fieldTypes.put("solid", "poprlst.");
+		fieldTypes.put("eqSpec", "sol.");
+		fieldTypes.put("eqSpecGroup", "sol.");
+		fieldTypes.put("eqSpecSubGroup", "sol.");
+		fieldTypes.put("btcustnm", "soh.");
+		fieldTypes.put("inspDt", "pp.");
+		fieldTypes.put("udsts", "pp.");
+		return fieldTypes;
+	}
+	
+	public String processSqlQuery(String sql) {
+		if (sql.trim().endsWith("or")) {
+			sql = sql.substring(0, sql.length() - 2);
+			sql = sql.trim().substring(0, sql.length() - 2).trim();
+		} else if (sql.trim().endsWith(" or")) {
+			sql = sql.substring(0, sql.length() - 2);
+			sql = sql.trim().substring(0, sql.length() - 3).trim();
+		}
+
+		sql = sql.replaceAll("h\\.isactv\\s*=\\s*'Active'", "h.isactv = 1");
+
+		sql = sql.replaceAll("h\\.isactv\\s*=\\s*'Inactive'", "h.isactv = 0");
+
+		return sql;
+	}
+
+	@Override
+	public <T> T getMaterialReInspectionDataGroupData(
+			MaterialReInspectionRequest request, int page, int size, String filterPathString, String sort,
+			String searchValue, String group) {
+		
+		int[] pageSizeArr = DevExtGridFilterUtils.processPageAndSize(page,size,10);
+		page = pageSizeArr[0];
+		size = pageSizeArr[1];
+		 
+		List<String> groupList = DevExtGridFilterUtils.getSortListFromString(group);
+		
+		return handleGroupOnly(request, groupList, page, size, page);
+	}
+	
+	private <T> T handleGroupOnly(MaterialReInspectionRequest request, List<String> groupList, int pageNumber,
+			int pageSize, int skip) {
+		pageSize = pageNumber + pageSize;
+		pageNumber = 0;
+		
+		String groupQuery = getQueryForGrouping(groupList);
+	    String groupCountQuery = getQueryForGroupingCount(groupList);
+		String mainCountQuery = getMainSlabeStockQueryCount();
+		Long mainQueryCount = repository.getMainQueryCount(request,mainCountQuery);
+	    Page<Object[]> groupingListData = repository.getGroupingListData(groupQuery, groupCountQuery,pageNumber,pageSize, skip,request);
+		Long totalDistCount = repository.groupCountQuery(groupCountQuery,request);
+		
+		return buildGroupedDataResponse(groupingListData, mainQueryCount, totalDistCount);
+	}
+
+	private String getQueryForGrouping(List<String> groupList) {
+		if (groupList == null || groupList.isEmpty()) {
+	        throw new IllegalArgumentException("groupList cannot be null or empty");
+	    }
+		
+		String desc = groupList.get(3);
+	    String groupColumn = groupList.get(1); 
+	    
+	     StringBuilder query = new StringBuilder();
+
+	     query.append("SELECT ")
+	    .append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)	
+		.append(" ,COUNT(*")
+		.append(")")
+		.append(OfsStatusConstants.WHERECONDITION);
+	    
+	    query.append(" GROUP BY "+checkClassAleas().get(groupColumn)+""+groupColumn+" ");
+	    
+	    if ("true".equals(desc)) {
+	    	query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn)).append(groupColumn).append(" DESC");
+		} else {
+			query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn)).append(groupColumn);
+		}
+		return query.toString();
+	}
+
+	private String getQueryForGroupingCount(List<String> groupList) {
+		String groupColumn = groupList.get(1);
+		StringBuilder query = new StringBuilder();
+		
+		 query.append("SELECT ")
+		    .append("COUNT( DISTINCT ")
+			.append(checkClassAleas().get(groupColumn))
+			.append(groupColumn)
+			.append(")")
+			.append(OfsStatusConstants.WHERECONDITION);
+		return query.toString();
+	}
+	
+	private String getMainSlabeStockQueryCount() {
+		   StringBuilder query = new StringBuilder();
+
+		     query.append("SELECT COUNT(distinct pp.id.ppid)")
+		          .append(OfsStatusConstants.WHERECONDITION);
+		return query.toString();
+	}
+	
+	@SuppressWarnings("unchecked")
+	private <T> T buildGroupedDataResponse(Page<Object[]> groupingListData, Long mainQueryCount, Long totalDistCount) {
+	    GroupedDataResponse<MaterialReInspectionDto> result = new GroupedDataResponse<>(null, 0L, 0L);
+	    List<Group<MaterialReInspectionDto>> list = new ArrayList<>();
+
+	    for (Object[] row : groupingListData) {
+	        String groupKey = row[0] instanceof BigDecimal
+	                ? ((BigDecimal) row[0]).toPlainString()
+	                : String.valueOf(row[0]);
+	        Long count = row[1] instanceof BigDecimal
+	                ? ((BigDecimal) row[1]).longValue()
+	                : (Long) row[1];
+	        list.add(new Group<>(groupKey, null, count));
+	    }
+
+	    result.setData(list);
+	    result.setTotalCount(mainQueryCount);
+	    result.setGroupCount(totalDistCount);
+	    return (T) result;
+	}
+	
+	private <T> T handleGroupWithFilterOrSort(MaterialReInspectionRequest request, List<String> groupList,
+			List<String> filterList, List<String> sortList, Integer page, Integer size, Integer skip,
+			boolean requireTotalCount,String status,Integer pageStore, Integer latestGroupCounts) {
+		if (requireTotalCount && size == null) {
+			size = pageStore;
+		} else {
+			size = page + size;
+			page = 0;
+		}
+
+		String queryForGrouping = getSlabeStockQueryForGroupingAndFiltering(groupList, filterList,status);
+		String queryForGroupingAndFilteringCount = getSlabeStockQueryForGroupingAndFilteringCount(groupList, filterList,sortList,status);
+		String mainCountQuery = repository.countMainQuery;
+		Long mainQueryCount = repository.getMainSlabeStockQueryCount(request,mainCountQuery,status);
+		Page<Object[]> groupingListData = repository.getGroupingListData(queryForGrouping,queryForGroupingAndFilteringCount, page, size, skip,request,status);
+		Long totalDistCount = repository.groupCountQuery(queryForGroupingAndFilteringCount,request,status);
+		
+	
+		return buildGroupedDataResponse(groupingListData, mainQueryCount, (totalDistCount != null && totalDistCount != 0) ? totalDistCount : latestGroupCounts);
+	}
+	
+	public String getSlabeStockQueryForGroupingAndFiltering(List<String> groupList,List<String> filterList,String status) {
+		String groupColumn = groupList.get(1);
+		String desc = groupList.get(3);
+		StringBuilder query = new StringBuilder();
+		query.append("SELECT ")
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)
+		.append(" ,COUNT(*")
+		.append(")")
+		.append(repository.countFromQuery);
+
+		String filterQueryUsingFilterList = query.toString();
+		
+		 if(!filterList.isEmpty()) {
+			 filterQueryUsingFilterList = filterQueryUsingFilterList(filterList,query.toString());
+		 }
+		 filterQueryUsingFilterList = filterQueryUsingFilterList+" "+"GROUP BY "+checkClassAleas().get(groupColumn)+""+ groupColumn + " "+"ORDER BY "+checkClassAleas().get(groupColumn)+""+ groupColumn;
+		 if("true".equals(desc)) {
+			 filterQueryUsingFilterList = filterQueryUsingFilterList+" DESC";
+		 }
+		 		
+		return filterQueryUsingFilterList;
+		
+	}
+	
+	
+	public String getSlabeStockQueryForGroupingAndFilteringCount(List<String> groupList,List<String> filterList,List<String> sortList, String status) {
+		String filterQueryUsingFilterList = null;
+		String groupColumn = groupList.get(1); 
+		StringBuilder query = new StringBuilder();
+		query.append("SELECT ")
+		.append("COUNT( DISTINCT ")
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)
+		.append(")")
+		.append(repository.countFromQuery);
+
+		filterQueryUsingFilterList = query.toString();
+		if(!filterList.isEmpty()) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList(filterList,query.toString());	
+		}
+
+		return filterQueryUsingFilterList;
+		
+	}
+	
+	
+	private <T> T handleGroupOnly(MaterialReInspectionRequest slabStockRequest, List<String> groupList, int pageNumber,
+			int pageSize, int skip, String status,Integer pageStore, Integer latestGroupCount) {
+		pageSize = pageNumber + pageSize;
+		pageNumber = 0;
+		String groupQuery = getQueryForGrouping(groupList,status);
+	    String groupCountQuery = getQueryForGroupingCount(groupList,status);
+		String mainCountQuery = repository.countMainQuery;
+		Long mainQueryCount = repository.getMainSlabeStockQueryCount(slabStockRequest,mainCountQuery,status);
+	    Page<Object[]> groupingListData = repository.getGroupingListData(groupQuery, groupCountQuery,pageNumber,pageSize, skip,slabStockRequest,status);
+		Long totalDistCount = repository.groupCountQuery(groupCountQuery,slabStockRequest,status);
+		return buildGroupedDataResponse(groupingListData, mainQueryCount, totalDistCount);
+	}
+	
+	private String getQueryForGrouping(List<String> groupList, String status) {
+		if (groupList == null || groupList.isEmpty()) {
+	        throw new IllegalArgumentException("groupList cannot be null or empty");
+	    }
+		
+		String desc = groupList.get(3);
+	    String groupColumn = groupList.get(1); 
+	    StringBuilder query = new StringBuilder();
+		query.append("SELECT ")
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)	
+		.append(" ,COUNT(*")
+		.append(")")
+		.append(repository.countFromQuery);
+
+		query.append(" GROUP BY "+checkClassAleas().get(groupColumn)+""+groupColumn+" ");
+		
+		if ("true".equals(desc)) {
+		    query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn)).append(groupColumn).append(" DESC");
+		} else {
+		    query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn)).append(groupColumn);
+		}
+		return query.toString();
+	}
+	
+	private String getQueryForGroupingCount(List<String> groupList, String status) {
+		String groupColumn = groupList.get(1); // Assuming the second element is the group column
+		StringBuilder query = new StringBuilder();
+		query.append("SELECT ")
+		.append("COUNT( DISTINCT ")
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)
+		.append(")")
+		.append(repository.countFromQuery);
+		return query.toString();
+	}
+	
+}

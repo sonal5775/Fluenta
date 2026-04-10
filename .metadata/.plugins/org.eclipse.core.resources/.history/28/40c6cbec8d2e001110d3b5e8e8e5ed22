@@ -1,0 +1,379 @@
+package com.hindindustec.fluenta.hsm.masters.serviceimpl;
+
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.common.config.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.masters.customrepository.ProductDefinitionCustRepository;
+import com.hindindustec.fluenta.hsm.masters.dto.AttributeMastermapDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ExternalGradeDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ForcastCodeDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ProductCodeDetailsDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ProductDefinitionDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ProductDefinitionRequest;
+import com.hindindustec.fluenta.hsm.masters.entities.ExtGrdJmEntity;
+import com.hindindustec.fluenta.hsm.masters.entities.FcprodcdeJm;
+import com.hindindustec.fluenta.hsm.masters.entities.GrdCm;
+import com.hindindustec.fluenta.hsm.masters.entities.PrdCs;
+import com.hindindustec.fluenta.hsm.masters.entities.PrdatrMapCs;
+import com.hindindustec.fluenta.hsm.masters.entities.PrdatrMapCsPK;
+import com.hindindustec.fluenta.hsm.masters.entities.PrdcdeCm;
+import com.hindindustec.fluenta.hsm.masters.repository.AtrlCsRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.AttributeMapJPARepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ExtgrdJmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ForcastCodeRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.GrdCmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ProductCodeJPARepository;
+import com.hindindustec.fluenta.hsm.masters.repository.ProductDefinationJPARepository;
+import com.hindindustec.fluenta.hsm.masters.service.ProductDefinitionService;
+
+@Service
+public class ProductDefinitionServiceImpl implements ProductDefinitionService {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(ProductDefinitionServiceImpl.class);
+	private ProductDefinitionCustRepository productDefinitionCustRepository;
+	private DBSessionService dbSessionService;
+	private ProductDefinationJPARepository productDefinationJPARepository;
+	private ProductCodeJPARepository productCodeJPARepository;
+	private AttributeMapJPARepository attributeMapJPARepository;
+	private AtrlCsRepository atrlCsRepository;
+	private GrdCmRepository grdCmRepository;
+	private ForcastCodeRepository forcastCodeRepository;
+	private ExtgrdJmRepository extgrdJmRepository;
+
+	public ProductDefinitionServiceImpl(ProductDefinitionCustRepository productDefinitionCustRepository,
+			DBSessionService dbSessionService, ProductDefinationJPARepository productDefinationJPARepository,
+			ProductCodeJPARepository productCodeJPARepository, AttributeMapJPARepository attributeMapJPARepository,
+			AtrlCsRepository atrlCsRepository, GrdCmRepository grdCmRepository,
+			ForcastCodeRepository forcastCodeRepository, ExtgrdJmRepository extgrdJmRepository) {
+		this.productDefinitionCustRepository = productDefinitionCustRepository;
+		this.dbSessionService = dbSessionService;
+		this.productDefinationJPARepository = productDefinationJPARepository;
+		this.productCodeJPARepository = productCodeJPARepository;
+		this.attributeMapJPARepository = attributeMapJPARepository;
+		this.atrlCsRepository = atrlCsRepository;
+		this.grdCmRepository = grdCmRepository;
+		this.forcastCodeRepository = forcastCodeRepository;
+		this.extgrdJmRepository = extgrdJmRepository;
+	}
+
+	@Override
+	public List<ProductDefinitionDto> getProductDefinitionDetails(ProductDefinitionRequest request) {
+		LOGGER.info("Getting product definition details for request: {}", request);
+		List<ProductDefinitionDto> productDetails = productDefinitionCustRepository.getProductDefinitionDetails();
+		LOGGER.info("Retrieved product definition details: {}", productDetails);
+		return productDetails;
+	}
+
+	@Override
+	public List<ProductCodeDetailsDto> getProductCodeDetails(String prdid) {
+		LOGGER.info("Getting product code details for product ID: {}", prdid);
+		List<ProductCodeDetailsDto> productCodeDetails = productDefinitionCustRepository.getProductCodeDetails(prdid);
+		LOGGER.info("Retrieved product code details: {}", productCodeDetails);
+		return productCodeDetails;
+	}
+
+	@Override
+	public List<ExternalGradeDto> getExternalGradeDetails() {
+		LOGGER.info("Getting external grade details");
+		List<ExternalGradeDto> externalGradeDetails = productDefinitionCustRepository.getExternalGradeDetails();
+		LOGGER.info("Retrieved external grade details: {}", externalGradeDetails);
+		return externalGradeDetails;
+	}
+
+	@Override
+	public List<AttributeMastermapDto> getAttributeMapDetails(String prdid) {
+		LOGGER.info("Getting attribute map details for product ID: {}", prdid);
+		List<AttributeMastermapDto> attributeMapDetails = productDefinitionCustRepository.getAttributeMapDetails(prdid);
+		LOGGER.info("Retrieved attribute map details: {}", attributeMapDetails);
+		return attributeMapDetails;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<ProductDefinitionDto> updateProductDefinition(List<ProductDefinitionDto> list) {
+		LOGGER.info("Updating product definitions: {}", list);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+
+		for (ProductDefinitionDto dto : list) {
+			LOGGER.debug("Processing product definition DTO: {}", dto);
+			if (dto.getPrdid() != null && !dto.getPrdid().trim().isEmpty()) {
+				Optional<PrdCs> productDef = productDefinationJPARepository.findById(dto.getPrdid().trim());
+				PrdCs entity = productDef.orElseGet(() -> {
+					LOGGER.debug("Creating new product definition entity for product ID: {}", dto.getPrdid());
+					PrdCs newEntity = new PrdCs();
+					newEntity.setPrdid(dto.getPrdid());
+					return newEntity;
+				});
+
+				entity.setPrdnm(dto.getPrdnm());
+				entity.setPrdfmly(dto.getPrdfmly());
+				entity.setPrdcat(dto.getPrdcat());
+				entity.setPrdshp(dto.getPrdshp());
+				entity.setQtymin(dto.getQtymin());
+				entity.setQtymax(dto.getQtymax());
+				entity.setIsactv(dto.getIsactv());
+
+				productDefinationJPARepository.save(entity);
+				LOGGER.debug("Saved product definition entity: {}", entity);
+			}
+		}
+
+		LOGGER.info("Completed updating product definitions: {}", list);
+		return list;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<ProductDefinitionDto> saveProductDefinationDetails(List<ProductDefinitionDto> list) {
+		LOGGER.info("Saving product definition details: {}", list);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+
+		for (ProductDefinitionDto dto : list) {
+			LOGGER.debug("Processing product definition DTO: {}", dto);
+			if (dto.getPrdid() != null && dto.getPrdid().trim().length() > 0
+					&& !productDefinationJPARepository.existsById(dto.getPrdid().trim())) {
+				PrdCs entity = new PrdCs();
+				entity.setPrdid(dto.getPrdid());
+				entity.setPrdnm(dto.getPrdnm());
+				entity.setPrdfmly(dto.getPrdfmly());
+				entity.setPrdcat(dto.getPrdcat());
+				entity.setPrdshp(dto.getPrdshp());
+				entity.setQtymin(dto.getQtymin());
+				entity.setQtymax(dto.getQtymax());
+				entity.setIsactv(dto.getIsactv());
+
+				productDefinationJPARepository.save(entity);
+				LOGGER.debug("Saved product definition entity: {}", entity);
+			}
+		}
+
+		LOGGER.info("Completed saving product definition details: {}", list);
+		return list;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<ProductCodeDetailsDto> updateProductCodeDetails(List<ProductCodeDetailsDto> list) {
+		LOGGER.info("Updating product code details: {}", list);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+
+		for (ProductCodeDetailsDto dto : list) {
+			LOGGER.debug("Processing product code details DTO: {}", dto);
+			if (dto.getPrdcdeid() != null && dto.getPrdcdeid().trim().length() > 0) {
+				Optional<PrdcdeCm> productCode = productCodeJPARepository.findById(dto.getPrdcdeid().trim());
+				PrdcdeCm entity = productCode.orElseGet(() -> {
+					LOGGER.debug("Creating new product code entity for code ID: {}", dto.getPrdcdeid());
+					PrdcdeCm newEntity = new PrdcdeCm();
+					newEntity.setPrdcdeid(dto.getPrdcdeid().trim());
+					return newEntity;
+				});
+
+				if (dto.getGrdid() != null && !dto.getGrdid().trim().isEmpty()) {
+					Optional<GrdCm> grd = grdCmRepository.findById(dto.getGrdid().trim());
+					if (grd.isPresent()) {
+						entity.setGrdid(grd.get().getGrdid());
+					} else {
+						LOGGER.info("Grade not found for grade ID: {}", dto.getGrdid());
+					}
+				}
+				entity.setMoDt(new Date());
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+				entity.setThkmin(dto.getThkmin());
+				entity.setThkmax(dto.getThkmax());
+				entity.setWdtmin(dto.getWdtmin());
+				entity.setWdtmax(dto.getWdtmax());
+				entity.setIsactv(dto.getIsactv());
+
+				productCodeJPARepository.save(entity);
+				LOGGER.debug("Saved product code entity: {}", entity);
+			}
+		}
+
+		LOGGER.info("Completed updating product code details: {}", list);
+		return list;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<ProductCodeDetailsDto> saveProductCodeDetails(String prdid, List<ProductCodeDetailsDto> list) {
+		LOGGER.info("Saving product code details for product ID: {}", prdid);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+
+		if (list != null) {
+			for (ProductCodeDetailsDto dto : list) {
+				LOGGER.debug("Processing product code details DTO: {}", dto);
+				if (dto != null && dto.getPrdcdeid() != null && !dto.getPrdcdeid().trim().isEmpty()
+						&& !productCodeJPARepository.existsById(dto.getPrdcdeid().trim())) {
+					PrdcdeCm entity = new PrdcdeCm();
+
+					entity.setPrdcdeid(dto.getPrdcdeid().trim());
+					entity.setThkmin(dto.getThkmin());
+					entity.setThkmax(dto.getThkmax());
+					entity.setWdtmin(dto.getWdtmin());
+					entity.setWdtmax(dto.getWdtmax());
+					entity.setIsactv(dto.getIsactv());
+					entity.setPrdid(prdid);
+
+					if (dto.getGrdid() != null) {
+						Optional<GrdCm> grdCmOptional = grdCmRepository.findById(dto.getGrdid());
+						GrdCm grdCm = grdCmOptional.orElseGet(() -> {
+							GrdCm newGrdCm = new GrdCm();
+							newGrdCm.setGrdid(dto.getGrdid());
+							return grdCmRepository.save(newGrdCm);
+						});
+
+						entity.setGrdid(grdCm.getGrdid());
+					}
+
+					BigDecimal lastPrdcdectr = productCodeJPARepository.findLastPrdcdectr();
+					BigDecimal newPrdcdectr = lastPrdcdectr != null ? lastPrdcdectr.add(BigDecimal.ONE) : BigDecimal.ONE;
+					entity.setPrdcdectr(newPrdcdectr);
+
+					productCodeJPARepository.save(entity);
+					LOGGER.debug("Saved product code entity: {}", entity);
+				}
+			}
+		} else {
+			LOGGER.error("No product code details to save");
+		}
+
+		LOGGER.info("Completed saving product code details for product ID: {}", prdid);
+		return list;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<AttributeMastermapDto> saveAttributeMapDetails(String prdid, List<AttributeMastermapDto> list) {
+		LOGGER.info("Saving attribute map details for product ID: {}", prdid);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+
+		if (list != null) {
+			for (AttributeMastermapDto dto : list) {
+				LOGGER.debug("Processing attribute map details DTO: {}", dto);
+				PrdatrMapCsPK prdMapPK = new PrdatrMapCsPK(prdid, dto.getAtrid());
+
+				Optional<PrdatrMapCs> existingEntity = attributeMapJPARepository.findById(prdMapPK);
+
+				PrdatrMapCs entity = existingEntity.orElseGet(() -> {
+					PrdatrMapCs newEntity = new PrdatrMapCs();
+					newEntity.setId(prdMapPK);
+					newEntity.setCrBy("Admin");
+					return newEntity;
+				});
+				entity.setIsactv(dto.getIsactv());
+
+				attributeMapJPARepository.save(entity);
+				LOGGER.debug("Saved attribute map entity: {}", entity);
+			}
+		}
+
+		LOGGER.info("Completed saving attribute map details for product ID: {}", prdid);
+		return list;
+	}
+
+	@Override
+	public List<ForcastCodeDto> getForcastProdDetails(String spec) {
+		LOGGER.info("Getting forecast product details for specification: {}", spec);
+		List<ForcastCodeDto> forcastProdDetails = productDefinitionCustRepository.getForcastCodeDetails(spec);
+		LOGGER.info("Retrieved forecast product details: {}", forcastProdDetails);
+		return forcastProdDetails;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<ForcastCodeDto> updateForcastCodeDetails(List<ForcastCodeDto> list) {
+		LOGGER.info("Updating forecast code details: {}", list);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+
+		for (ForcastCodeDto dto : list) {
+			LOGGER.debug("Processing forecast code details DTO: {}", dto);
+			if (dto.getFcprodcde() != null && !dto.getFcprodcde().trim().isEmpty()) {
+				Optional<FcprodcdeJm> forcastCodeOptional = forcastCodeRepository.findById(dto.getFcprodcde().trim());
+				FcprodcdeJm entity = forcastCodeOptional.orElseGet(() -> {
+					LOGGER.debug("Creating new forecast code entity for code: {}", dto.getFcprodcde());
+					FcprodcdeJm newEntity = new FcprodcdeJm();
+					newEntity.setFcprodcde(dto.getFcprodcde().trim());
+					return newEntity;
+				});
+
+				entity.setThkmax(dto.getThkmax());
+				entity.setThkmin(dto.getThkmin());
+				entity.setWdtmax(dto.getWdtmax());
+				entity.setWdtmin(dto.getWdtmin());
+				entity.setIsactv(dto.getIsactv());
+
+				forcastCodeRepository.save(entity);
+				LOGGER.debug("Saved forecast code entity: {}", entity);
+			}
+		}
+
+		LOGGER.info("Completed updating forecast code details: {}", list);
+		return list;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<ForcastCodeDto> saveForcastCodeDetails(String spec, String prdid, List<ForcastCodeDto> list) {
+		LOGGER.info("Saving forecast code details for specification: {} and product ID: {}", spec, prdid);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+
+		for (ForcastCodeDto dto : list) {
+			LOGGER.debug("Processing forecast code details DTO: {}", dto);
+			if (dto.getFcprodcde() != null && !dto.getFcprodcde().trim().isEmpty()) {
+				Optional<FcprodcdeJm> forcastCodeOptional = forcastCodeRepository.findById(dto.getFcprodcde().trim());
+				FcprodcdeJm entity = forcastCodeOptional.orElseGet(() -> {
+					LOGGER.debug("Creating new forecast code entity for code: {}", dto.getFcprodcde());
+					FcprodcdeJm newEntity = new FcprodcdeJm();
+					newEntity.setFcprodcde(dto.getFcprodcde().trim());
+					return newEntity;
+				});
+
+				entity.setThkmax(dto.getThkmax());
+				entity.setThkmin(dto.getThkmin());
+				entity.setWdtmax(dto.getWdtmax());
+				entity.setWdtmin(dto.getWdtmin());
+				entity.setIsactv(dto.getIsactv());
+				entity.setPrdid(prdid);
+
+				List<ExtGrdJmEntity> extgrdJm = extgrdJmRepository.findBySpec(spec);
+				if (extgrdJm != null) {
+					if (entity.getExtgrdnm() == null) {
+						entity.setExtgrdnm(extgrdJm.get(0).getExtgrdnm());
+					}
+					entity.setExtgrdnm(extgrdJm.get(0).getExtgrdnm());
+				}
+
+				forcastCodeRepository.save(entity);
+				LOGGER.debug("Saved forecast code entity: {}", entity);
+			}
+		}
+
+		LOGGER.info("Completed saving forecast code details for specification: {} and product ID: {}", spec, prdid);
+		return list;
+	}
+
+	@Override
+	public String getAtrnmByAtrid(String atrid) {
+		LOGGER.info("Getting attribute name for attribute ID: {}", atrid);
+		String atrnm = atrlCsRepository.findAtridById(atrid);
+		LOGGER.info("Retrieved attribute name: {}", atrnm);
+		return atrnm;
+	}
+
+	@Override
+	public List<String> getProductCodeDetails(String intgrd, BigDecimal avgCoilThk, BigDecimal avgCoilWidth) {
+		LOGGER.info("Getting product code details for internal grade: {}, average coil thickness: {}, average coil width: {}",
+				intgrd, avgCoilThk, avgCoilWidth);
+		return productCodeJPARepository.getProductCodeDetails(intgrd, avgCoilThk, avgCoilWidth);
+	}
+}

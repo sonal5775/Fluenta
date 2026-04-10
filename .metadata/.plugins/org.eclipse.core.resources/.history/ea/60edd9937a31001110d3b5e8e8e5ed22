@@ -1,0 +1,37 @@
+package com.hindindustec.fluenta.hsm.masters.common;
+
+public class OfsStatusConstants {
+
+	public static final String IN_PROGRESS = "IN PROGRESS";
+	public static final String COMPLETE = "COMPLETE";
+	public static final String REQUESTED = "REQUESTED";
+	public static final String ATTACHED = "ATTACHED";
+	public static final String CONFIRMED = "CONFIRMED";
+	public static final String CREATED = "CREATED";
+	public static final String REJECTED = "REJECTED";
+	public static final String FREE_STOCK = "FREE STOCK";
+	public static final String AVAILABLE = "AVAILABLE";
+	
+	//TDC
+	public static final String TDC_WF_STATUS_PENDING = "PENDING";
+	public static final String TDC_WF_STATUS_COMPLETE = "COMPLETED";
+	public static final String TDC_STATUS_APPROVAL = "APPROVAL";
+	public static final String TDC_STATUS_APPROVED = "APPROVED";
+	public static final String TDC_STATUS_REVIEW = "REVIEW";
+	public static final String TDC_STATUS_REJECTED = "REJECTED";
+	public static final String TDC_STATUS_RELEASED = "RELEASED";
+	public static final String TDC_STATUS_NEW_REQUEST = "NEW REQUEST";
+	public static final String TDC_STATUS_DRAFT = "DRAFT";
+	public static final String TDC_STATUS_REVISION = "REVISION";
+
+//	IS WORKFLOW
+	public static final String IS_WF_STATUS_PENDING = "PENDING";
+	public static final String IS_WF_STATUS_APPROVAL = "APPROVAL";
+	public static final String IS_WF_STATUS_COMPLETE = "COMPLETED";
+	public static final String IS_STATUS_RELEASED = "RELEASED";
+
+	private OfsStatusConstants() {
+		throw new IllegalStateException("Utility class");
+	}
+
+}

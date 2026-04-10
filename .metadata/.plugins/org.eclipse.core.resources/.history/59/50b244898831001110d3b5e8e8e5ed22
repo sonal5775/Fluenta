@@ -1,0 +1,66 @@
+package com.hindindustec.fluenta.hsm.masters.dto;
+
+import java.math.BigDecimal;
+import java.util.Date;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+
+@NoArgsConstructor
+@Getter
+@Setter
+@AllArgsConstructor
+@ToString
+public class WfExestepsDto {
+
+	private String wfexeid;
+	private long stepid;
+	private String wfstepsts;
+	private BigDecimal stepwfroleid;
+	private String rolenm; 
+	private String msgty;
+	private String stepmsgsub;
+	private String stepmsgbody;    // @Lob
+	private BigDecimal stepactionid;
+	private String actionnm;
+	private BigDecimal nextwfroleid;
+	private String nextRolename;
+	private BigDecimal isactv;
+	private String crBy;
+	private Date crDt;
+	private String crMacAddr;
+	private String moBy;
+	private Date moDt;
+	private String moMacAddr;
+	private String comments;
+	
+	public WfExestepsDto(String wfexeid, long stepid, String wfstepsts, BigDecimal stepwfroleid, String rolenm,
+			String msgty, String stepmsgsub, String stepmsgbody, BigDecimal stepactionid, String actionnm,
+			BigDecimal nextwfroleid, String nextRolename, BigDecimal isactv, String crBy, Date crDt, String crMacAddr,
+			String moBy, Date moDt, String moMacAddr) {
+		super();
+		this.wfexeid = wfexeid;
+		this.stepid = stepid;
+		this.wfstepsts = wfstepsts;
+		this.stepwfroleid = stepwfroleid;
+		this.rolenm = rolenm;
+		this.msgty = msgty;
+		this.stepmsgsub = stepmsgsub;
+		this.stepmsgbody = stepmsgbody;
+		this.stepactionid = stepactionid;
+		this.actionnm = actionnm;
+		this.nextwfroleid = nextwfroleid;
+		this.nextRolename = nextRolename;
+		this.isactv = isactv;
+		this.crBy = crBy;
+		this.crDt = crDt;
+		this.crMacAddr = crMacAddr;
+		this.moBy = moBy;
+		this.moDt = moDt;
+		this.moMacAddr = moMacAddr;
+	}
+
+}

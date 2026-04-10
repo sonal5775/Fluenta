@@ -1,0 +1,26 @@
+api.env = Local
+#DEV
+#spring.datasource.url = jdbc:oracle:thin:@45.114.142.57:1522:OFSDV
+#spring.datasource.username = ENC(MTYrTYysCZxmuIYC9s4oZvIGmB3h0S6n8c5HyP3U2sj0p/TepaLAvCNo4yIfndEz)
+#spring.datasource.password = ENC(MTYrTYysCZxmuIYC9s4oZvIGmB3h0S6n8c5HyP3U2sj0p/TepaLAvCNo4yIfndEz)
+
+spring.datasource.url = jdbc:oracle:thin:@10.37.0.103:1521:OFSUATDB
+spring.datasource.username = ENC(BtXrd/r89MJSi7gxEYOuOzIU5WL9ZSOWksqKsKTVrvdcsMhwO2L0wnxA66aM32CP)
+spring.datasource.password = ENC(BtXrd/r89MJSi7gxEYOuOzIU5WL9ZSOWksqKsKTVrvdcsMhwO2L0wnxA66aM32CP)
+
+#Spring Boot Admin Config
+spring.boot.admin.client.instance.service-base-url = http://localhost:8485
+spring.boot.admin.client.url = http://localhost:8444
+
+#Eureka Config
+eureka.client.service-url.defaultZone=http://localhost:8761/serviceregistry/eureka/
+
+#Oauth2
+spring.security.oauth2.client.registration.google.redirectUri=http://localhost:8485/oauth2/callback/{registrationId}
+app.oauth2.authorizedRedirectUris[0]=http://localhost:4200/oauth2
+
+app.default.role=admin
+app.auth.provider=GOOGLE
+
+
+

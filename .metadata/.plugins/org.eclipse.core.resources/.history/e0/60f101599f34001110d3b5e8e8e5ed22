@@ -1,0 +1,1149 @@
+package com.hindindustec.fluenta.sales.service.serviceimpl;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.sales.common.ClientIpUtils;
+import com.hindindustec.fluenta.sales.common.DBSessionService;
+import com.hindindustec.fluenta.sales.common.DevExtGridFilterUtils;
+import com.hindindustec.fluenta.sales.common.OfsCommonResponse;
+import com.hindindustec.fluenta.sales.common.OfsConstants;
+import com.hindindustec.fluenta.sales.common.OfsLoggerNameConstants;
+import com.hindindustec.fluenta.sales.common.OfsMapper;
+import com.hindindustec.fluenta.sales.common.OfsStatusConstants;
+import com.hindindustec.fluenta.sales.common.response.FluentaPaginatedResponse;
+import com.hindindustec.fluenta.sales.common.response.Group;
+import com.hindindustec.fluenta.sales.common.response.GroupedDataResponse;
+import com.hindindustec.fluenta.sales.dto.AttachedStatusDto;
+import com.hindindustec.fluenta.sales.dto.ConfirmedStatusDto;
+import com.hindindustec.fluenta.sales.dto.CreatedStatusDto;
+import com.hindindustec.fluenta.sales.dto.CustomerDto;
+import com.hindindustec.fluenta.sales.dto.HeaderDateRequestDto;
+import com.hindindustec.fluenta.sales.dto.InProgressStatusDto;
+import com.hindindustec.fluenta.sales.dto.OfsToSapIntResponse;
+import com.hindindustec.fluenta.sales.dto.RejectedStatusDto;
+import com.hindindustec.fluenta.sales.dto.RemarksDto;
+import com.hindindustec.fluenta.sales.dto.RequestedStatusDto;
+import com.hindindustec.fluenta.sales.dto.SalesEnquiryDropdownDto;
+import com.hindindustec.fluenta.sales.dto.SalesEnquiryDto;
+import com.hindindustec.fluenta.sales.dto.SalesEnquiryItemDto;
+import com.hindindustec.fluenta.sales.dto.SalesRemarksDto;
+import com.hindindustec.fluenta.sales.dto.SalesResponse;
+import com.hindindustec.fluenta.sales.dto.SalesStatus;
+import com.hindindustec.fluenta.sales.dto.StatusDto;
+import com.hindindustec.fluenta.sales.dto.StatusRequest;
+import com.hindindustec.fluenta.sales.dto.TdcGeneralRequestDto;
+import com.hindindustec.fluenta.sales.dto.TdcMainRequest;
+import com.hindindustec.fluenta.sales.model.SehStEntity;
+import com.hindindustec.fluenta.sales.model.SehistoryStEntity;
+import com.hindindustec.fluenta.sales.model.SehistoryStEntityPK;
+import com.hindindustec.fluenta.sales.model.SelStEntity;
+import com.hindindustec.fluenta.sales.model.SelStEntityPK;
+import com.hindindustec.fluenta.sales.model.SelrmksStEntity;
+import com.hindindustec.fluenta.sales.model.SelrmksStEntityPK;
+import com.hindindustec.fluenta.sales.repository.SalesEnquiryRepository;
+import com.hindindustec.fluenta.sales.repository.SalesRemarksRepository;
+import com.hindindustec.fluenta.sales.repository.SehStRepository;
+import com.hindindustec.fluenta.sales.repository.SehistoryStRepository;
+import com.hindindustec.fluenta.sales.repository.SelStRepository;
+import com.hindindustec.fluenta.sales.repository.UserGrpCodeDtlRepository;
+import com.hindindustec.fluenta.sales.service.SalesEnquiryService;
+import com.hindindustec.fluenta.sales.util.IdGenerationUtility;
+
+@Service
+public class SalesEnquiryServiceImpl implements SalesEnquiryService {
+
+	private static final String ORDER_BY = " ORDER BY ";
+
+	private static final String NOT_LIKE = " NOT LIKE ";
+
+	private static final String LIKE = " LIKE ";
+
+	private static final String ENDSWITH = "endswith";
+
+	private static final String STARTSWITH = "startswith";
+
+	private static final String NOTCONTAINS = "notcontains";
+
+	private static final String CONTAINS = "contains";
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(OfsLoggerNameConstants.SALES_ENQUIRY_LOG);
+
+	private SalesEnquiryRepository salesEnquiryRepository;
+
+	private DBSessionService dbSessionService;
+
+	private SehStRepository sehStJpaRepository;
+
+	private SelStRepository selStRepository;
+
+	private SehistoryStRepository historyRepository;
+
+	private SalesRemarksRepository remarksRepository;
+
+	private UserGrpCodeDtlRepository userGrpCodeDtlRepository;
+
+	public SalesEnquiryServiceImpl(SalesEnquiryRepository salesEnquiryRepository, DBSessionService dbSessionService,
+			SehStRepository sehStJpaRepository, SelStRepository selStRepository,
+			SehistoryStRepository historyRepository, SalesRemarksRepository remarksRepository, UserGrpCodeDtlRepository userGrpCodeDtlRepository) {
+		super();
+		this.salesEnquiryRepository = salesEnquiryRepository;
+		this.dbSessionService = dbSessionService;
+		this.sehStJpaRepository = sehStJpaRepository;
+		this.selStRepository = selStRepository;
+		this.historyRepository = historyRepository;
+		this.remarksRepository = remarksRepository;
+		this.userGrpCodeDtlRepository = userGrpCodeDtlRepository;
+	}
+
+	/**
+	 * This method returns all sales enquiry details
+	 * 
+	 * @author Pinaki Samal
+	 * @param request - status data
+	 */
+
+	
+	@Override
+	public FluentaPaginatedResponse<SalesEnquiryDto> getAllPaginatedSalesEnquiryDetails(
+			StatusRequest request,Integer page, Integer size, String filterPathString,
+			String sort) {
+		List<String> filterList = DevExtGridFilterUtils.extractElements(filterPathString);
+		List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);
+		if(!filterList.isEmpty()) {
+			boolean isNumber = DevExtGridFilterUtils.isNumberOrStringCheck(filterList.get(2));
+
+			if(filterList.contains("or") && !isNumber) {
+				filterList = DevExtGridFilterUtils.removeNumberFieldsFromString(filterList,SalesEnquiryDto.class);
+			}
+		}
+		
+		String query = getAllPaginatedSalesEnquiryDetailsInString(request);
+		String countQuery = getAllPaginatedSalesEnquiryDetailsInStringForCount(request);
+		
+		if(!filterList.isEmpty()) {
+			query = filterQueryUsingFilterList(filterList,query);
+			countQuery = filterQueryUsingFilterList(filterList,countQuery);
+
+		}
+		Map<String, String> columnAlise = checkClassAleasWithNoStop();
+		if(!sortList.isEmpty()){
+			if(sortList.get(3).equals("true")) {
+				query = query+ORDER_BY+columnAlise.get(sortList.get(1))+" DESC";
+			}else {
+				query = query+ORDER_BY+columnAlise.get(sortList.get(1));
+			}
+		}
+		else {
+			query = query + "ORDER BY sehSt.seDt DESC";
+		}
+		
+		Page<SalesEnquiryDto> salesEnquiry = salesEnquiryRepository.getAllPaginatedSalesEnquiryDetails(request,page,size,query,countQuery);
+
+	
+		return new FluentaPaginatedResponse<SalesEnquiryDto>(
+			    salesEnquiry.getContent(), 
+			    salesEnquiry.getTotalElements(),
+			    salesEnquiry.getTotalPages()
+			);
+		
+	}
+	
+	public String getAllPaginatedSalesEnquiryDetailsInString(StatusRequest request) {
+
+	    // Initialize base query
+		return  "SELECT new com.hindindustec.fluenta.sales.dto.SalesEnquiryDto(" 
+                + "sehSt.seid, sehSt.btcustnm, sehSt.seDt, sehSt.seconfDt, sehSt.custcntno, "
+                + "sehSt.sests, sehSt.brn, sehSt.btcustid, sehSt.crBy, sehSt.crDt, "
+                + "sehSt.crMacAddr, sehSt.custcntprsn, sehSt.custty, sehSt.custzone, "
+                + "sehSt.dischannel, sehSt.dispseid, sehSt.entrprise, sehSt.hdrrmks, "
+                + "sehSt.intsalesagnt, sehSt.isactv, sehSt.kamid, sehSt.moBy, sehSt.moDt, "
+                + "sehSt.moMacAddr, sehSt.mrktseg, sehSt.poDt, sehSt.prdid, sehSt.projty, "
+                + "sehSt.refpuroid, sehSt.salesgrp, sehSt.sety, sehSt.stid, "
+                + "(SELECT SUM(selSt.seqty) FROM SelStEntity selSt WHERE sehSt.seid = selSt.id.seid AND selSt.isactv = 1) "
+                + ") "
+                + "FROM SehStEntity sehSt "
+                + "WHERE (:statusFlag IS NULL OR sehSt.sests IN (:status)) ";
+              
+	    
+	    
+	}
+	
+	public String getAllPaginatedSalesEnquiryDetailsInStringForCount(StatusRequest request) {
+
+		return "SELECT COUNT(*) " +
+	               "FROM SehStEntity sehSt " +
+	               "WHERE (:statusFlag IS NULL OR sehSt.sests IN (:status)) " ;
+	    
+	    
+	}
+	
+	public String filterQueryUsingFilterList(List<String> filterList,String query) {
+		query = query+" AND (";
+
+		List<String> columnNames = DevExtGridFilterUtils.getAllFields(SalesEnquiryDto.class);
+
+		Map<String, String> columnDataTypesKeyValuePair = DevExtGridFilterUtils.getAllFieldsWithTypes(SalesEnquiryDto.class);
+		Map<String, String> columnAlise = checkClassAleas();
+		boolean isClobObject = false;
+		boolean isStringObject = false;
+		boolean isDateObject = false;
+		boolean isContains = false;
+		boolean isNotContains = false;
+		boolean isStartWith = false;
+		boolean isEndWith = false;
+		for(int i=0;i<filterList.size();i++) {
+			String item = filterList.get(i);
+			if(columnNames.contains(item)) {
+				if(columnDataTypesKeyValuePair.get(item).equals("CLOB")) {
+					query = query+"DBMS_LOB.INSTR("+columnAlise.get(item)+item+",";
+					isClobObject = true;
+				}else if(columnDataTypesKeyValuePair.get(item).equals("DATE")) {
+					query = query+" TO_CHAR("+columnAlise.get(item)+item+", 'YYYY-MM-DD')";
+					isDateObject = true;
+				}else if(columnDataTypesKeyValuePair.get(item).equals("VARCHAR2")) {
+					
+						query = query+"(UPPER(TRIM("+columnAlise.get(item)+""+item+"))";
+						isStringObject = true;
+					
+					
+				}
+				else {
+					if("quantity".equals(item)) {
+						int index = filterList.indexOf("quantity");
+						query = query+ "(SELECT SUM(selSt.seqty) FROM SelStEntity selSt WHERE sehSt.seid = selSt.id.seid AND selSt.isactv = 1) "+filterList.get(index+1)+" "+filterList.get(index+2)+"";
+						i +=2;
+					}else {
+					query = query+columnAlise.get(item)+item;
+					}
+					
+				}
+			}else if(item.equals(CONTAINS) || item.equals(NOTCONTAINS) || item.equals(STARTSWITH) || item.equals(ENDSWITH)){
+				if(isClobObject) {
+
+				}else if(isDateObject) {
+
+					query = query+LIKE;
+
+				}
+				else {
+					if(item.equals(CONTAINS)) {
+						query = query+LIKE;
+						isContains = true;
+					}else if(item.equals(NOTCONTAINS)) {
+						query = query+NOT_LIKE;
+						isNotContains = true;
+
+					}else if(item.equals(STARTSWITH)) {
+						query = query+LIKE;
+						isStartWith = true;
+					}else if(item.equals(ENDSWITH)) {
+						query = query+LIKE;
+						isEndWith = true;
+					}else {
+						query = query+" = ";
+					}
+
+				}
+
+			}
+			else if(item.equals("or") || item.equals("and")) {
+				query = query+" "+item+" ";
+			}else if(item.equals("=")) {
+				query = query+" "+item;
+
+			}else if(item.equals("<>")) {
+				query = query+" "+item;
+			}else if(item.equals(">=")) {
+				query = query+" "+item;
+			}else if(item.equals("<")) {
+				query = query+" "+item;
+			}else if(item.equals(">")) {
+				query = query+" "+item;
+			}
+			else {
+				if(isClobObject) {
+					query = query+"'"+item+"') > 0";
+					isClobObject = false;
+				}else if(isStringObject) {
+					if(isContains) {
+                        query = query+" UPPER(TRIM('%"+item+"%'"+")))";
+                        isContains = false;
+                    }else if(isNotContains) {
+                        query = query+" UPPER(TRIM('%"+item+"%')))";
+                        isNotContains = false;
+
+                    }else if(isStartWith) {
+                        query = query+" UPPER(TRIM('"+item+"%')))";
+                        isStartWith = false;
+                    }else if(isEndWith) {
+                        query = query+" UPPER(TRIM('%"+item+"')))";
+                        isEndWith = false;
+                    }else {
+                        query = query+" UPPER(TRIM('"+item+"')))";
+                    }
+
+					isStringObject = false;
+				}else if(isDateObject ) {
+					LocalDateTime dateTime = LocalDate.parse(item, DateTimeFormatter.ISO_LOCAL_DATE).atStartOfDay();
+					String dateString = dateTime.toLocalDate().toString();
+					query = query+" '"+dateString+"'";
+					isDateObject = false;
+				}
+				else {
+					query = query+" "+item+"";
+				}
+
+			}
+		}
+		query = query+")";
+
+		return query;
+	}
+	
+	public Map<String, String> checkClassAleas(){
+		Map<String, String> fieldTypes = new HashMap<>();
+		fieldTypes.put(OfsConstants.SEID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.BTCUSTNM, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.SEDT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.SECONFDT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CUSTCNTNO, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.SESTS, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.BRN, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.BTCUSTID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CRBY, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CRDT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CRMACADDR, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CUSTCNTPRSN, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CUSTTY, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CUSTZONE, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.DISCHANNEL, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.DISPSEID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.ENTRPRISE, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.HDRRMKS, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.INTSALESAGNT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.ISACTV, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.KAMID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.MOBY, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.MODT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.MOMACADDR, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.MRKTSEG, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.PODT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.PRDID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.PROJTY, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.REFPUROID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.SALESGRP, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.SETY, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.STID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.QUANTITY, OfsConstants.SEHST_PREFIX);
+
+		return fieldTypes;
+	}
+
+	public Map<String, String> checkClassAleasWithNoStop(){
+		Map<String, String> fieldTypes = new HashMap<>();
+		fieldTypes.put(OfsConstants.SEID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.BTCUSTNM, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.SEDT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.SECONFDT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CUSTCNTNO, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.SESTS, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.BRN, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.BTCUSTID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CRBY, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CRDT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CRMACADDR, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CUSTCNTPRSN, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CUSTTY, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.CUSTZONE, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.DISCHANNEL, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.DISPSEID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.ENTRPRISE, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.HDRRMKS, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.INTSALESAGNT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.ISACTV, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.KAMID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.MOBY, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.MODT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.MOMACADDR, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.MRKTSEG, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.PODT, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.PRDID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.PROJTY, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.REFPUROID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.SALESGRP, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.SETY, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.STID, OfsConstants.SEHST_PREFIX);
+		fieldTypes.put(OfsConstants.QUANTITY, OfsConstants.SEHST_PREFIX);
+
+		return fieldTypes;
+	}
+
+	@Override
+	public List<SalesEnquiryDto> getAllSalesEnquiryDetailsTdc(StatusRequest request) {
+		return salesEnquiryRepository.getAllSalesEnquiryDetails(request);
+	}
+
+	/**
+	 * This method returns all sales enquiry item details
+	 * 
+	 * @author Pinaki Samal
+	 * @param request - sales enquiry data
+	 */
+	@Override
+	public List<SalesEnquiryItemDto> getAllSalesEnquiryItemsDetails(SalesEnquiryDto request) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: getAllSalesEnquiryItemsDetails ");
+
+		return salesEnquiryRepository.getAllSalesEnquiryItemsDetails(request);
+	}
+
+	/**
+	 * This method returns dropdown values
+	 * 
+	 * @author Pinaki Samal
+	 */
+	@Override
+	public SalesEnquiryDropdownDto getDropdownValues() {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: getDropdownValues ");
+
+		SalesEnquiryDropdownDto dto = new SalesEnquiryDropdownDto();
+		List<CustomerDto> customers = salesEnquiryRepository.getCustomers();
+		List<String> products = salesEnquiryRepository.getProducts();
+		List<String> sites = salesEnquiryRepository.getSites();
+		List<String> extrenalGrades = salesEnquiryRepository.getExternalGrades();
+		List<String> standardDims = salesEnquiryRepository.getStandardDims();
+		List<String> tdcNos = salesEnquiryRepository.getTdcNos();
+
+		dto.setCustomers(customers);
+		dto.setProducts(products);
+		dto.setSites(sites);
+		dto.setExtrenalGrades(extrenalGrades);
+		dto.setStandardDims(standardDims);
+		dto.setTdcNos(tdcNos);
+		return dto;
+	}
+
+	/**
+	 * This method returns in progress status data
+	 * 
+	 * @author Pinaki Samal
+	 */
+	@Override
+	public List<InProgressStatusDto> getInProgressStatus() {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: getInProgressStatus ");
+
+		return salesEnquiryRepository.getInProgressStatus();
+	}
+
+	/**
+	 * This method returns in requested status data
+	 * 
+	 * @author Pinaki Samal
+	 */
+	@Override
+	public List<RequestedStatusDto> getIRequestedStatus() {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: getIRequestedStatus ");
+
+		return salesEnquiryRepository.getRequestedStatus();
+	}
+
+	/**
+	 * This method returns in progress status data
+	 * 
+	 * @author Pinaki Samal
+	 * @param request - header data
+	 */
+	@Override
+	public List<StatusDto> getStatus(HeaderDateRequestDto request) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: getStatus ");
+
+		ArrayList<StatusDto> list = new ArrayList<>();
+		InProgressStatusDto inProgressDto = new InProgressStatusDto(OfsStatusConstants.IN_PROGRESS, 0);
+		AttachedStatusDto attachedDto = new AttachedStatusDto(OfsStatusConstants.ATTACHED, 0);
+		RequestedStatusDto requestedDto = new RequestedStatusDto(OfsStatusConstants.REQUESTED, 0);
+		ConfirmedStatusDto confirmedDto = new ConfirmedStatusDto(OfsStatusConstants.CONFIRMED, 0);
+		if (!salesEnquiryRepository.getInProgressStatus().isEmpty()) {
+			inProgressDto = salesEnquiryRepository.getInProgressStatus().get(0);
+		}
+		if (!salesEnquiryRepository.getAttachedStatus().isEmpty()) {
+			attachedDto = salesEnquiryRepository.getAttachedStatus().get(0);
+		}
+		if (!salesEnquiryRepository.getRequestedStatus().isEmpty()) {
+			requestedDto = salesEnquiryRepository.getRequestedStatus().get(0);
+		}
+		if (!salesEnquiryRepository.getConfirmedStatus().isEmpty()) {
+			confirmedDto = salesEnquiryRepository.getConfirmedStatus().get(0);
+		}
+		list.add(addStatus(inProgressDto));
+		list.add(addStatus(requestedDto));
+		list.add(addStatus(attachedDto));
+		list.add(addStatus(confirmedDto));
+		if (request.getFromDate() != null && request.getToDate() != null) {
+			Long createdStatusCount = salesEnquiryRepository.getCreatedStatus(request);
+			CreatedStatusDto createdDto = new CreatedStatusDto();
+			createdDto.setStatus(OfsStatusConstants.CREATED);
+			createdDto.setCount(createdStatusCount);
+			Long rejectedStatusCount = salesEnquiryRepository.getRejectedStatus(request);
+			RejectedStatusDto rejectedDto = new RejectedStatusDto();
+			rejectedDto.setStatus(OfsStatusConstants.REJECTED);
+			rejectedDto.setCount(rejectedStatusCount);
+			list.add(addStatus(createdDto));
+			list.add(addStatus(rejectedDto));
+		}
+		return list;
+	}
+
+	/**
+	 * This method add status data
+	 * 
+	 * @author Pinaki Samal
+	 * @param status - status data
+	 */
+	public StatusDto addStatus(SalesStatus status) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: addStatus ");
+
+		StatusDto statusDto = new StatusDto();
+		statusDto.setStatus(status.getStatus());
+		statusDto.setValue(status.getCount());
+		return statusDto;
+	}
+
+	/**
+	 * This method returns in confirmed status data
+	 * 
+	 * @author Pinaki Samal
+	 */
+	@Override
+	public List<ConfirmedStatusDto> getConfirmedStatus() {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: getConfirmedStatus ");
+
+		return salesEnquiryRepository.getConfirmedStatus();
+	}
+
+	/**
+	 * This method updates sales enquiry status data
+	 * 
+	 * @author Pinaki Samal
+	 * @param request - sales enquiry data
+	 */
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public SalesEnquiryDto updateSalesEnquiryStatus(SalesEnquiryDto dto) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: updateSalesEnquiryStatus ");
+
+		 dbSessionService.setSessionInfo(this.getClass().getName());
+		if (dto.getSeid() != null && !dto.getSeid().trim().isEmpty()) {
+			Optional<SehStEntity> sehStRepo = sehStJpaRepository.findById(dto.getSeid().trim());
+			SehStEntity entity = null;
+
+			if (sehStRepo.isPresent()) {
+				entity = sehStRepo.get();
+				entity.setMoDt(new Date());
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+				entity.setSests(dto.getSests());
+				if(OfsStatusConstants.REQUESTED.equals(dto.getSests())) {
+					entity.setTdcreqdt(new Date());
+				}
+				sehStJpaRepository.save(entity);
+				registerSeHistory(dto);
+				
+			}
+			
+			
+			
+			
+			
+		}
+
+		return dto;
+
+	}
+
+	/**
+	 * This method saves sales enquiry data
+	 * 
+	 * @author Pinaki Samal
+	 * @param request - sales enquiry data
+	 */
+	@Override
+	@Transactional
+	public SalesResponse saveSalesEnquiry(SalesEnquiryDto dto) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: saveSalesEnquiry ");
+
+		 dbSessionService.setSessionInfo(this.getClass().getName());
+		SalesResponse salesResponse = new SalesResponse();
+		OfsCommonResponse response = new OfsCommonResponse();
+
+		// Logging if the SEID is null or empty
+		LOGGER.info("{}", dto.getSeid() == null || dto.getSeid().isEmpty());
+
+		SehStEntity sehStEntity;
+		Optional<SehStEntity> optional = sehStJpaRepository.findById(dto.getSeid());
+
+		if (optional.isPresent()) {
+			// Update existing entity
+			sehStEntity = optional.get();
+			sehStEntity.setMoDt(new Date());
+			sehStEntity.setMoBy(ClientIpUtils.getClient());
+			sehStEntity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+		} else {
+			// Create new entity
+			sehStEntity = new SehStEntity();
+			Long count = salesEnquiryRepository.getSalesEnquiryHighest();
+			String enquiryId = IdGenerationUtility.createSalesEnquiryId(count);
+			LOGGER.info(enquiryId);
+			sehStEntity.setSeid(enquiryId);
+			sehStEntity.setCrDt(new Date());
+			sehStEntity.setCrBy(ClientIpUtils.getClient());
+			sehStEntity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+		}
+
+		// Setting the other properties
+		sehStEntity.setSeDt(dto.getSeDt());
+		sehStEntity.setBrn(dto.getBrn());
+		sehStEntity.setKamid(dto.getKamid());
+		sehStEntity.setIntsalesagnt(dto.getIntsalesagnt());
+		sehStEntity.setEntrprise(dto.getEntrprise());
+		sehStEntity.setStid(dto.getStid());
+		sehStEntity.setBtcustid(dto.getBtcustid());
+		sehStEntity.setBtcustnm(dto.getBtcustnm());
+		sehStEntity.setCustzone(dto.getCustzone());
+		sehStEntity.setCustcntprsn(dto.getCustcntprsn());
+		sehStEntity.setCustcntno(dto.getCustcntno());
+		sehStEntity.setMrktseg(dto.getMrktseg());
+		sehStEntity.setPrdid(dto.getPrdid());
+		sehStEntity.setSests(OfsStatusConstants.IN_PROGRESS);
+		sehStEntity.setIsactv(BigDecimal.ONE);
+		sehStEntity.setSalesgrp(dto.getSalesgrp());
+		sehStEntity.setDischannel(dto.getDischannel());
+		sehStEntity.setProjty(dto.getProjty());
+
+		// Save entity and check if ID is set correctly
+		SehStEntity savedEntity = sehStJpaRepository.save(sehStEntity);
+
+		if (savedEntity.getSeid() != null && !savedEntity.getSeid().isEmpty()) {
+			response.setStatus(1);
+			response.addInfoMsg("Enquiry Generated");
+		} else {
+			response.setStatus(2);
+			response.addErrorMsg("Enquiry Generation Failed");
+		}
+
+		dto.setSeid(savedEntity.getSeid());
+		dto.setSests(savedEntity.getSests());
+		salesResponse.setResponse(response);
+		salesResponse.setEnquiryDto(dto);
+		return salesResponse;
+	}
+
+	/**
+	 * This method returns history data
+	 * 
+	 * @author Pinaki Samal
+	 * @param request - sales enquiry data
+	 */
+	@Override
+	@Transactional
+	public void registerSeHistory(SalesEnquiryDto dto) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: registerSeHistory ");
+
+		 dbSessionService.setSessionInfo(this.getClass().getName());
+		SehistoryStEntity history = new SehistoryStEntity();
+		SehistoryStEntityPK historyPk = new SehistoryStEntityPK();
+		historyPk.setSeid(dto.getSeid());
+		historyPk.setSests(dto.getSests());
+		history.setId(historyPk);
+		history.setActntake(dto.getSests());
+		history.setIsactv(BigDecimal.ONE);
+		history.setCrBy(ClientIpUtils.getClient());
+		history.setCrDt(new Date());
+		history.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+		historyRepository.save(history);
+	}
+
+	/**
+	 * This method saves sales enquiry item data
+	 * 
+	 * @author Pinaki Samal
+	 * @param request - sales enquiry item data
+	 */
+	@Override
+	@Transactional
+	public OfsCommonResponse saveSalesEnquiryItems(List<SalesEnquiryItemDto> request) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: saveSalesEnquiryItems ");
+
+		 dbSessionService.setSessionInfo(this.getClass().getName());
+		OfsCommonResponse response = new OfsCommonResponse();
+		for (SalesEnquiryItemDto dto : request) {
+			SelStEntityPK pk = new SelStEntityPK();
+			pk.setSeid(dto.getSeid());
+			pk.setSelid(dto.getSelid());
+			SelStEntity entity = null;
+
+			Optional<SelStEntity> optional = selStRepository.findById(pk);
+			if (optional.isPresent()) {
+				entity = optional.get();
+				entity.setMoDt(new Date());
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+			} else {
+				entity = new SelStEntity();
+				Long count = salesEnquiryRepository.getSalesEnquiryItemMax(dto.getSeid());
+				pk.setSelid(count + 1);
+				pk.setSeid(dto.getSeid());
+				entity.setId(pk);
+				entity.setRevid(dto.getRevid());
+				entity.setIsactv(BigDecimal.ONE);
+				entity.setCrBy(ClientIpUtils.getClient());
+				entity.setCrDt(new Date());
+				entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+			}
+			entity.setPrdid(dto.getPrdid());
+			entity.setSety(dto.getSety());
+			entity.setExtgrdnm(dto.getExtgrdnm());
+			entity.setStdid(dto.getStdid());
+			entity.setThkaim(dto.getThkaim());
+			entity.setWdtaim(dto.getWdtaim());
+			entity.setLenaim(dto.getLenaim());
+			entity.setSeqty(dto.getSeqty());
+			entity.setTdcid(dto.getTdcid());
+			String lovidData = userGrpCodeDtlRepository.findByValDesc(dto.getSuppcon());
+			if (lovidData!=null) {
+			    entity.setSuppcon(lovidData);
+			}
+			entity.setWgtmin(dto.getWgtmin());
+			entity.setWgtmax(dto.getWgtmax());
+			entity.setSpecialreq(dto.getSpecialreq());
+			entity.setEnduse(dto.getEnduse());
+			entity.setEdgecond(dto.getEdgecond());
+			entity.setOverdeltol(dto.getOverdeltol());
+
+			SelStEntity savedEntity = selStRepository.save(entity);
+
+			if (savedEntity.getId() != null) { // Check if ID was set, indicating a successful save
+				response.setStatus(1);
+				response.addInfoMsg("Enquiry Item Added");
+			} else {
+				response.setStatus(2);
+				response.addErrorMsg("Enquiry Item Addition Failed");
+			}
+		}
+		return response;
+	}
+
+	/**
+	 * This method returns sales enquiry item remarks data
+	 * 
+	 * @author Pinaki Samal
+	 * @param request - sales enquiry item data
+	 */
+	@Override
+	public SalesRemarksDto fetchItemRemarks(SalesEnquiryItemDto dto) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: fetchItemRemarks ");
+
+		SalesRemarksDto response = new SalesRemarksDto();
+		List<RemarksDto> remarksDto = salesEnquiryRepository.getAllSalesItemRemarks(dto);
+		StringBuilder remarksWithNewlines = new StringBuilder();
+		for (RemarksDto remark : remarksDto) {
+			String selrmks = remark.getSelrmks();
+			if (selrmks != null) {
+				remarksWithNewlines.append(selrmks).append("\n");
+			}
+		}
+		response.setRemarks(remarksWithNewlines.toString());
+		response.setSalesItemDto(dto);
+
+		return response;
+	}
+
+	/**
+	 * This method saves sales item remark data
+	 * 
+	 * @author Pinaki Samal
+	 * @param dto - sales remarks data
+	 */
+	@Override
+	@Transactional
+	public OfsCommonResponse saveItemRemarks(SalesRemarksDto dto) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: saveItemRemarks ");
+
+		 dbSessionService.setSessionInfo(this.getClass().getName());
+		OfsCommonResponse response = new OfsCommonResponse();
+		SelrmksStEntity entity = new SelrmksStEntity();
+		SelrmksStEntityPK pk = new SelrmksStEntityPK();
+		SalesEnquiryItemDto salesItemDto = dto.getSalesItemDto();
+		pk.setSeid(salesItemDto.getSeid());
+		pk.setSelid(salesItemDto.getSelid());
+		Long count = salesEnquiryRepository.getSalesEnquiryItemRemarksCount(salesItemDto);
+		pk.setRmksctr((count == null ? 0L : count) + 1);
+		entity.setId(pk);
+		entity.setSelrmks(dto.getRemarks());
+		entity.setCrDt(new Date());
+		entity.setCrBy(ClientIpUtils.getClient());
+		entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+		entity.setIsactv(BigDecimal.ONE);
+		entity = remarksRepository.save(entity);
+
+		if (entity.getId() != null) {
+			response.setStatus(1);
+			response.addInfoMsg("Remarks Saved Successfully");
+		} else {
+			response.setStatus(2);
+			response.addInfoMsg("Remarks Saving UnsuccessFull");
+		}
+		return response;
+	}
+
+	/**
+	 * This method saves sales enquiry remarks data
+	 * 
+	 * @author Pinaki Samal
+	 * @param dto - sales remarks data
+	 */
+	@Override
+	@Transactional
+	public OfsCommonResponse saveEnquiryRemarks(SalesRemarksDto dto) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: saveEnquiryRemarks ");
+
+		 dbSessionService.setSessionInfo(this.getClass().getName());
+		OfsCommonResponse response = new OfsCommonResponse();
+		Optional<SehStEntity> optional = sehStJpaRepository.findById(dto.getSalesEnquiryDto().getSeid().trim());
+		if (optional.isPresent()) {
+			SehStEntity sehStEntity = optional.get();
+			sehStEntity.setHdrrmks(dto.getRemarks());
+			try {
+				sehStJpaRepository.save(sehStEntity);
+			} catch (Exception e) {
+				LOGGER.info("Exception ", e);
+			}
+			response.addInfoMsg("Remarks Added");
+		} else {
+			response.addInfoMsg("Enquiry Not Found");
+		}
+		return response;
+	}
+
+	/**
+	 * This method delete sales enquiry item data
+	 * 
+	 * @author Pinaki Samal
+	 * @param request - sales enquiry item data
+	 */
+	@Override
+	@Transactional
+	public OfsCommonResponse deleteSalesEnquiryItems(SalesEnquiryItemDto dto) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: deleteSalesEnquiryItems ");
+
+		 dbSessionService.setSessionInfo(this.getClass().getName());
+		OfsCommonResponse response = new OfsCommonResponse();
+		SelStEntityPK pk = new SelStEntityPK();
+		pk.setSeid(dto.getSeid());
+		pk.setSelid(dto.getSelid());
+		SelStEntity entity = null;
+		Optional<SelStEntity> optional = selStRepository.findById(pk);
+		if (optional.isPresent()) {
+			entity = optional.get();
+			entity.setIsactv(BigDecimal.ZERO);
+			selStRepository.save(entity);
+			response.setStatus(1);
+			response.addInfoMsg("Enquiry Item Deleted");
+		} else {
+			response.setStatus(2);
+			response.addErrorMsg("Enquiry Item Deletion Failed");
+		}
+		return response;
+	}
+
+	/**
+	 * This method returns sales enquiry item without tdc id data
+	 * 
+	 * @author Suman Kumar
+	 * @param request - sales enquiry data
+	 */
+	@Override
+	public List<SalesEnquiryItemDto> fetchSalesInqItemWithOutTdcId(SalesEnquiryDto request) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: fetchSalesInqItemWithOutTdcId ");
+
+		return salesEnquiryRepository.fetchSalesInqItemWithOutTdcId(request);
+	}
+
+	/**
+	 * This method returns sales enquiry item with approved tdc data
+	 * 
+	 * @author Pinaki Samal
+	 * @param request - sales enquiry data
+	 */
+	@Override
+	public Boolean getAllSalesEnquiryItemsDetailsWithApprovedTdc(SalesEnquiryDto request) {
+		LOGGER.info("Inside SalesEnquiryServiceImpl:: fetchSalesInqItemWithApprovedTdc ");
+
+		return salesEnquiryRepository.getAllSalesEnquiryItemsDetailsWithApprovedTdc(request);
+	}
+
+	@Override
+	public List<SalesEnquiryItemDto> getSalesItemByTdc(TdcGeneralRequestDto request) {
+		LOGGER.info("Inside TdcGeneralServiceImpl :: getSalesItemByTdc {} ", request);
+		return salesEnquiryRepository.getAllSalesEnquiryItemsDetailsByTdc(request);
+
+	}
+
+	@Override
+	public SalesEnquiryItemDto getSalesEnquiryItems(SalesEnquiryItemDto request) {
+		SelStEntityPK pk = new SelStEntityPK();
+		pk.setSeid(request.getSeid());
+		pk.setSelid(request.getSelid());
+		Optional<SelStEntity> optional = selStRepository.findById(pk);
+		if (optional.isPresent()) {
+			SelStEntity entity = optional.get();
+			SalesEnquiryItemDto dto = OfsMapper.INSTANCE.salesItemEntityToDto(entity);
+			dto.setSeid(entity.getId().getSeid());
+			dto.setSelid(entity.getId().getSelid());
+			return dto;
+		} else {
+			return null;
+		}
+	}
+
+	@Override
+	public List<TdcMainRequest> getTdcidAndRevidBySeid(String seid) {
+		return salesEnquiryRepository.getTdcidAndRevidBySeid(seid);
+	}
+
+	@Override
+	public SalesEnquiryDto getSalesEnquiryById(SalesEnquiryDto request) {
+		Optional<SehStEntity> optional = sehStJpaRepository.findById(request.getSeid());
+		if (optional.isPresent()) {
+			SehStEntity entity = optional.get();
+			return OfsMapper.INSTANCE.salesEntityToDto(entity);
+
+		} else {
+			return request;
+		}
+
+	}
+	/**
+	 * Retrieves sales enquiry item details with support for filtering, sorting, grouping, and pagination. 
+	 * Determines the appropriate data retrieval approach based on the provided parameters.
+	 * @author -Sonal patil
+	 **/
+	@Override
+	public <T> T getAllSalesEnquiryItemsDetails(StatusRequest request, String status, int pageNumber, int pageSize,
+			String filter, String sort, String group, int skip, boolean requireTotalCount, boolean requireGroupCount,
+			String searchValue, Integer pageStore, Integer latestGroupCount) {
+		List<String> filterList = DevExtGridFilterUtils.extractElements(filter);
+		 int[] pageSizeArr = processPageAndSize(pageNumber, pageSize,pageStore);
+		 pageNumber = pageSizeArr[0];
+		 pageSize = pageSizeArr[1];	 
+		 List<String> groupList = DevExtGridFilterUtils.getSortListFromString(group);	
+		 List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);		 
+		 if (DevExtGridFilterUtils.isGroupWithoutFilterOrSort(group, filter, sort)) {
+		     return handleGroupOnlySalesEnquiryDetails(request, groupList, pageNumber, pageSize, skip,status,pageStore,latestGroupCount);
+		 }	 
+		 if (DevExtGridFilterUtils.isGroupWithFilterOrSort(group, filter, sort)) {
+		     return handleGroupWithFilterOrSortSalesEnquiryDetails(request, groupList, filterList, sortList, pageNumber, pageSize, skip,requireTotalCount,status,pageStore,latestGroupCount);
+		 }
+		 if (DevExtGridFilterUtils.isFilterOrSortOnly(group, filter, sort)) {
+		     return handleFilterOrSortSalesEnquiryDetails(request, filterList, sortList,pageNumber, pageSize, skip, requireTotalCount,status,pageStore,latestGroupCount);
+	     }
+		  return null;
+	}
+	private int[] processPageAndSize(Integer pageNumber, Integer pageSize,Integer pageStore) {
+	    if (pageNumber == null) {
+	    	pageNumber = 0;
+	    }
+	    if (pageSize == null) {
+	    	pageSize = pageStore;
+	    }
+	    return new int[]{pageNumber, pageSize};
+	}
+	private <T> T handleGroupOnlySalesEnquiryDetails(StatusRequest request, List<String> groupList, int pageNumber,
+			int pageSize, int skip, String status,Integer pageStore, Integer latestGroupCount) {
+		pageSize = pageNumber + pageSize;
+		pageNumber = 0;	
+		String groupQuery = getQueryForGroupingSalesEnquiryDetails(groupList);
+	    String groupCountQuery = getQueryForGroupingCountSalesEnquiryDetails(groupList);
+		String mainCountQuery = getMainSalesEnquiryDetailsQueryCount();
+		Long mainQueryCount = salesEnquiryRepository.getSalesEnquiryDetailsQueryCount(request,mainCountQuery);
+	    Page<Object[]> groupingListData = salesEnquiryRepository.getGroupingListDataSalesEnquiryDetails(groupQuery, groupCountQuery,pageNumber,pageSize, skip,request);
+	    Long totalDistCount = salesEnquiryRepository.groupCountQuerySalesEnquiryDetails(groupCountQuery,request);
+	    return buildGroupedDataResponse(groupingListData, mainQueryCount, totalDistCount);
+	}
+	private String getQueryForGroupingSalesEnquiryDetails(List<String> groupList) {
+		if (groupList == null || groupList.isEmpty()) {
+	        throw new IllegalArgumentException("groupList cannot be null or empty");
+	    }	
+		String desc = groupList.get(3);
+	    String groupColumn = groupList.get(1); 
+	    StringBuilder query = new StringBuilder();
+		query.append(" "+OfsConstants.SELECT+" ")
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)	
+		.append(" ,COUNT(*")
+		.append(")")
+		.append(SalesEnquiryRepository.SALES_ENQUIRY_CONDITION) 
+		.append(SalesEnquiryRepository.SALES_ENQUIRY_WHERE_CONDITION) ;
+		query.append(" GROUP BY "+checkClassAleas().get(groupColumn)+""+groupColumn+" ");		
+		if ("true".equals(desc)) {
+		    query.append("  "+OfsConstants.ORDER_BY+" ").append(checkClassAleas().get(groupColumn)).append(groupColumn).append(" "+OfsConstants.DESC);
+		} else {
+		    query.append("  "+OfsConstants.ORDER_BY+" ").append(checkClassAleas().get(groupColumn)).append(groupColumn);
+		}
+		return query.toString();
+	}
+	private String getQueryForGroupingCountSalesEnquiryDetails(List<String> groupList) {
+		String groupColumn = groupList.get(1); // Assuming the second element is the group column
+		StringBuilder query = new StringBuilder();
+		query.append(" "+OfsConstants.SELECT+" ")
+		.append(OfsConstants.COUNT_DISTINCT)
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)
+		.append(")")
+		.append(SalesEnquiryRepository.SALES_ENQUIRY_CONDITION) 
+		.append(SalesEnquiryRepository.SALES_ENQUIRY_WHERE_CONDITION) ;
+		return query.toString();
+	}
+
+	public String getMainSalesEnquiryDetailsQueryCount() {
+	    StringBuilder query = new StringBuilder();
+	    query.append(" SELECT COUNT(*")
+		.append(") ")
+	    .append(SalesEnquiryRepository.SALES_ENQUIRY_CONDITION) 
+		.append(SalesEnquiryRepository.SALES_ENQUIRY_WHERE_CONDITION) ;
+	    return query.toString();
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T buildGroupedDataResponse(Page<Object[]> groupingListData, Long mainQueryCount, Long totalDistCount) {
+	    GroupedDataResponse<SalesEnquiryDto> result = new GroupedDataResponse<>(null, 0L, 0L);
+	    List<Group<SalesEnquiryDto>> list = new ArrayList<>();
+	    for (Object[] row : groupingListData) {
+	        String groupKey;
+	        if (row[0] instanceof BigDecimal bigDecimal) {
+	            groupKey = bigDecimal.toPlainString();
+	        } else {
+	            groupKey = String.valueOf(row[0]);
+	        }
+
+	        Long count;
+	        if (row[1] instanceof BigDecimal bigDecimal) {
+	            count = bigDecimal.longValue();
+	        } else {
+	            count = (Long) row[1];
+	        }
+
+	        list.add(new Group<>(groupKey, null, count));
+	    }
+	    result.setData(list);
+	    result.setTotalCount(mainQueryCount);
+	    result.setGroupCount(totalDistCount);
+	    return (T) result;
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T handleFilterOrSortSalesEnquiryDetails(StatusRequest request, List<String> filterList,List<String> sortList, Integer page, Integer size, Integer skip, boolean requireTotalCount,String status,Integer pageStore, Integer latestGroupCount) {
+		if (!requireTotalCount) {
+	        size = page + size;
+	        page = 0;
+	    }
+		  String query = getSalesEnquiryDetailsQuery();
+		    String countQuery = getMainSalesEnquiryDetailsQueryCount(); 
+		    if (!filterList.isEmpty()) {
+		        query = filterQueryUsingFilterList(filterList, query);
+		       countQuery = filterQueryUsingFilterList(filterList, countQuery);
+		     }
+	    query = applySorting(sortList, query);
+		 Page<SalesEnquiryDto> salesenquiryresult = salesEnquiryRepository.getSalesEnquiryDetails(request, page, size, query, countQuery, skip);
+		 return (T) new FluentaPaginatedResponse<>(salesenquiryresult.getContent(), salesenquiryresult.getTotalElements());
+	}
+	private String applySorting(List<String> sortList, String query) {
+
+		return  query + " ORDER BY sehSt.seDt DESC";  
+	   
+	}
+
+	public String getSalesEnquiryDetailsQuery() {
+		return 
+				SalesEnquiryRepository.SALES_ENQUIRY_QUERY+
+				SalesEnquiryRepository.SALES_ENQUIRY_CONDITION+
+				SalesEnquiryRepository.SALES_ENQUIRY_WHERE_CONDITION;
+
+	}
+	private <T> T handleGroupWithFilterOrSortSalesEnquiryDetails(StatusRequest request, List<String> groupList,
+			List<String> filterList, List<String> sortList, Integer page, Integer size, Integer skip,
+			boolean requireTotalCount,String status,Integer pageStore, Integer latestGroupCounts) {
+		if (requireTotalCount && size == null) {
+			size = pageStore;
+		} else {
+			size = page + size;
+			page = 0;
+		}
+		String queryForGrouping = getSalesEnquiryDetailsAndFiltering(groupList, filterList);
+		String queryForGroupingAndFilteringCount = getSalesEnquiryDetailsAndFilteringCount(groupList, filterList,sortList,status);
+		String mainCountQuery = getMainSalesEnquiryDetailsQueryCount();
+		Long mainQueryCount = salesEnquiryRepository.getSalesEnquiryDetailsQueryCount(request,mainCountQuery);
+		Page<Object[]> groupingListData = salesEnquiryRepository.getGroupingListDataSalesEnquiryDetails(queryForGrouping,queryForGroupingAndFilteringCount, page, size, skip,request);
+		Long totalDistCount = salesEnquiryRepository.groupCountQuerySalesEnquiryDetails(queryForGroupingAndFilteringCount,request);	
+		return buildGroupedDataResponse(groupingListData, mainQueryCount, (totalDistCount != null && totalDistCount != 0) ? totalDistCount : latestGroupCounts);
+	}
+	
+	public String getSalesEnquiryDetailsAndFiltering(List<String> groupList,List<String> filterList) {
+		String groupColumn = groupList.get(1);
+		String desc = groupList.get(3);
+		StringBuilder query = new StringBuilder();
+		query.append(" "+OfsConstants.SELECT+" ")
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)
+		.append(" ,COUNT(*")
+		.append(")")
+		.append(SalesEnquiryRepository.SALES_ENQUIRY_CONDITION) 
+		.append(SalesEnquiryRepository.SALES_ENQUIRY_WHERE_CONDITION) ;
+		String filterQueryUsingFilterList = query.toString();		
+		 if(!filterList.isEmpty()) {
+			 filterQueryUsingFilterList = filterQueryUsingFilterList(filterList,query.toString());
+		 }
+		 filterQueryUsingFilterList = filterQueryUsingFilterList+" "+"GROUP BY "+checkClassAleas().get(groupColumn)+""+ groupColumn + " "+"ORDER BY "+checkClassAleas().get(groupColumn)+""+ groupColumn;
+		 if("true".equals(desc)) {
+			 filterQueryUsingFilterList = filterQueryUsingFilterList+" DESC";
+		 }	 		
+		return filterQueryUsingFilterList;
+		
+	}
+	public String getSalesEnquiryDetailsAndFilteringCount(List<String> groupList,List<String> filterList,List<String> sortList, String status) {
+		String filterQueryUsingFilterList = null;
+		String groupColumn = groupList.get(1); 
+		StringBuilder query = new StringBuilder();
+		query.append(" "+OfsConstants.SELECT+" ")
+		.append(OfsConstants.COUNT_DISTINCT)
+		.append(checkClassAleas().get(groupColumn))
+		.append(groupColumn)
+		.append(")")
+		.append(SalesEnquiryRepository.SALES_ENQUIRY_CONDITION) 
+		.append(SalesEnquiryRepository.SALES_ENQUIRY_WHERE_CONDITION) ;
+		filterQueryUsingFilterList = query.toString();
+		
+		if(!filterList.isEmpty()) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList(filterList,query.toString());	
+		}
+		return filterQueryUsingFilterList;
+	}
+
+	@Override
+	public Long getSalesItemsCount(String seId) {
+		return selStRepository.countBySeId(seId);
+	}
+}

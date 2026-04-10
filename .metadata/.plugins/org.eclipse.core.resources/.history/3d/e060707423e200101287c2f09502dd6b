@@ -1,0 +1,284 @@
+package com.hindindustec.fluenta.hsm.quality.repository;
+
+import com.hindindustec.fluenta.hsm.quality.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.quality.constants.QualityConstants;
+import com.hindindustec.fluenta.hsm.quality.dto.CoilClearanceListDto;
+import com.hindindustec.fluenta.hsm.quality.dto.CoilClearanceRequestDto;
+
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
+import jakarta.persistence.TypedQuery;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public class CoilClearanceCustRepo {
+
+    private static final Logger logger = LoggerFactory.getLogger(CoilClearanceCustRepo.class);
+
+    EntityManager entityManager;
+
+    public CoilClearanceCustRepo(EntityManager entityManager) {
+        super();
+        this.entityManager = entityManager;
+    }
+
+    public Page<CoilClearanceListDto> getCoilClearanceDetails(CoilClearanceRequestDto request,
+                                                              Integer page, Integer size, String query, String countQuery) {
+        logger.info("Request Data: {}", request);
+
+        Query queryCount = entityManager.createQuery(countQuery);
+        queryCount.setParameter(OfsConstants.HEAT_ID, request.getHeatId());
+        queryCount.setParameter(OfsConstants.COIL_ID_FROM, request.getPpidFrom());
+        queryCount.setParameter(OfsConstants.COIL_ID_TO, request.getPpidTo());
+
+        Number resultNumber = (Number) queryCount.getSingleResult();
+        int totalRows = resultNumber.intValue();
+        Pageable pageable = PageRequest.of(page, size);
+
+        TypedQuery<CoilClearanceListDto> q = entityManager.createQuery(
+                query,
+                CoilClearanceListDto.class);
+        q.setFirstResult(pageable.getPageNumber() * pageable.getPageSize());
+        q.setMaxResults(pageable.getPageSize());
+
+        q.setParameter(OfsConstants.HEAT_ID, request.getHeatId());
+        q.setParameter(OfsConstants.COIL_ID_FROM, request.getPpidFrom());
+        q.setParameter(OfsConstants.COIL_ID_TO, request.getPpidTo());
+
+        logger.info("Fetching HSM Coil Clearance {}", q.getResultList());
+
+        List<CoilClearanceListDto> resultList = q.getResultList();
+
+        return new PageImpl<>(resultList, pageable, totalRows);
+    }
+
+    public String getAllPaginatedHSMCoilClearanceInString() {
+        StringBuilder query = new StringBuilder();
+        query.append(QualityConstants.COIL_CLEARANCE_GRID_DTO).append("(")
+                .append(" TRIM(qcschdl.id.schdId),")
+                .append(" TRIM(pppost.id.ppId),")
+                .append(" TRIM(qcschdl.parentPpId),")
+                .append(" inventory.thickness,")
+                .append(" inventory.width,")
+                .append(" inventory.weight,")
+                .append(" TRIM(qcschdl.heatId),")
+                .append(" qcschdl.extGrdNm,")
+                .append(" qcschdl.grdId,")
+                .append(" qcschdl.soId,")
+                .append(" qcschdl.solId,")
+                .append(" CONCAT(qcschdl.soId, '-', qcschdl.solId) AS concatSoItem, ")
+                .append(" qcschdl.custNm,")
+                .append(" qcschdl.tdcId,")
+                .append(" CASE WHEN tdcjm IS NULL THEN false ELSE true END AS hasTdcId,")
+                .append(" qcschdl.crDt,")
+                .append(" pppost.manualDecision,")
+                .append(" CASE WHEN pppost.manualDecision = 'HLD' THEN pppost.holdRemark ELSE pppost.releaseRemark END AS qaRemark,")
+                .append(" pppost.decisionBy,")
+                .append(" inventory.productionPlanStatus,")
+                .append(" pppost.decisionDate,")
+                .append(" labSamp.sampleId,")
+                .append(" tpiSamp.sampleId,")
+                .append(" COALESCE(tpi.finalResult, lab.finalResult),")
+                .append(" onlineInsp.finalResult,")
+                .append(" processInsp.finalResult,")
+                .append(" tpiInsp.finalResult,")
+                .append(" CASE WHEN tpi.id.ppId IS NOT NULL THEN 'YES' ELSE 'NO' END AS tpiReq")
+                .append(" ) ")
+                .append(" FROM QualityScheduleLinesEntity qcschdl")
+                .append(" LEFT JOIN TdcJmEntity tdcjm ON TRIM(tdcjm.id.tdcId) = TRIM(qcschdl.tdcId) AND tdcjm.crBy <> 'SAP' ")
+                .append(" JOIN PostProdTaskMtEntity pppost ON TRIM(qcschdl.ppId) = TRIM(pppost.id.ppId)")
+                .append(" AND pppost.tpiRequired = 'HSMQC' AND pppost.taskStatus = 'PENDING' AND pppost.latestFlag = 'Y' ")
+                .append(" JOIN Inventory inventory ON TRIM(pppost.id.ppId) = TRIM(inventory.id.ppid)")
+//                .append(" JOIN H1mh01Hm1millPdoLi pdo ON TRIM(pppost.id.ppId) = TRIM(pdo.id.coilid)")
+                .append(" LEFT JOIN PostProdTaskMtEntity tpi ON TRIM(qcschdl.ppId) = TRIM(tpi.id.ppId)")
+                .append(" AND tpi.tpiRequired = 'HSMTPI' AND tpi.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity insp ON TRIM(qcschdl.ppId) = TRIM(insp.id.ppId)")
+                .append(" AND insp.tpiRequired = 'HSMINSP' AND insp.latestFlag = 'Y' ")
+//                .append(" LEFT JOIN PpInspCharEntity charthk ON TRIM(charthk.id.ppid) = TRIM(insp.id.ppId) AND charthk.id.ppctr = insp.id.ppCtr")
+//                .append(" AND charthk.id.taskstepid = insp.id.taskstepId AND charthk.id.atrid = 'AVG COIL THK'")
+//                .append(" LEFT JOIN PpInspCharEntity charwgt ON TRIM(charwgt.id.ppid) = TRIM(insp.id.ppId) AND charwgt.id.ppctr = insp.id.ppCtr")
+//                .append(" AND charwgt.id.taskstepid = insp.id.taskstepId AND charwgt.id.atrid = 'COIL WGT'")
+//                .append(" LEFT JOIN PpInspCharEntity charwdt ON TRIM(charwdt.id.ppid) = TRIM(insp.id.ppId) AND charwdt.id.ppctr = insp.id.ppCtr")
+//                .append(" AND charwdt.id.taskstepid = insp.id.taskstepId AND charwdt.id.atrid = 'AVG COIL WIDTH'")
+                .append(" LEFT JOIN SampleQualityEntity tpiSamp ON TRIM(tpiSamp.sampleId) = TRIM(tpi.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity lab ON TRIM(qcschdl.ppId) = TRIM(lab.id.ppId)")
+                .append(" AND lab.tpiRequired = 'HSMLAB' AND lab.latestFlag = 'Y' ")
+                .append(" LEFT JOIN SampleQualityEntity labSamp ON TRIM(labSamp.sampleId) = TRIM(lab.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity onlineInsp ON TRIM(qcschdl.ppId) = TRIM(onlineInsp.id.ppId)")
+                .append(" AND onlineInsp.tpiRequired = 'ONLINEINSP' AND onlineInsp.taskStatus = 'COMPLETE' AND onlineInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity processInsp ON TRIM(qcschdl.ppId) = TRIM(processInsp.id.ppId)")
+                .append(" AND processInsp.tpiRequired = 'PROCESSINSP' AND processInsp.taskStatus = 'COMPLETE' AND processInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity tpiInsp ON TRIM(qcschdl.ppId) = TRIM(tpiInsp.id.ppId)")
+                .append(" AND tpiInsp.tpiRequired = 'HSMTPIINSP' AND tpiInsp.taskStatus = 'COMPLETE' AND tpiInsp.latestFlag = 'Y' ")
+                .append(" WHERE (:heatId IS NULL OR TRIM(qcschdl.heatId) = TRIM(:heatId))")
+                .append(" AND (:coilIdFrom IS NULL AND :coilIdTo IS NULL ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)))");
+
+        return query.toString();
+    }
+
+    public String getAllPaginatedHSMCoilClearanceInStringForCount() {
+        StringBuilder countQuery = new StringBuilder();
+        countQuery.append("SELECT COUNT(DISTINCT qcschdl.id)")
+                .append(" FROM QualityScheduleLinesEntity qcschdl")
+                .append(" LEFT JOIN TdcJmEntity tdcjm ON TRIM(tdcjm.id.tdcId) = TRIM(qcschdl.tdcId) AND tdcjm.crBy <> 'SAP' ")
+                .append(" JOIN PostProdTaskMtEntity pppost ON TRIM(qcschdl.ppId) = TRIM(pppost.id.ppId)")
+                .append(" AND pppost.tpiRequired = 'HSMQC' AND pppost.taskStatus = 'PENDING' AND pppost.latestFlag = 'Y' ")
+                .append(" JOIN Inventory inventory ON TRIM(pppost.id.ppId) = TRIM(inventory.id.ppid)")
+                .append(" JOIN H1mh01Hm1millPdoLi pdo ON TRIM(pppost.id.ppId) = TRIM(pdo.id.coilid)")
+                .append(" LEFT JOIN PostProdTaskMtEntity tpi ON TRIM(qcschdl.ppId) = TRIM(tpi.id.ppId)")
+                .append(" AND tpi.tpiRequired = 'HSMTPI' AND tpi.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity insp ON TRIM(qcschdl.ppId) = TRIM(insp.id.ppId)")
+                .append(" AND insp.tpiRequired = 'HSMINSP' AND insp.latestFlag = 'Y' ")
+//                .append(" LEFT JOIN PpInspCharEntity charthk ON TRIM(charthk.id.ppid) = TRIM(insp.id.ppId) AND charthk.id.ppctr = insp.id.ppCtr")
+//                .append(" AND charthk.id.taskstepid = insp.id.taskstepId AND charthk.id.atrid = 'AVG COIL THK'")
+//                .append(" LEFT JOIN PpInspCharEntity charwgt ON TRIM(charwgt.id.ppid) = TRIM(insp.id.ppId) AND charwgt.id.ppctr = insp.id.ppCtr")
+//                .append(" AND charwgt.id.taskstepid = insp.id.taskstepId AND charwgt.id.atrid = 'COIL WGT'")
+//                .append(" LEFT JOIN PpInspCharEntity charwdt ON TRIM(charwdt.id.ppid) = TRIM(insp.id.ppId) AND charwdt.id.ppctr = insp.id.ppCtr")
+//                .append(" AND charwdt.id.taskstepid = insp.id.taskstepId AND charwdt.id.atrid = 'AVG COIL WIDTH'")
+                .append(" LEFT JOIN SampleQualityEntity tpiSamp ON TRIM(tpiSamp.sampleId) = TRIM(tpi.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity lab ON TRIM(qcschdl.ppId) = TRIM(lab.id.ppId)")
+                .append(" AND lab.tpiRequired = 'HSMLAB' AND lab.latestFlag = 'Y' ")
+                .append(" LEFT JOIN SampleQualityEntity labSamp ON TRIM(labSamp.sampleId) = TRIM(lab.mapSampleId)")
+                .append(" LEFT JOIN PostProdTaskMtEntity onlineInsp ON TRIM(qcschdl.ppId) = TRIM(onlineInsp.id.ppId)")
+                .append(" AND onlineInsp.tpiRequired = 'ONLINEINSP' AND onlineInsp.taskStatus = 'COMPLETE' AND onlineInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity processInsp ON TRIM(qcschdl.ppId) = TRIM(processInsp.id.ppId)")
+                .append(" AND processInsp.tpiRequired = 'PROCESSINSP' AND processInsp.taskStatus = 'COMPLETE' AND processInsp.latestFlag = 'Y' ")
+                .append(" LEFT JOIN PostProdTaskMtEntity tpiInsp ON TRIM(qcschdl.ppId) = TRIM(tpiInsp.id.ppId)")
+                .append(" AND tpiInsp.tpiRequired = 'HSMTPIINSP' AND tpiInsp.taskStatus = 'COMPLETE' AND tpiInsp.latestFlag = 'Y' ")
+                .append(" WHERE (:heatId IS NULL OR TRIM(qcschdl.heatId) = TRIM(:heatId))")
+                .append(" AND (:coilIdFrom IS NULL AND :coilIdTo IS NULL ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+                .append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(qcschdl.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)))");
+
+        return countQuery.toString();
+    }
+
+    public List<String> getHeatId() {
+        StringBuilder queryBuilder = new StringBuilder();
+
+        queryBuilder.append("SELECT DISTINCT(TRIM(h.heatId)) ")
+                .append("FROM QualityScheduleLinesEntity h ")
+                .append("ORDER BY TRIM(h.heatId) DESC");
+
+        TypedQuery<String> q = entityManager.createQuery(queryBuilder.toString(), String.class);
+        q.setMaxResults(10);
+        return q.getResultList();
+    }
+
+    public Long getMainCoilClearanceQueryCount(CoilClearanceRequestDto request, String query, String status) {
+        Query countQuery = entityManager.createQuery(query);
+        countQuery.setParameter(OfsConstants.HEAT_ID, request.getHeatId());
+        countQuery.setParameter(OfsConstants.COIL_ID_FROM, request.getPpidFrom());
+        countQuery.setParameter(OfsConstants.COIL_ID_TO, request.getPpidTo());
+        return (Long) countQuery.getSingleResult();
+    }
+	
+    public Page<Object[]> getGroupingListData(String queryForGrouping, String queryForGroupingAndFilteringCount,
+                                              Integer page, Integer size, Integer skip, CoilClearanceRequestDto request, String status) {
+        Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+        queryCount.setParameter(OfsConstants.HEAT_ID, request.getHeatId());
+        queryCount.setParameter(OfsConstants.COIL_ID_FROM, request.getPpidFrom());
+        queryCount.setParameter(OfsConstants.COIL_ID_TO, request.getPpidTo());
+        Number resultNumber = (Number) queryCount.getSingleResult();
+		int totalRows = resultNumber.intValue();
+		int effectiveOffset = page * size;
+		int effectivePageSize = size;
+
+		if (skip != null && skip > 0) {
+			if (skip >= size) {
+				effectiveOffset += skip;
+				skip = 0;
+			} else {
+				effectiveOffset += skip;
+				effectivePageSize -= skip;
+			}
+		}
+		Pageable pageable = PageRequest.of(page, size);
+		TypedQuery<Object[]> query = entityManager.createQuery(queryForGrouping, Object[].class);
+		query.setParameter(OfsConstants.HEAT_ID, request.getHeatId());
+		query.setParameter(OfsConstants.COIL_ID_FROM, request.getPpidFrom());
+		query.setParameter(OfsConstants.COIL_ID_TO, request.getPpidTo());
+		query.setFirstResult(effectiveOffset);
+		query.setMaxResults(effectivePageSize);
+		List<Object[]> resultList = query.getResultList();
+		return new PageImpl<>(resultList, pageable, totalRows);
+    }
+
+    public Long groupCountQuery(String queryForGroupingAndFilteringCount, CoilClearanceRequestDto request, String status) {
+        Query queryCount = entityManager.createQuery(queryForGroupingAndFilteringCount);
+        queryCount.setParameter(OfsConstants.HEAT_ID, request.getHeatId());
+        queryCount.setParameter(OfsConstants.COIL_ID_FROM, request.getPpidFrom());
+        queryCount.setParameter(OfsConstants.COIL_ID_TO, request.getPpidTo());
+
+        Number resultNumber = (Number) queryCount.getSingleResult();
+        return resultNumber.longValue();
+    }
+
+    public Page<CoilClearanceListDto> getCoilClearance(CoilClearanceRequestDto request, String status, int page, int size, String query, String countQueryParm, Integer skip) {
+        // Step 1: Calculate effective OFFSET and PAGE SIZE
+        int effectiveOffset = page * size;
+        int effectivePageSize = size;
+
+        if (skip != null && skip > 0) {
+            if (skip >= size) {
+                effectiveOffset += skip; // Adjust the offset by skipping additional rows
+                skip = 0; // Reset skip as it's already accounted for
+            } else {
+                effectiveOffset += skip;
+                effectivePageSize -= skip; // Adjust the size to exclude skipped rows
+            }
+        }
+
+        // Step 2: Query for Results
+        TypedQuery<CoilClearanceListDto> q = entityManager.createQuery(query, CoilClearanceListDto.class);
+
+        // Set parameters directly in this method
+        q.setParameter(OfsConstants.HEAT_ID, request.getHeatId());
+        q.setParameter(OfsConstants.COIL_ID_FROM, request.getPpidFrom());
+        q.setParameter(OfsConstants.COIL_ID_TO, request.getPpidTo());
+
+        q.setFirstResult(effectiveOffset);
+        q.setMaxResults(effectivePageSize);
+
+        List<CoilClearanceListDto> resultList = q.getResultList();
+
+        // Step 3: Query for Count
+        Query countQuery = entityManager.createQuery(countQueryParm);
+
+        countQuery.setParameter(OfsConstants.HEAT_ID, request.getHeatId());
+        countQuery.setParameter(OfsConstants.COIL_ID_FROM, request.getPpidFrom());
+        countQuery.setParameter(OfsConstants.COIL_ID_TO, request.getPpidTo());
+
+
+        Long totalRows = (Long) countQuery.getSingleResult();
+
+        // Step 4: Pageable and PageImpl
+        Pageable pageable = PageRequest.of(page, size);
+        return new PageImpl<>(resultList, pageable, totalRows);
+
+    }
+
+    public List<String> getCoilIdList() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT DISTINCT TRIM(qsl.ppId) ")
+          .append("FROM QualityScheduleListEntity qsl ")
+          .append("ORDER BY TO_NUMBER(TRIM(qsl.ppId)) DESC");
+
+        TypedQuery<String> q = entityManager.createQuery(sb.toString(), String.class);
+        q.setMaxResults(100);   
+
+        return q.getResultList();
+    }
+
+}

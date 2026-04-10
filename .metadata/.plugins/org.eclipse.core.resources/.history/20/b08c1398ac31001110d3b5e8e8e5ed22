@@ -1,0 +1,23 @@
+package com.hindindustec.fluenta.hsm.masters.repository;
+
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.hindindustec.fluenta.hsm.masters.entities.StddimtoldJm;
+import com.hindindustec.fluenta.hsm.masters.entities.StddimtoldJmPK;
+
+public interface StddimtoldJmRepository extends JpaRepository<StddimtoldJm, StddimtoldJmPK> {
+	
+	@Query("SELECT st FROM StddimtoldJm st WHERE st.id.dimtolid = :dimtolid")
+	Optional<StddimtoldJm> findByDimtolid(@Param("dimtolid") String dimtolid);
+
+	@Query("SELECT s FROM StddimtoldJm s WHERE s.id.dimtolid = :dimtolid AND s.isactv = :isactv ORDER BY s.crDt ASC")
+    List<StddimtoldJm> findById_DimtolidAndIsactvOrderByCrDtAsc(@Param("dimtolid") String dimtolid, @Param("isactv") Integer isactv);
+
+
+}

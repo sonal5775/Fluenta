@@ -1,0 +1,202 @@
+package com.hindindustec.fluenta.reports.service.serviceimpl;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+
+import com.hindindustec.fluenta.reports.common.OfsConstants;
+import com.hindindustec.fluenta.reports.common.response.FluentaApiResponse;
+import com.hindindustec.fluenta.reports.common.response.ResponseUtil;
+import com.hindindustec.fluenta.reports.dto.CombinationDto;
+import com.hindindustec.fluenta.reports.dto.MaterialRollingRequestParamsDto;
+import com.hindindustec.fluenta.reports.dto.MaterialRollingSummaryKpiDto;
+import com.hindindustec.fluenta.reports.dto.MaterialRollingSummaryReportDto;
+import com.hindindustec.fluenta.reports.dto.MaterialRollingSummaryReportRequest;
+import com.hindindustec.fluenta.reports.repository.ExternalGradeRepository;
+import com.hindindustec.fluenta.reports.repository.InternalGradeRepository;
+import com.hindindustec.fluenta.reports.repository.MaterialRollingSummaryCustRepository;
+import com.hindindustec.fluenta.reports.service.MaterialRollingSummaryReportService;
+
+@Service
+public class MaterialRollingSummaryReportServiceImpl implements MaterialRollingSummaryReportService {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(MaterialRollingSummaryReportServiceImpl.class);
+
+	private MaterialRollingSummaryCustRepository materialRollingSummaryCustRepository;
+	private ExternalGradeRepository externalGradeRepository;
+	private InternalGradeRepository internalGradeRepository;
+
+	public MaterialRollingSummaryReportServiceImpl(
+			MaterialRollingSummaryCustRepository materialRollingSummaryCustRepository,
+			ExternalGradeRepository externalGradeRepository, InternalGradeRepository internalGradeRepository) {
+		super();
+		this.materialRollingSummaryCustRepository = materialRollingSummaryCustRepository;
+		this.externalGradeRepository = externalGradeRepository;
+		this.internalGradeRepository = internalGradeRepository;
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<String>>> searchInternalGrades(String query) {
+		List<String> list = materialRollingSummaryCustRepository.searchInternalGrades(query);
+		return ResponseUtil.createResponse(list, "Fetching internalgrade", true);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<String>>> searchExternalGrades(String query) {
+		List<String> list = materialRollingSummaryCustRepository.searchExternalGrades(query);
+		return ResponseUtil.createResponse(list, "Fetching externalgrade", true);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<MaterialRollingSummaryReportDto>>> getMaterialRollingSummaryReportData(
+	        MaterialRollingSummaryReportRequest request) {
+
+	    LOGGER.info("Fetching MaterialRollingSummaryReportData, request servimp: {}", request);
+
+	    int chunkSize = 100;
+	    Long totalRecords = materialRollingSummaryCustRepository.getTotalRecordsCount(request);
+	    LOGGER.info("Total records found for request: {}", totalRecords);
+
+	    if (totalRecords == 0) {
+	        LOGGER.warn("No records found, preparing inactive combinations response servimp");
+
+	        List<MaterialRollingSummaryReportDto> resultList = new ArrayList<>();
+	        List<String> presentCombinations = new ArrayList<>();
+	        List<CombinationDto> combinations = buildCombination(request);
+
+	        combinations.parallelStream().forEach(comb -> {
+	            if (!presentCombinations.contains(comb.getKey())) {
+	                MaterialRollingSummaryReportDto dto = new MaterialRollingSummaryReportDto();
+	                dto.setExtgrd(comb.getExtgrd());
+	                dto.setGrdid(comb.getGrdid());
+	                dto.setStatus(OfsConstants.STSINACTIVE);
+	                resultList.add(dto);
+	                LOGGER.debug("Added inactive combination servimp: {}", comb.getKey());
+	            }
+	        });
+
+	        LOGGER.info("Inactive combinations prepared, total: {}", resultList.size());
+	        return ResponseUtil.createResponse(resultList, "Fetching HsmScheduleSummaryData Details servimp", true);
+	    }
+
+	    Long totalChunks = (long) Math.ceil((double) totalRecords / chunkSize);
+	    LOGGER.info("Processing in {} chunks with chunkSize={} servimp", totalChunks, chunkSize);
+
+	    ExecutorService executorService = Executors.newFixedThreadPool(10);
+	    List<CompletableFuture<List<MaterialRollingSummaryReportDto>>> futures = new ArrayList<>();
+
+	    for (int i = 0; i < totalChunks; i++) {
+	        int pageNumber = i;
+	        futures.add(CompletableFuture.supplyAsync(() -> {
+	            LOGGER.debug("Fetching chunk {} of {} servimp", pageNumber + 1, totalChunks);
+	            return materialRollingSummaryCustRepository.getMaterialRollingSummaryReportDetails(
+	                    request, pageNumber, chunkSize);
+	        }, executorService));
+	    }
+
+	    // ✅ collect into a mutable list
+	    List<MaterialRollingSummaryReportDto> resultList = futures.stream()
+	            .map(CompletableFuture::join)
+	            .flatMap(List::stream)
+	            .collect(Collectors.toList());
+
+	    executorService.shutdown();
+	    LOGGER.info("Fetched {} records from DB after merging all chunks servimp", resultList.size());
+
+	    // ✅ also make this mutable
+	    List<String> presentCombinations = resultList.parallelStream()
+	            .map(e -> e.getExtgrd() + "|" + e.getGrdid())
+	            .distinct()
+	            .collect(Collectors.toList());
+
+	    List<CombinationDto> combinations = buildCombination(request);
+	    combinations.parallelStream().forEach(comb -> {
+	        if (!presentCombinations.contains(comb.getKey())) {
+	            MaterialRollingSummaryReportDto dto = new MaterialRollingSummaryReportDto();
+	            dto.setExtgrd(comb.getExtgrd());
+	            dto.setGrdid(comb.getGrdid());
+	            dto.setStatus(OfsConstants.STSINACTIVE);
+	            resultList.add(dto);   // ✅ now safe
+	            LOGGER.debug("Added missing inactive combination servimp: {}", comb.getKey());
+	        }
+	    });
+
+	    LOGGER.info("Final result prepared, total records servimp: {}", resultList.size());
+	    return ResponseUtil.createResponse(resultList, "Fetching HsmScheduleSummaryData Details", true);
+	}
+
+
+	private List<CombinationDto> buildCombination(MaterialRollingSummaryReportRequest request) {
+	    List<String> externalGrades = request.getExtgrd();
+	    List<String> grdid = request.getGrdid();
+
+	    LOGGER.debug("Building combinations for extgrd={} and grdid={}", externalGrades, grdid);
+
+	    ArrayList<CombinationDto> resultList = new ArrayList<>();
+	    externalGrades.parallelStream().forEach(e -> {
+	        grdid.stream().forEach(g -> {
+	            StringBuilder comb = new StringBuilder();
+	            CombinationDto dto = new CombinationDto();
+	            comb.append(e).append("|").append(g);
+	            dto.setExtgrd(e);
+	            dto.setGrdid(g);
+	            dto.setKey(comb.toString());
+	            resultList.add(dto);
+	        });
+	    });
+
+	    LOGGER.info("Combinations built: {}", resultList.size());
+	    return resultList;
+	}
+
+
+	@Override
+	public MaterialRollingSummaryKpiDto getKpis(MaterialRollingSummaryReportRequest request) {
+		return materialRollingSummaryCustRepository.getKpis(request);
+	}
+
+	
+	
+	@Override
+	public ResponseEntity<FluentaApiResponse<MaterialRollingRequestParamsDto>> getRequestParameters() {
+		LOGGER.info("Fetching Request Parameters");
+		List<String> externalGrades = externalGradeRepository.findAllDistinctExternalGrades();
+		List<String> internalGrades = null;
+		MaterialRollingRequestParamsDto dto = new MaterialRollingRequestParamsDto();
+		dto.setExternalGrades(externalGrades);
+		dto.setInternalGrades(internalGrades);
+		return ResponseUtil.createResponse(dto, "Fetching Mapping Details", true);
+	}
+
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<MaterialRollingRequestParamsDto>> getInternalGradeByRequestParameters(
+	        MaterialRollingSummaryReportRequest request) {
+
+	    LOGGER.info("Fetching internal grades, request received service: {}", request);
+
+	    List<String> externalGrades = request.getExtgrd() != null ? request.getExtgrd() : List.of();
+	    LOGGER.debug("External grades after null-check service : {}", externalGrades);
+
+	    List<String> internalGrades = materialRollingSummaryCustRepository.findInternalGradesByExternalGrades(externalGrades);
+	    LOGGER.info("Internal grades fetched from DB service : {}", internalGrades);
+
+	    MaterialRollingRequestParamsDto dto = new MaterialRollingRequestParamsDto();
+	    dto.setExternalGrades(externalGrades);
+	    dto.setInternalGrades(internalGrades);
+
+	    LOGGER.info("Prepared response DTO service : {}", dto);
+
+	    return ResponseUtil.createResponse(dto, "Fetching Mapping Details servcie ", true);
+	}
+
+	
+}

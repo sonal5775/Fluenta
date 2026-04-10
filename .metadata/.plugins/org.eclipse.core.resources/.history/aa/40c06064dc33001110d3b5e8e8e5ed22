@@ -1,0 +1,59 @@
+package com.hindindustec.fluenta.sales.common.config;
+
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
+
+@Component
+class HealthCheckScheduler {
+//	private final List<HealthIndicator> healthIndicators;
+//
+//
+//	@Autowired
+//	private JavaMailSender javaMailSender;
+//
+//	public List<HealthIndicator> getHealthStatus() {
+//		return this.healthIndicators;
+//	}
+//
+//	@Scheduled(fixedRate = 4, timeUnit = TimeUnit.HOURS)
+//	public void checkAndNotify() {
+//		for (HealthIndicator healthIndicator : getHealthStatus()) {
+//			if (healthIndicator.health().toString().contains("DOWN")) {
+//				sendEmailNotification(healthIndicator);
+//			}
+//		}
+//	}
+//
+//	private void sendEmailNotification(HealthIndicator healthIndicator) {
+//		MimeMessage message = javaMailSender.createMimeMessage();
+//		MimeMessageHelper helper = new MimeMessageHelper(message);
+//
+//		try {
+//			helper.setFrom("amit.bhalerao@hindindustec.com");
+//			helper.setTo(InternetAddress.parse("amit.bhalerao@hindindustec.com"));
+//			helper.setSubject("Application Health Alert");
+//			helper.setText("Component " + healthIndicator + " is down.");
+//			javaMailSender.send(message);
+//		} catch (MessagingException e) {
+//			e.printStackTrace();
+//		}
+//	}
+//
+//	public HealthCheckScheduler(List<HealthIndicator> healthIndicators, JavaMailSender javaMailSender) {
+//		super();
+//		this.healthIndicators = healthIndicators;
+//		this.javaMailSender = javaMailSender;
+//	}
+//
+}

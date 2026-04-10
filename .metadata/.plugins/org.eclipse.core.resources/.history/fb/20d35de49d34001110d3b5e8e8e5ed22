@@ -1,0 +1,75 @@
+package com.hindindustec.fluenta.sales.service;
+
+import java.util.List;
+
+import com.hindindustec.fluenta.sales.common.OfsCommonResponse;
+import com.hindindustec.fluenta.sales.common.response.FluentaPaginatedResponse;
+import com.hindindustec.fluenta.sales.dto.ConfirmedStatusDto;
+import com.hindindustec.fluenta.sales.dto.HeaderDateRequestDto;
+import com.hindindustec.fluenta.sales.dto.InProgressStatusDto;
+import com.hindindustec.fluenta.sales.dto.RequestedStatusDto;
+import com.hindindustec.fluenta.sales.dto.SalesEnquiryDropdownDto;
+import com.hindindustec.fluenta.sales.dto.SalesEnquiryDto;
+import com.hindindustec.fluenta.sales.dto.SalesEnquiryItemDto;
+import com.hindindustec.fluenta.sales.dto.SalesRemarksDto;
+import com.hindindustec.fluenta.sales.dto.SalesResponse;
+import com.hindindustec.fluenta.sales.dto.StatusDto;
+import com.hindindustec.fluenta.sales.dto.StatusRequest;
+import com.hindindustec.fluenta.sales.dto.TdcGeneralRequestDto;
+import com.hindindustec.fluenta.sales.dto.TdcMainRequest;
+
+public interface SalesEnquiryService {
+
+	public FluentaPaginatedResponse<SalesEnquiryDto> getAllPaginatedSalesEnquiryDetails(
+			StatusRequest request,Integer page, Integer size, String filterPathString,
+			String sort);
+	
+	public List<SalesEnquiryItemDto> getAllSalesEnquiryItemsDetails(SalesEnquiryDto request);
+
+	public SalesEnquiryDropdownDto getDropdownValues();
+	
+	public List<StatusDto> getStatus(HeaderDateRequestDto request);
+	
+	public List<InProgressStatusDto> getInProgressStatus();
+	
+	public List<RequestedStatusDto> getIRequestedStatus();
+	
+	public List<ConfirmedStatusDto> getConfirmedStatus();
+
+	SalesEnquiryDto updateSalesEnquiryStatus(SalesEnquiryDto list);
+
+	public SalesResponse saveSalesEnquiry(SalesEnquiryDto dto);
+
+	public OfsCommonResponse saveSalesEnquiryItems(List<SalesEnquiryItemDto> request);
+	
+	public void registerSeHistory(SalesEnquiryDto dto);
+
+	public SalesRemarksDto fetchItemRemarks(SalesEnquiryItemDto request);
+
+	public OfsCommonResponse saveItemRemarks(SalesRemarksDto dto);
+
+	public OfsCommonResponse saveEnquiryRemarks(SalesRemarksDto dto);
+
+	public OfsCommonResponse deleteSalesEnquiryItems(SalesEnquiryItemDto request);
+
+	public List<SalesEnquiryItemDto> fetchSalesInqItemWithOutTdcId(SalesEnquiryDto request); // created by suman
+
+	public List<SalesEnquiryDto> getAllSalesEnquiryDetailsTdc(StatusRequest request);
+
+	public Boolean getAllSalesEnquiryItemsDetailsWithApprovedTdc(SalesEnquiryDto request);
+
+	public List<SalesEnquiryItemDto> getSalesItemByTdc(TdcGeneralRequestDto request);
+
+	public SalesEnquiryItemDto getSalesEnquiryItems(SalesEnquiryItemDto request);
+	
+	List<TdcMainRequest> getTdcidAndRevidBySeid(String seid);
+
+	public SalesEnquiryDto getSalesEnquiryById(SalesEnquiryDto request);
+
+	public <T> T getAllSalesEnquiryItemsDetails(StatusRequest request, String status, int pageNumber, int pageSize,
+			String filter, String sort, String group, int skip, boolean requireTotalCount, boolean requireGroupCount,
+			String searchValue, Integer pageStore, Integer latestGroupCount);
+
+	public Long getSalesItemsCount(String seId);
+	
+}

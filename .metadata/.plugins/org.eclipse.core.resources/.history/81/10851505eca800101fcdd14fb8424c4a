@@ -1,0 +1,1205 @@
+package com.hindindustec.fluenta.reports.service.serviceimpl;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.IntStream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.reports.common.DBSessionService;
+import com.hindindustec.fluenta.reports.common.DevExtGridFilterUtils;
+import com.hindindustec.fluenta.reports.common.OfsCommonResponse;
+import com.hindindustec.fluenta.reports.common.OfsConstants;
+import com.hindindustec.fluenta.reports.common.OfsStatusConstants;
+import com.hindindustec.fluenta.reports.common.customexception.CustomException;
+import com.hindindustec.fluenta.reports.common.response.FluentaApiResponse;
+import com.hindindustec.fluenta.reports.common.response.FluentaPaginatedResponse;
+import com.hindindustec.fluenta.reports.common.response.Group;
+import com.hindindustec.fluenta.reports.common.response.GroupedDataResponse;
+import com.hindindustec.fluenta.reports.common.response.ResponseUtil;
+import com.hindindustec.fluenta.reports.dto.Chemistry;
+import com.hindindustec.fluenta.reports.dto.SlabStockDto;
+import com.hindindustec.fluenta.reports.dto.SlabStockLocationDto;
+import com.hindindustec.fluenta.reports.dto.SlabStockRequest;
+import com.hindindustec.fluenta.reports.dto.SlabStockSourceDto;
+import com.hindindustec.fluenta.reports.dto.SlabStockStatusDto;
+import com.hindindustec.fluenta.reports.model.PphMt;
+import com.hindindustec.fluenta.reports.model.PphMtPK;
+import com.hindindustec.fluenta.reports.repository.PphMtRepository;
+import com.hindindustec.fluenta.reports.repository.SlabStockCustRepository;
+import com.hindindustec.fluenta.reports.service.SlabStockService;
+
+@Service
+public class SlabStockServiceImpl implements SlabStockService {
+
+	private SlabStockCustRepository slabStockCustRepository;
+	private PphMtRepository pphMtRepository;
+	private DBSessionService dbSessionService;
+	private static final Logger LOGGER = LoggerFactory.getLogger(SlabStockServiceImpl.class);
+
+	public SlabStockServiceImpl(SlabStockCustRepository slabStockCustRepository, PphMtRepository pphMtRepository,
+			DBSessionService dbSessionService) {
+		super();
+		this.slabStockCustRepository = slabStockCustRepository;
+		this.pphMtRepository = pphMtRepository;
+		this.dbSessionService = dbSessionService;
+
+	}
+
+	@Override
+	public <T> T getSlabStocks(SlabStockRequest slabStockRequest, String status, int pageNumber, int pageSize,
+			String filter, String sort, String group, int skip, boolean requireTotalCount, boolean requireGroupCount,
+			String searchValue, Integer pageStore, Integer latestGroupCount) {
+		List<String> filterList = DevExtGridFilterUtils.extractElements(filter);
+		for (String string : filterList) {
+			if (string.equalsIgnoreCase("shiftid")) { // Case insensitive comparison
+				int index = filterList.indexOf(string);
+				String shiftValue = filterList.get(index + 2).toUpperCase(); // Normalize to uppercase
+				switch (shiftValue) {
+				case OfsConstants.A: // Matches uppercase "A"
+					filterList.set(index + 2, OfsConstants.M);
+					break;
+				case OfsConstants.B: // Matches uppercase "B"
+					filterList.set(index + 2, OfsConstants.A);
+					break;
+				case OfsConstants.C: // Matches uppercase "C"
+					filterList.set(index + 2, OfsConstants.N);
+					break;
+				default:
+					// Handle any unexpected values
+					break;
+				}
+			}
+		}
+
+		// new
+		int[] pageSizeArr = processPageAndSize(pageNumber, pageSize, pageStore);
+		pageNumber = pageSizeArr[0];
+		pageSize = pageSizeArr[1];
+
+		List<String> groupList = DevExtGridFilterUtils.getSortListFromString(group);
+
+		List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);
+
+		if (DevExtGridFilterUtils.isGroupWithoutFilterOrSort(group, filter, sort)) {
+
+			return handleGroupOnly(slabStockRequest, groupList, pageNumber, pageSize, skip, status, pageStore,
+					latestGroupCount);
+		}
+
+		if (DevExtGridFilterUtils.isGroupWithFilterOrSort(group, filter, sort)) {
+
+			return handleGroupWithFilterOrSort(slabStockRequest, groupList, filterList, sortList, pageNumber, pageSize,
+					skip, requireTotalCount, status, pageStore, latestGroupCount);
+		}
+
+		if (DevExtGridFilterUtils.isFilterOrSortOnly(group, filter, sort)) {
+
+			return handleFilterOrSort(slabStockRequest, filterList, sortList, pageNumber, pageSize, skip,
+					requireTotalCount, status, pageStore, latestGroupCount);
+		}
+
+		return null;
+		// old
+	}
+
+	public List<Chemistry> getSlabStocksChemistry(SlabStockRequest request) {
+		return slabStockCustRepository.getSlabStocksChemistry(request);
+	}
+
+	@Override
+	public List<SlabStockStatusDto> getSlabStockStatus(SlabStockRequest request) {
+		List<SlabStockStatusDto> resultList = new ArrayList<>();
+
+		addStatusDto(resultList, OfsStatusConstants.FREE_STOCK,
+				pphMtRepository.findSlabsByFreestockStatus(OfsStatusConstants.FREE_STOCK),
+				pphMtRepository.findSlabsWgtByFreestockStatus(OfsStatusConstants.FREE_STOCK));
+		addStatusDto(resultList, OfsStatusConstants.AVAILABLE,
+				pphMtRepository.findSlabsByAvailableStatus(OfsStatusConstants.AVAILABLE),
+				pphMtRepository.findSlabsWgtByAvailableStatus(OfsStatusConstants.AVAILABLE));
+		addStatusDto(resultList, OfsStatusConstants.CHARGING,
+				pphMtRepository.findSlabsByChargedStatus(OfsStatusConstants.CHARGING),
+				pphMtRepository.findSlabsWgtByChargedStatus(OfsStatusConstants.CHARGING));
+		addStatusDto(resultList, OfsStatusConstants.HOLD,
+				pphMtRepository.findSlabsByHoldStatus(OfsStatusConstants.HOLD),
+				pphMtRepository.findSlabsWgtByHoldStatus(OfsStatusConstants.HOLD));
+		addStatusDto(resultList, OfsStatusConstants.READY_TO_DISPATCH,
+				pphMtRepository.findSlabsByRTDStatus(OfsStatusConstants.READY_TO_DISPATCH),
+				pphMtRepository.findSlabsWgtByRTDStatus(OfsStatusConstants.READY_TO_DISPATCH));
+		addStatusDto(resultList, OfsStatusConstants.LOADED,
+				pphMtRepository.findSlabsByLoadedStatus(OfsStatusConstants.LOADED),
+				pphMtRepository.findSlabsWgtByLoadedStatus(OfsStatusConstants.LOADED));
+		addStatusDto(resultList, OfsStatusConstants.INSPPEND,
+				pphMtRepository.findSlabsByInsppendStatus(OfsStatusConstants.INSPPEND),
+				pphMtRepository.findSlabsWgtByInsppendStatus(OfsStatusConstants.INSPPEND));
+		addStatusDto(resultList, OfsStatusConstants.DISPATCHED,
+				pphMtRepository.findSlabsByDispatchedStatus(OfsStatusConstants.DISPATCHED),
+				pphMtRepository.findSlabsWgtByDispatchedStatus(OfsStatusConstants.DISPATCHED));
+		addStatusDto(resultList, OfsConstants.SCHEDULED,
+				pphMtRepository.findSlabsByScheduledStatus(OfsConstants.SCHEDULED),
+				pphMtRepository.findSlabsWgtByScheduledStatus(OfsConstants.SCHEDULED));
+		addStatusDto(resultList, OfsStatusConstants.IDENTIFIED,
+				pphMtRepository.findSlabsByIdentifiedStatus(OfsStatusConstants.IDENTIFIED),
+				pphMtRepository.findSlabsWgtByIdentifiedStatus(OfsStatusConstants.IDENTIFIED));
+		addStatusDto(resultList, OfsStatusConstants.TOTAL, pphMtRepository.findTotalSlabsCount(),
+				pphMtRepository.findTotalSlabsWgt());
+
+		return resultList;
+
+	}
+
+	private void addStatusDto(List<SlabStockStatusDto> resultList, String status, Long count, BigDecimal wgt) {
+		SlabStockStatusDto slabStockStatusDto = new SlabStockStatusDto();
+		slabStockStatusDto.setStatus(status);
+		slabStockStatusDto.setCount(count != null ? count : 0);
+		slabStockStatusDto.setColor("");
+		slabStockStatusDto.setWgt(wgt);
+		resultList.add(slabStockStatusDto);
+	}
+
+	@Override
+	public List<SlabStockLocationDto> getSlabStockLocations(SlabStockRequest request) {
+		List<SlabStockLocationDto> resultList = new ArrayList<>();
+
+		addLocationDto(resultList, OfsStatusConstants.ROW_A, pphMtRepository.findSlabsInRow(OfsStatusConstants.ROW_A),
+				pphMtRepository.findSlabsWgtInRow(OfsStatusConstants.ROW_A));
+		addLocationDto(resultList, OfsStatusConstants.ROW_B, pphMtRepository.findSlabsInRow(OfsStatusConstants.ROW_B),
+				pphMtRepository.findSlabsWgtInRow(OfsStatusConstants.ROW_B));
+		addLocationDto(resultList, OfsStatusConstants.ROW_C, pphMtRepository.findSlabsInRow(OfsStatusConstants.ROW_C),
+				pphMtRepository.findSlabsWgtInRow(OfsStatusConstants.ROW_C));
+		addLocationDto(resultList, OfsStatusConstants.ROW_D, pphMtRepository.findSlabsInRow(OfsStatusConstants.ROW_D),
+				pphMtRepository.findSlabsWgtInRow(OfsStatusConstants.ROW_D));
+		addLocationDto(resultList, OfsStatusConstants.TOTAL, pphMtRepository.findTotalSlabsCount(),
+				pphMtRepository.findTotalSlabsWgt());
+
+		return resultList;
+	}
+
+	private void addLocationDto(List<SlabStockLocationDto> resultList, String location, Long count, BigDecimal wgt) {
+		SlabStockLocationDto slabStockLocationDto = new SlabStockLocationDto();
+		slabStockLocationDto.setLocation(location);
+		slabStockLocationDto.setCount(count != null ? count : 0);
+		slabStockLocationDto.setColor(""); // Set the color if needed
+		slabStockLocationDto.setWgt(wgt);
+		resultList.add(slabStockLocationDto);
+	}
+
+	@Override
+	public List<SlabStockSourceDto> getSlabStockSource(SlabStockRequest request) {
+		List<SlabStockSourceDto> resultList = new ArrayList<>();
+
+		addSourceDto(resultList, OfsStatusConstants.SMS_1,
+				pphMtRepository.findSlabsBySms1Source(OfsStatusConstants.SMS_1),
+				pphMtRepository.findSlabsWgtBySms1Source(OfsStatusConstants.SMS_1));
+		addSourceDto(resultList, OfsStatusConstants.SMS_2,
+				pphMtRepository.findSlabsBySms2Source(OfsStatusConstants.SMS_2),
+				pphMtRepository.findSlabsWgtBySms2Source(OfsStatusConstants.SMS_2));
+		addSourceDto(resultList, OfsStatusConstants.OUTSOURCE,
+				pphMtRepository.findSlabsByOutsource(OfsStatusConstants.OUTSOURCE),
+				pphMtRepository.findSlabsWgtByOutsource(OfsStatusConstants.OUTSOURCE));
+		addSourceDto(resultList, OfsStatusConstants.L2, pphMtRepository.findSlabsByL2(OfsStatusConstants.L2),
+				pphMtRepository.findSlabsWgtByL2(OfsStatusConstants.L2));
+		return resultList;
+	}
+
+	private void addSourceDto(List<SlabStockSourceDto> resultList, String source, Long count, BigDecimal wgt) {
+		SlabStockSourceDto slabStockSourceDto = new SlabStockSourceDto();
+		slabStockSourceDto.setSource(source);
+		slabStockSourceDto.setCount(count != null ? count : 0);
+		slabStockSourceDto.setColor("");
+		slabStockSourceDto.setWgt(wgt);
+		resultList.add(slabStockSourceDto);
+	}
+
+	@Override
+	@Transactional(rollbackFor = TransactionException.class)
+	public OfsCommonResponse saveSlabStockLocation(SlabStockDto slabStockDto) {
+		OfsCommonResponse response = new OfsCommonResponse(1);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+
+		PphMtPK entityPk = new PphMtPK();
+		entityPk.setPpid(slabStockDto.getPpid());
+		entityPk.setPpctr(slabStockDto.getPpctr());
+
+		PphMt entity = pphMtRepository.findById(entityPk)
+				.orElseThrow(() -> new CustomException("Entity not found with ppid: " + slabStockDto.getPpid()));
+
+		List<PphMt> duplicateEntry = new ArrayList<>();
+		if (slabStockDto.getPpsts() != null && OfsStatusConstants.HOLD.equals(slabStockDto.getPpsts())
+				|| OfsStatusConstants.AVAILABLE.equals(slabStockDto.getPpsts())
+				|| OfsStatusConstants.FREE_STOCK.equals(slabStockDto.getPpsts())) {
+
+			duplicateEntry = slabStockCustRepository.findRecordUsingLocationAndSequenceTyped(slabStockDto.getSlocid(),
+					slabStockDto.getSlocseq());
+		}
+
+		if (duplicateEntry.isEmpty()) {
+			entity.setSlocid(slabStockDto.getSlocid());
+			entity.setPrevslocid(slabStockDto.getPrevslocid());
+			entity.setSlocseq(slabStockDto.getSlocseq());
+			entity.setPrevslocseq(slabStockDto.getPrevslocseq());
+			entity.setRhfrmks(slabStockDto.getRhfrmks());
+
+			pphMtRepository.save(entity);
+			response.addInfoMsg("Success");
+		} else {
+			PphMt firstDuplicate = duplicateEntry.get(0);
+			PphMtPK pphMtPK = firstDuplicate.getId();
+			response.addErrorMsg("Already bay row and sequence is allotted to SLABID: " + pphMtPK.getPpid());
+		}
+
+		return response;
+	}
+
+	public Map<String, List<String>> getAllLists() {
+		List<Object[]> resultList = slabStockCustRepository.getCombinedData();
+
+		List<String> slabIdList = new ArrayList<>();
+		List<String> heatIdList = new ArrayList<>();
+		List<String> statusList = new ArrayList<>();
+		List<String> sourceList = new ArrayList<>();
+
+		for (Object[] result : resultList) {
+			slabIdList.add((String) result[0]);
+			heatIdList.add((String) result[1]);
+			statusList.add((String) result[2]);
+			sourceList.add((String) result[3]);
+		}
+
+		Map<String, List<String>> allLists = new HashMap<>();
+		allLists.put("slabIdList", slabIdList);
+		allLists.put("heatIdList", heatIdList);
+		allLists.put("statusList", statusList);
+		allLists.put("sourceList", sourceList);
+
+		return allLists;
+	}
+
+	public String filterQueryUsingFilterList(List<String> filterList, String query) {
+
+		StringBuilder queryBuilder = new StringBuilder(query);
+		queryBuilder.append(" AND (");
+
+		List<String> columnNames = DevExtGridFilterUtils.getAllFields(SlabStockDto.class);
+		IntStream.range(0, filterList.size()).filter(i -> OfsConstants.SHIFT_ID.equals(filterList.get(i)))
+				.forEach(i -> {
+					int findIndex = i + 2; // Locate the index for the replacement
+					if (findIndex < filterList.size()) { // Ensure index is within bounds
+						String forSearch = filterList.get(findIndex);
+						String updatedValue = switch (forSearch) {
+						case OfsConstants.M -> OfsConstants.A;
+						case OfsConstants.A -> OfsConstants.B;
+						case OfsConstants.N -> OfsConstants.C;
+						default -> forSearch; // No change for other values
+						};
+						filterList.set(findIndex, updatedValue);
+					}
+				});
+		Map<String, String> columnDataTypesKeyValuePair = DevExtGridFilterUtils
+				.getAllFieldsWithTypes(SlabStockDto.class);
+		Map<String, String> columnAlise = checkClassAleas();
+		boolean isClobObject = false;
+		boolean isStringObject = false;
+		boolean isDateObject = false;
+		boolean isContains = false;
+		boolean isNotContains = false;
+		boolean isStartWith = false;
+		boolean isEndWith = false;
+		boolean isNullCheck = false;
+		boolean isDateString = false;
+
+		for (int i = 0; i < filterList.size(); i++) {
+			String item = filterList.get(i);
+			if (columnNames.contains(item)) {
+
+				if (columnDataTypesKeyValuePair.get(item).equals("CLOB")) {
+					queryBuilder.append("DBMS_LOB.INSTR(").append(columnAlise.get(item)).append(",");
+					isClobObject = true;
+				} else if (columnDataTypesKeyValuePair.get(item).equals("DATE")) {
+<<<<<<< HEAD
+					queryBuilder.append(" TO_CHAR(").append(columnAlise.get(item)).append(", 'YYYY-MM-DD')");
+					isDateObject = true;
+
+				} else if (item.equals("dischargingDate")) {
+
+					queryBuilder.append(" TO_DATE(SUBSTR(").append(columnAlise.get(item)).append(",1,8), 'YYYYMMDD') ");
+					isDateString = true;
+=======
+					queryBuilder.append(" TO_CHAR(").append(columnAlise.get(item))
+							.append(", 'YYYY-MM-DD')");
+					isDateObject = true;
+					
+				} else if (item.equals("dischargingDate")) {
+				    queryBuilder.append(" TO_DATE(SUBSTR(")
+				                .append(columnAlise.get(item))
+				                .append(",1,8), 'YYYYMMDD') ");
+				    isDateString = true;
+>>>>>>> e0def4d17f89cf6fc85bba61afa96bb44490e667
+
+				} else if (columnDataTypesKeyValuePair.get(item).equals("VARCHAR2")) {
+					queryBuilder.append(columnAlise.get(item)).append(item);
+					int columnIndex = findIndexOfKey(filterList, item, i);
+
+					if ("null".equals(filterList.get(columnIndex + 2))) {
+
+						isNullCheck = true;
+					}
+					isStringObject = true;
+				} else {
+					queryBuilder.append(columnAlise.get(item)).append(item);
+
+				}
+
+			} else if (isNullCheck) {
+				queryBuilder.append(" IS NULL ");
+				i = i + 1;
+				isNullCheck = false;
+				isStringObject = false;
+			
+				
+			} else if (isDateString) {
+				
+			    if (item.matches("\\d{4}/\\d{2}/\\d{2}.*")) {
+			    	DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+			        LocalDateTime dateTime = LocalDateTime.parse(item, formatter);
+
+			        String dateOnly = dateTime.toLocalDate().toString().replace("-", "");
+			        queryBuilder.append(" TO_DATE('").append(dateOnly).append("','YYYYMMDD')");
+			        isDateString = false;
+			    } else {
+			        queryBuilder.append(" ").append(item).append(" ");
+			    }		
+
+
+			} else if (isDateString) {
+
+				if (item.matches("\\d{4}/\\d{2}/\\d{2}(\\s+\\d{2}:\\d{2}:\\d{2})?")) {
+					try {
+						LocalDate localDate;
+
+						if (item.contains(":")) {
+							// yyyy/MM/dd HH:mm:ss
+							DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+							LocalDateTime dateTime = LocalDateTime.parse(item, formatter);
+							localDate = dateTime.toLocalDate();
+						} else {
+							// yyyy/MM/dd
+							DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd");
+							localDate = LocalDate.parse(item, formatter);
+						}
+
+						// ✅ Append properly formatted date only once
+						String dateOnly = localDate.format(DateTimeFormatter.BASIC_ISO_DATE); // 20240210
+						queryBuilder.append(" TO_DATE('").append(dateOnly).append("','YYYYMMDD') ");
+						isDateString = false;
+
+					} catch (Exception e) {
+
+						queryBuilder.append(" '").append(item).append("' ");
+					}
+
+					// ✅ Skip any further processing for this item
+					continue;
+				}
+
+				// For non-date items
+				queryBuilder.append(" ").append(item).append(" ");
+
+			} else if (item.equals(OfsConstants.CONTAINS) || item.equals(OfsConstants.NOTCONTAINS)
+					|| item.equals(OfsConstants.STARTSWITH) || item.equals(OfsConstants.ENDSWITH)) {
+				if (isClobObject) {
+				} else if (isDateObject) {
+					queryBuilder.append(OfsConstants.LIKE);
+				} else {
+					if (item.equals(OfsConstants.CONTAINS)) {
+						queryBuilder.append(OfsConstants.LIKE);
+						isContains = true;
+					} else if (item.equals(OfsConstants.NOTCONTAINS)) {
+						queryBuilder.append(OfsConstants.NOT_LIKE);
+						isNotContains = true;
+					} else if (item.equals(OfsConstants.STARTSWITH)) {
+						queryBuilder.append(OfsConstants.LIKE);
+						isStartWith = true;
+					} else if (item.equals(OfsConstants.ENDSWITH)) {
+						queryBuilder.append(OfsConstants.LIKE);
+						isEndWith = true;
+					} else {
+						queryBuilder.append(" = ");
+					}
+				}
+			} else if (item.equals("or") || item.equals("and")) {
+				queryBuilder.append(" ").append(item).append(" ");
+			} else if (item.equals("=") || item.equals("<>") || item.equals(">=") || item.equals("<")
+					|| item.equals(">")) {
+				queryBuilder.append(" ").append(item);
+			} else {
+				if (isClobObject) {
+					queryBuilder.append("'").append(item).append("') > 0");
+					isClobObject = false;
+				} else if (isStringObject) {
+					if (isContains) {
+						queryBuilder.append(" '%").append(item.trim().toUpperCase()).append("%'");
+						isContains = false;
+					} else if (isNotContains) {
+						queryBuilder.append(" '%").append(item.trim().toUpperCase()).append("%'");
+						isNotContains = false;
+					} else if (isStartWith) {
+						queryBuilder.append(" '").append(item.trim().toUpperCase()).append("%'");
+						isStartWith = false;
+					} else if (isEndWith) {
+						queryBuilder.append(" '%").append(item.trim().toUpperCase()).append("'");
+						isEndWith = false;
+					} else {
+						queryBuilder.append(" '").append(item.trim().toUpperCase()).append("'");
+					}
+					isStringObject = false;
+				} else if (isDateObject) {
+
+<<<<<<< HEAD
+					LocalDate localDate = null;
+
+					if (item.matches("\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2}")) {
+						LocalDateTime ldt = LocalDateTime.parse(item,
+								DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"));
+						localDate = ldt.toLocalDate();
+
+					} else if (item.matches("\\d{4}/\\d{2}/\\d{2}\\+\\d{2}:\\d{2}:\\d{2}")) {
+						String fixedItem = item.replace("+", " ");
+						LocalDateTime ldt = LocalDateTime.parse(fixedItem,
+								DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"));
+						localDate = ldt.toLocalDate();
+
+					} else if (item.matches("\\d{4}/\\d{2}/\\d{2}")) {
+						localDate = LocalDate.parse(item, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+
+					} else {
+						String fixedItem = item.replace(" ", "+");
+						OffsetDateTime odt = OffsetDateTime.parse(fixedItem);
+						localDate = odt.toLocalDate();
+					}
+
+					queryBuilder.append(" '").append(localDate.toString()).append("'");
+					isDateObject = false;
+=======
+				    LocalDate localDate = null;
+
+				    if (item.matches("\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2}")) {
+				        LocalDateTime ldt = LocalDateTime.parse(item, DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"));
+				        localDate = ldt.toLocalDate();
+
+				    } else if (item.matches("\\d{4}/\\d{2}/\\d{2}\\+\\d{2}:\\d{2}:\\d{2}")) {
+				        String fixedItem = item.replace("+", " ");
+				        LocalDateTime ldt = LocalDateTime.parse(fixedItem, DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"));
+				        localDate = ldt.toLocalDate();
+
+				    } else if (item.matches("\\d{4}/\\d{2}/\\d{2}")) {
+				        localDate = LocalDate.parse(item, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+
+				    } else {
+				        String fixedItem = item.replace(" ", "+");
+				        OffsetDateTime odt = OffsetDateTime.parse(fixedItem);
+				        localDate = odt.toLocalDate();
+				    }
+
+				    queryBuilder.append(" '").append(localDate.toString()).append("'");
+				    isDateObject = false;
+>>>>>>> e0def4d17f89cf6fc85bba61afa96bb44490e667
+
+				} else {
+				    queryBuilder.append(" ").append(item);
+				}
+
+			}
+		}
+		queryBuilder.append(" )");
+
+		return queryBuilder.toString();
+	}
+
+	public Map<String, String> checkClassAleas() {
+		Map<String, String> fieldTypes = new HashMap<>();
+		fieldTypes.put("ppid", "ph.id.");
+		fieldTypes.put("ppctr", "ph.id.");
+		fieldTypes.put("heatid", "ph.");
+		fieldTypes.put("extgrd", "ph.");
+		fieldTypes.put("grdid", "ph.");
+		fieldTypes.put("thk", "ph.");
+		fieldTypes.put("wdt", "ph.");
+		fieldTypes.put("len", "ph.");
+		fieldTypes.put("wgt", "ph.");
+		fieldTypes.put("source", "ph.");
+		fieldTypes.put("slocid", "ph.");
+		fieldTypes.put("prevslocid", "ph.");
+		fieldTypes.put("ppsts", "ph.");
+<<<<<<< HEAD
+
+		fieldTypes.put("chargingDate", "schd.");
+		fieldTypes.put("dischargingDate", "COALESCE(mh01.slabDischarge, mh02.sendingDt)");
+		fieldTypes.put("dischargingTime", "mh02.");
+
+=======
+		
+		fieldTypes.put("chargingDate", "schd.slbchrgDt");
+		fieldTypes.put("dischargingDate","COALESCE(mh01.slabDischarge, mh02.sendingDt)");
+		fieldTypes.put("dischargingTime", "mh02.sendingTime");
+		
+>>>>>>> e0def4d17f89cf6fc85bba61afa96bb44490e667
+		fieldTypes.put("soid", "sos.id.");
+		fieldTypes.put("solid", "sos.id.");
+		fieldTypes.put("prodDt", "ph.prodDt");
+		fieldTypes.put("schdid", "ph.");
+		fieldTypes.put("schdordseq", "ph.");
+		fieldTypes.put("stcustnm", "sos.");
+		fieldTypes.put("tdcid", "sos.");
+		fieldTypes.put("shiftid", "ph.");
+		fieldTypes.put("manualDecision", "pppt.");
+		fieldTypes.put("istaper", "ph.");
+		fieldTypes.put("headwdt", "ph.");
+		fieldTypes.put("tailwdt", "ph.");
+		fieldTypes.put("tapstardis", "ph.");
+		fieldTypes.put("tapenddis", "ph.");
+		fieldTypes.put("taperwdt", "ph.");
+		fieldTypes.put("mixgrdflg", "ph.");
+		fieldTypes.put("fstslbflg", "ph.");
+		fieldTypes.put("lstslbflg", "ph.");
+		fieldTypes.put("crDt", "ph.");
+		fieldTypes.put("slocseq", "ph.");
+		fieldTypes.put("prevslocseq", "ph.");
+		fieldTypes.put("releaserem", "pppt.");
+		fieldTypes.put("holdrem", "pppt.");
+		fieldTypes.put("rhfrmks", "ph.");
+		return fieldTypes;
+	}
+
+	public Map<String, String> checkClassAleasWithNoStop() {
+		Map<String, String> fieldTypes = new HashMap<>();
+		fieldTypes.put("ppid", "ph.id.ppid");
+		fieldTypes.put("ppctr", "ph.id.ppctr");
+		fieldTypes.put("heatid", "ph.heatid");
+		fieldTypes.put("extgrd", "ph.extgrd");
+		fieldTypes.put("grdid", "ph.grdid");
+		fieldTypes.put("thk", "ph.thk");
+		fieldTypes.put("wdt", "ph.wdt");
+		fieldTypes.put("len", "ph.len");
+		fieldTypes.put("wgt", "ph.wgt");
+		fieldTypes.put("source", "ph.source");
+		fieldTypes.put("slocid", "ph.slocid");
+		fieldTypes.put("prevslocid", "ph.prevslocid");
+		fieldTypes.put("ppsts", "ph.ppsts");
+
+		fieldTypes.put("chargingDate", "schd.slbchrgDt");
+<<<<<<< HEAD
+		fieldTypes.put("dischargingDate", "COALESCE(mh01.slabDischarge, mh02.sendingDt)");
+=======
+		fieldTypes.put("dischargingDate","COALESCE(mh01.slabDischarge, mh02.sendingDt)");
+>>>>>>> e0def4d17f89cf6fc85bba61afa96bb44490e667
+		fieldTypes.put("dischargingTime", "mh02.sendingTime");
+
+		fieldTypes.put("soid", "sos.id");
+		fieldTypes.put("solid", "sos.id");
+		fieldTypes.put("prodDt", "ph.prodDt");
+		fieldTypes.put("schdid", "ph.schdid");
+		fieldTypes.put("schdordseq", "ph.schdordseq");
+		fieldTypes.put("stcustnm", "sos.stcustnm");
+		fieldTypes.put("tdcid", "sos.tdcid");
+		fieldTypes.put("shiftid", "ph.shiftid");
+		fieldTypes.put("manualDecision", "pppt.manualDecision");
+		fieldTypes.put("istaper", "ph.istaper");
+		fieldTypes.put("headwdt", "ph.headwdt");
+		fieldTypes.put("tailwdt", "ph.tailwdt");
+		fieldTypes.put("tapstardis", "ph.tapstardis");
+		fieldTypes.put("tapenddis", "ph.tapenddis");
+		fieldTypes.put("taperwdt", "ph.taperwdt");
+		fieldTypes.put("mixgrdflg", "ph.mixgrdflg");
+		fieldTypes.put("fstslbflg", "ph.fstslbflg");
+		fieldTypes.put("lstslbflg", "ph.lstslbflg");
+		fieldTypes.put("crDt", "ph.crDt");
+		fieldTypes.put("slocseq", "ph.slocseq");
+		fieldTypes.put("prevslocseq", "ph.prevslocseq");
+		fieldTypes.put("releaserem", "pppt.releaserem");
+		fieldTypes.put("holdrem", "pppt.holdrem");
+		fieldTypes.put("rhfrmks", "ph.rhfrmks");
+		return fieldTypes;
+	}
+
+	public String processSqlQuery(String sql) {
+		if (sql.trim().endsWith("or")) {
+			sql = sql.substring(0, sql.length() - 2);
+			sql = sql.trim().substring(0, sql.length() - 2).trim();
+		} else if (sql.trim().endsWith(" or")) {
+			sql = sql.substring(0, sql.length() - 2);
+			sql = sql.trim().substring(0, sql.length() - 3).trim();
+		}
+
+		sql = sql.replaceAll("h\\.isactv\\s*=\\s*'Active'", "h.isactv = 1");
+
+		sql = sql.replaceAll("h\\.isactv\\s*=\\s*'Inactive'", "h.isactv = 0");
+
+		return sql;
+	}
+
+	@Override
+	public List<String> searchStringFilter(String filterValue, String filterName) {
+		if (filterName.equalsIgnoreCase("SLABNO")) {
+			return slabStockCustRepository.searchStringFilter(filterValue, "PphMt", "id.ppid");
+		}
+		if (filterName.equalsIgnoreCase("HEATNO")) {
+			return slabStockCustRepository.searchStringFilter(filterValue, "PphMt", "heatid");
+		}
+		return null;
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<String>>> searchMatchingSlab(String query) {
+		List<String> list = slabStockCustRepository.searchMatchingSlab(query);
+		return ResponseUtil.createResponse(list, "Fetching slab", true);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<String>>> searchMatchingIntGrd(String query) {
+		List<String> list = slabStockCustRepository.searchMatchingIntGrd(query);
+		return ResponseUtil.createResponse(list, "Fetching int grd", true);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<String>>> searchMatchingHeat(String query) {
+		List<String> list = slabStockCustRepository.searchMatchingHeat(query);
+		return ResponseUtil.createResponse(list, "Fetching heat", true);
+	}
+
+	private static final int THREAD_COUNT = 10;
+
+	@Override
+	public List<SlabStockDto> getSlabStockDetails(SlabStockRequest request) {
+		List<SlabStockDto> slabList = slabStockCustRepository.getSlabStockDetails(request);
+<<<<<<< HEAD
+		DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+		DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
+
+		for (SlabStockDto dto : slabList) {
+			String dischargingDate = dto.getDischargingDate();
+			if (dischargingDate != null && dischargingDate.length() == 14) {
+				LocalDateTime parsedDate = LocalDateTime.parse(dischargingDate, inputFormatter);
+				String formattedDate = parsedDate.format(outputFormatter);
+				dto.setDischargingDate(formattedDate);
+			}
+		}
+
+		return slabList;
+
+=======
+		 DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+		    DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
+
+		    for (SlabStockDto dto : slabList) {
+		        String dischargingDate = dto.getDischargingDate();
+		        if (dischargingDate != null && dischargingDate.length() == 14) {
+		            LocalDateTime parsedDate = LocalDateTime.parse(dischargingDate, inputFormatter);
+		            String formattedDate = parsedDate.format(outputFormatter);
+		            dto.setDischargingDate(formattedDate);
+		        }
+		    }
+
+		    return slabList;
+//		long startTime = System.currentTimeMillis();
+//
+//	    long totalRecords = slabStockCustRepository.getTotalRecordCount(request);
+//	    long endTime = System.currentTimeMillis();
+//	    System.out.println("count query time"+(endTime-startTime));
+//	    int chunkSize = (int) Math.ceil((double) totalRecords / THREAD_COUNT);
+//
+//	    ThreadPoolExecutor executor = ThreadPoolConfig.createFixedThreadPoolExecutor(THREAD_COUNT);
+//	    List<Future<List<SlabStockDto>>> futures = new ArrayList<>();
+//
+//	    // Submit tasks to the thread pool
+//	    for (int i = 0; i < THREAD_COUNT; i++) {
+//	        final int chunkIndex = i;
+//	        int start = chunkIndex * chunkSize + 1;
+//	        int end = Math.min(start + chunkSize - 1, (int) totalRecords);
+//	        if (start <= totalRecords) {
+//	            futures.add(executor.submit(() -> slabStockCustRepository.getSlabStockDetails(request, start, end)));
+//	        }
+//	    }
+//
+//	    List<SlabStockDto> allResults = new ArrayList<>();
+//	    for (Future<List<SlabStockDto>> future : futures) {
+//	        try {
+//	            allResults.addAll(future.get());
+//	        } catch (InterruptedException | ExecutionException e) {
+//	            LOGGER.error("Error fetching data chunk", e);
+//	            Thread.currentThread().interrupt(); // Restore interrupted status
+//	        }
+//	    }
+//
+//	    // Shutdown the executor
+//	    executor.shutdown();
+//	    try {
+//	        if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+//	            executor.shutdownNow();
+//	            if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+//	                LOGGER.error("Executor did not terminate in the allocated time.");
+//	            }
+//	        }
+//	    } catch (InterruptedException e) {
+//	        executor.shutdownNow();
+//	        Thread.currentThread().interrupt();
+//	        LOGGER.error("Interrupted during shutdown", e);
+//	    }
+//	    long totalEndTime = System.currentTimeMillis();
+//	    System.out.println("total query time"+(totalEndTime-startTime));
+//		return allResults;
+>>>>>>> e0def4d17f89cf6fc85bba61afa96bb44490e667
+	}
+
+	@Override
+	public List<SlabStockDto> getSlabLocationUpdateDetails(SlabStockRequest request) {
+		return slabStockCustRepository.getSlabLocationUpdateDetails(request);
+	}
+
+	private int[] processPageAndSize(Integer pageNumber, Integer pageSize, Integer pageStore) {
+		if (pageNumber == null) {
+			pageNumber = 0;
+		}
+		if (pageSize == null) {
+			pageSize = pageStore;
+		}
+		return new int[] { pageNumber, pageSize };
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T handleFilterOrSort(SlabStockRequest request, List<String> filterList, List<String> sortList,
+			Integer page, Integer size, Integer skip, boolean requireTotalCount, String status, Integer pageStore,
+			Integer latestGroupCount) {
+		if (!requireTotalCount) {
+			size = page + size;
+			page = 0;
+		}
+
+		String query = getMainSlabeStockQuery(status);
+
+		String countQuery = getMainSlabeStockQueryCount(status);
+
+		if (!filterList.isEmpty()) {
+			query = filterQueryUsingFilterList(filterList, query);
+
+			countQuery = filterQueryUsingFilterList(filterList, countQuery);
+
+		}
+
+		query = applySorting(sortList, query);
+
+		Page<SlabStockDto> slabeStock = slabStockCustRepository.getSlabStocks(request, status, page, size, query,
+				countQuery, skip);
+
+		return (T) new FluentaPaginatedResponse<>(slabeStock.getContent(), slabeStock.getTotalElements());
+	}
+
+	public List<String> filterListData(List<String> filterList) {
+		List<String> result = new ArrayList<>();
+
+		for (int i = 0; i < filterList.size(); i++) {
+			String currentItem = filterList.get(i);
+
+			// Check if the current item is "or" and the next items are in the form of
+			// <field> = null
+			if (currentItem.equals("or") && i + 3 < filterList.size() && filterList.get(i + 1) != null
+					&& filterList.get(i + 2).equals("=") && filterList.get(i + 3).equals("null")) {
+				// Skip the "or", <field>, "=", and "null" (i.e., the next 4 items)
+				i += 3; // Skip over this "or", "<field> =", "null"
+			} else {
+				// Add the current item to the result
+				result.add(currentItem);
+			}
+		}
+
+		return result;
+	}
+
+	private <T> T handleGroupWithFilterOrSort(SlabStockRequest request, List<String> groupList, List<String> filterList,
+			List<String> sortList, Integer page, Integer size, Integer skip, boolean requireTotalCount, String status,
+			Integer pageStore, Integer latestGroupCounts) {
+		if (requireTotalCount && size == null) {
+			size = pageStore;
+		} else {
+			size = page + size;
+			page = 0;
+		}
+
+		String queryForGrouping = getSlabeStockQueryForGroupingAndFiltering(groupList, filterList, status);
+		String queryForGroupingAndFilteringCount = getSlabeStockQueryForGroupingAndFilteringCount(groupList, filterList,
+				sortList, status);
+		String mainCountQuery = getMainSlabeStockQueryCount(status);
+		Long mainQueryCount = slabStockCustRepository.getMainSlabeStockQueryCount(request, mainCountQuery, status);
+		Page<Object[]> groupingListData = slabStockCustRepository.getGroupingListData(queryForGrouping,
+				queryForGroupingAndFilteringCount, page, size, skip, request, status);
+		Long totalDistCount = slabStockCustRepository.groupCountQuery(queryForGroupingAndFilteringCount, request,
+				status);
+
+		return buildGroupedDataResponse(groupingListData, mainQueryCount,
+				(totalDistCount != null && totalDistCount != 0) ? totalDistCount : latestGroupCounts);
+
+	}
+
+	private <T> T handleGroupOnly(SlabStockRequest slabStockRequest, List<String> groupList, int pageNumber,
+			int pageSize, int skip, String status, Integer pageStore, Integer latestGroupCount) {
+		pageSize = pageNumber + pageSize;
+		pageNumber = 0;
+
+		String groupQuery = getQueryForGrouping(groupList, status);
+		String groupCountQuery = getQueryForGroupingCount(groupList, status);
+		String mainCountQuery = getMainSlabeStockQueryCount(status);
+		Long mainQueryCount = slabStockCustRepository.getMainSlabeStockQueryCount(slabStockRequest, mainCountQuery,
+				status);
+		Page<Object[]> groupingListData = slabStockCustRepository.getGroupingListData(groupQuery, groupCountQuery,
+				pageNumber, pageSize, skip, slabStockRequest, status);
+		Long totalDistCount = slabStockCustRepository.groupCountQuery(groupCountQuery, slabStockRequest, status);
+
+		return buildGroupedDataResponse(groupingListData, mainQueryCount, totalDistCount);
+	}
+
+	private String getQueryForGroupingCount(List<String> groupList, String status) {
+		String groupColumn = groupList.get(1); // Assuming the second element is the group column
+		StringBuilder query = new StringBuilder();
+		query.append("SELECT ").append("COUNT( DISTINCT ").append(checkClassAleas().get(groupColumn))
+				.append(groupColumn).append(")").append("FROM PphMt ph ")
+				.append("LEFT JOIN PppostprodtaskMt pppt ON ph.id.ppid = pppt.id.ppid ")
+				.append("JOIN PoprlSt p ON ph.poid = p.id.poid AND ph.poprctr = p.id.poprctr ")
+				.append("JOIN SolSt sos ON p.soid = sos.id.soid AND p.solid = sos.id.solid ")
+				.append("LEFT JOIN H1mh02Hm1millPdoLi mh02 ON TRIM(mh02.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN H1mh01Hm1millPdoLi mh01 ON TRIM(mh01.id.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN HsmschdslbdPt schd ON TRIM(schd.actslbid) = TRIM(ph.id.ppid) ")
+				.append("WHERE (:selectedHeat IS NULL OR TRIM(ph.heatid) IN :selectedHeat) ")
+				.append("  AND (:selectedSlab IS NULL OR TRIM(ph.id.ppid) IN :selectedSlab) ")
+				.append("  AND (:selectedStatus IS NULL OR ph.ppsts IN :selectedStatus) ")
+				.append("  AND (:selectedShift IS NULL OR ph.shiftid = :selectedShift) ")
+				.append("  AND (:fromDate IS NULL OR FUNCTION('TO_CHAR', ph.prodDt, 'YYYYMMDD') <= FUNCTION('TO_CHAR', :toDate, 'YYYYMMDD')) ")
+				.append("  AND (:toDate IS NULL OR FUNCTION('TO_CHAR', ph.prodDt, 'YYYYMMDD') >= FUNCTION('TO_CHAR', :fromDate, 'YYYYMMDD')) ")
+				.append("  AND (:selectedSource IS NULL OR ph.source IN :selectedSource) ")
+				.append("  AND (:selectedLocation IS NULL OR ph.slocid LIKE CONCAT(:selectedLocation, '%')) ");
+
+		if (OfsStatusConstants.CONSUMED.equalsIgnoreCase(status)
+				|| OfsStatusConstants.CONSPEND.equalsIgnoreCase(status)) {
+			query.append("AND ph.ppsts IN ('").append(OfsStatusConstants.CONSUMED).append("', '")
+					.append(OfsStatusConstants.CONSPEND).append("') ");
+		} else {
+			query.append("AND ph.ppsts != '").append(OfsStatusConstants.CONSUMED).append("' ");
+		}
+		return query.toString();
+	}
+
+	private String getQueryForGrouping(List<String> groupList, String status) {
+		if (groupList == null || groupList.isEmpty()) {
+			throw new IllegalArgumentException("groupList cannot be null or empty");
+		}
+
+		String desc = groupList.get(3);
+		String groupColumn = groupList.get(1);
+		StringBuilder query = new StringBuilder();
+		query.append("SELECT ").append(checkClassAleas().get(groupColumn)).append(groupColumn).append(" ,COUNT(*")
+				.append(")").append("FROM PphMt ph ")
+				.append("LEFT JOIN PppostprodtaskMt pppt ON ph.id.ppid = pppt.id.ppid ")
+				.append("JOIN PoprlSt p ON ph.poid = p.id.poid AND ph.poprctr = p.id.poprctr ")
+				.append("JOIN SolSt sos ON p.soid = sos.id.soid AND p.solid = sos.id.solid ")
+				.append("LEFT JOIN H1mh02Hm1millPdoLi mh02 ON TRIM(mh02.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN H1mh01Hm1millPdoLi mh01 ON TRIM(mh01.id.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN HsmschdslbdPt schd ON TRIM(schd.actslbid) = TRIM(ph.id.ppid) ")
+				.append("WHERE (:selectedHeat IS NULL OR TRIM(ph.heatid) IN :selectedHeat) ")
+				.append("  AND (:selectedSlab IS NULL OR TRIM(ph.id.ppid) IN :selectedSlab) ")
+				.append("  AND (:selectedStatus IS NULL OR ph.ppsts IN :selectedStatus) ")
+				.append("  AND (:selectedShift IS NULL OR ph.shiftid = :selectedShift) ")
+				.append("  AND (:fromDate IS NULL OR FUNCTION('TO_CHAR', ph.crDt, 'YYYYMMDD') <= FUNCTION('TO_CHAR', :toDate, 'YYYYMMDD')) ")
+				.append("  AND (:toDate IS NULL OR FUNCTION('TO_CHAR', ph.crDt, 'YYYYMMDD') >= FUNCTION('TO_CHAR', :fromDate, 'YYYYMMDD')) ")
+				.append("  AND (:selectedSource IS NULL OR ph.source IN :selectedSource) ")
+				.append("  AND (:selectedLocation IS NULL OR ph.slocid LIKE CONCAT(:selectedLocation, '%')) ");
+
+		if (OfsStatusConstants.CONSUMED.equalsIgnoreCase(status)
+				|| OfsStatusConstants.CONSPEND.equalsIgnoreCase(status)) {
+			query.append("AND ph.ppsts IN ('").append(OfsStatusConstants.CONSUMED).append("', '")
+					.append(OfsStatusConstants.CONSPEND).append("') ");
+		} else {
+			query.append("AND ph.ppsts != '").append(OfsStatusConstants.CONSUMED).append("' ");
+		}
+
+		query.append(" GROUP BY " + checkClassAleas().get(groupColumn) + "" + groupColumn + " ");
+
+		if ("true".equals(desc)) {
+			query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn)).append(groupColumn).append(" DESC");
+		} else {
+			query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn)).append(groupColumn);
+		}
+		return query.toString();
+	}
+
+	public String getMainSlabeStockQuery(String status) {
+		StringBuilder q = new StringBuilder();
+		q.append("SELECT new com.hindindustec.fluenta.reports.dto.SlabStockDto(").append("    ph.id.ppid, ")
+				.append("    ph.id.ppctr, ").append("    ph.heatid, ").append("    ph.extgrd, ")
+				.append("    ph.grdid, ").append("    ph.thk, ").append("    ph.wdt, ").append("    ph.len, ")
+				.append("    ph.wgt, ").append("    ph.source, ").append("    ph.slocid, ")
+				.append("    ph.prevslocid, ").append("    ph.ppsts, ").append("	  schd.slbchrgDt AS chargingDate, ")
+				.append("	  COALESCE(mh01.slabDischarge,mh02.sendingDt) AS dischargingDate, ")
+				.append("	  COALESCE(mh01.slabDischarge,mh02.sendingTime) AS dischargingTime, ")
+				.append("    sos.id.soid, ").append("    sos.id.solid, ").append("    ph.prodDt, ")
+				.append("    ph.schdid, ").append("    ph.schdordseq, ").append("    sos.stcustnm, ")
+				.append("    sos.tdcid, ").append("    CASE ").append("        WHEN ph.shiftid = '")
+				.append(OfsConstants.M).append("' THEN '").append(OfsConstants.A).append("' ")
+				.append("        WHEN ph.shiftid = '").append(OfsConstants.A).append("' THEN '").append(OfsConstants.B)
+				.append("' ").append("        WHEN ph.shiftid = '").append(OfsConstants.N).append("' THEN '")
+				.append(OfsConstants.C).append("' ").append("        ELSE ph.shiftid ").append("    END AS shiftid, ")
+				.append("    pppt.manualDecision, ").append("    ph.istaper, ").append("    ph.headwdt, ")
+				.append("    ph.tailwdt, ").append("    ph.tapstardis, ").append("    ph.tapenddis, ")
+				.append("    ph.taperwdt, ").append("    ph.mixgrdflg, ").append("    ph.fstslbflg, ")
+				.append("    ph.lstslbflg, ").append("    ph.crDt, ").append("    ph.slocseq, ")
+				.append("    ph.prevslocseq, ").append("    pppt.releaserem, ")
+				.append("    COALESCE(pppt.holdrem, '') AS holdrem, ").append("    ph.rhfrmks ").append(") ")
+				.append("FROM PphMt ph ")
+				.append("LEFT JOIN PppostprodtaskMt pppt ON ph.id.ppid = pppt.id.ppid AND pppt.prid = :prid ")
+				.append("JOIN PoprlSt p ON ph.poid = p.id.poid AND ph.poprctr = p.id.poprctr ")
+				.append("JOIN SolSt sos ON p.soid = sos.id.soid AND p.solid = sos.id.solid ")
+				.append("LEFT JOIN H1mh02Hm1millPdoLi mh02 ON TRIM(mh02.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN H1mh01Hm1millPdoLi mh01 ON TRIM(mh01.id.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN HsmschdslbdPt schd ON TRIM(schd.actslbid) = TRIM(ph.id.ppid) ")
+				.append("WHERE (:selectedHeat IS NULL OR TRIM(ph.heatid) IN :selectedHeat) ")
+				.append("  AND (:selectedSlab IS NULL OR TRIM(ph.id.ppid) IN :selectedSlab) ")
+				.append("  AND (:selectedStatus IS NULL OR ph.ppsts IN :selectedStatus) ")
+				.append("  AND (:selectedShift IS NULL OR ph.shiftid = :selectedShift) ")
+
+				.append("  AND (:fromDate IS NULL OR ph.prodDt >= :fromDate)")
+				.append("  AND (:toDate IS NULL OR ph.prodDt<= :toDate ) ")
+				.append("  AND (:selectedSource IS NULL OR ph.source IN :selectedSource) ")
+				.append("  AND (:selectedLocation IS NULL OR ph.slocid LIKE CONCAT(:selectedLocation, '%')) ");
+
+		if (OfsStatusConstants.CONSUMED.equalsIgnoreCase(status)
+				|| OfsStatusConstants.CONSPEND.equalsIgnoreCase(status)) {
+			q.append("AND ph.ppsts IN ('").append(OfsStatusConstants.CONSUMED).append("', '")
+					.append(OfsStatusConstants.CONSPEND).append("') ");
+		} else {
+			q.append("AND ph.ppsts != '").append(OfsStatusConstants.CONSUMED).append("' ");
+		}
+
+		return q.toString();
+	}
+
+	public String getSlabeStockQueryForGroupingAndFiltering(List<String> groupList, List<String> filterList,
+			String status) {
+		String groupColumn = groupList.get(1);
+		String desc = groupList.get(3);
+		StringBuilder query = new StringBuilder();
+		query.append("SELECT ").append(checkClassAleas().get(groupColumn)).append(groupColumn).append(" ,COUNT(*")
+				.append(")").append("FROM PphMt ph ")
+				.append("LEFT JOIN PppostprodtaskMt pppt ON ph.id.ppid = pppt.id.ppid ")
+				.append("JOIN PoprlSt p ON ph.poid = p.id.poid AND ph.poprctr = p.id.poprctr ")
+				.append("JOIN SolSt sos ON p.soid = sos.id.soid AND p.solid = sos.id.solid ")
+				.append("LEFT JOIN H1mh02Hm1millPdoLi mh02 ON TRIM(mh02.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN H1mh01Hm1millPdoLi mh01 ON TRIM(mh01.id.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN HsmschdslbdPt schd ON TRIM(schd.actslbid) = TRIM(ph.id.ppid) ")
+				.append("WHERE (:selectedHeat IS NULL OR TRIM(ph.heatid) IN :selectedHeat) ")
+				.append("  AND (:selectedSlab IS NULL OR TRIM(ph.id.ppid) IN :selectedSlab) ")
+				.append("  AND (:selectedStatus IS NULL OR ph.ppsts IN :selectedStatus) ")
+				.append("  AND (:selectedShift IS NULL OR ph.shiftid = :selectedShift) ")
+				.append("  AND (:fromDate IS NULL OR ph.prodDt >= :fromDate)")
+				.append("  AND (:toDate IS NULL OR ph.prodDt<= :toDate ) ")
+				.append("  AND (:selectedSource IS NULL OR ph.source IN :selectedSource) ")
+				.append("  AND (:selectedLocation IS NULL OR ph.slocid LIKE CONCAT(:selectedLocation, '%')) ");
+
+		if (OfsStatusConstants.CONSUMED.equalsIgnoreCase(status)
+				|| OfsStatusConstants.CONSPEND.equalsIgnoreCase(status)) {
+			query.append("AND ph.ppsts IN ('").append(OfsStatusConstants.CONSUMED).append("', '")
+					.append(OfsStatusConstants.CONSPEND).append("') ");
+		} else {
+			query.append("AND ph.ppsts != '").append(OfsStatusConstants.CONSUMED).append("' ");
+		}
+
+		String filterQueryUsingFilterList = query.toString();
+
+		if (!filterList.isEmpty()) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList(filterList, query.toString());
+		}
+		filterQueryUsingFilterList = filterQueryUsingFilterList + " " + "GROUP BY " + checkClassAleas().get(groupColumn)
+				+ "" + groupColumn + " " + " ORDER BY " + checkClassAleas().get(groupColumn) + "" + groupColumn;
+		if ("true".equals(desc)) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList + " DESC";
+		}
+
+		return filterQueryUsingFilterList;
+
+	}
+
+	public String getSlabeStockQueryForGroupingAndFilteringCount(List<String> groupList, List<String> filterList,
+			List<String> sortList, String status) {
+		String filterQueryUsingFilterList = null;
+		String groupColumn = groupList.get(1);
+		StringBuilder query = new StringBuilder();
+		query.append("SELECT ").append("COUNT( DISTINCT ").append(checkClassAleas().get(groupColumn))
+				.append(groupColumn).append(")").append("FROM PphMt ph ")
+				.append("LEFT JOIN PppostprodtaskMt pppt ON ph.id.ppid = pppt.id.ppid ")
+				.append("JOIN PoprlSt p ON ph.poid = p.id.poid AND ph.poprctr = p.id.poprctr ")
+				.append("JOIN SolSt sos ON p.soid = sos.id.soid AND p.solid = sos.id.solid ")
+				.append("LEFT JOIN H1mh02Hm1millPdoLi mh02 ON TRIM(mh02.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN H1mh01Hm1millPdoLi mh01 ON TRIM(mh01.id.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN HsmschdslbdPt schd ON TRIM(schd.actslbid) = TRIM(ph.id.ppid) ")
+				.append("WHERE (:selectedHeat IS NULL OR TRIM(ph.heatid) IN :selectedHeat) ")
+				.append("  AND (:selectedSlab IS NULL OR TRIM(ph.id.ppid) IN :selectedSlab) ")
+				.append("  AND (:selectedStatus IS NULL OR ph.ppsts IN :selectedStatus) ")
+				.append("  AND (:selectedShift IS NULL OR ph.shiftid = :selectedShift) ")
+				.append("  AND (:fromDate IS NULL OR ph.prodDt >= :fromDate)")
+				.append("  AND (:toDate IS NULL OR ph.prodDt<= :toDate ) ")
+				.append("  AND (:selectedSource IS NULL OR ph.source IN :selectedSource) ")
+				.append("  AND (:selectedLocation IS NULL OR ph.slocid LIKE CONCAT(:selectedLocation, '%')) ");
+
+		if (OfsStatusConstants.CONSUMED.equalsIgnoreCase(status)
+				|| OfsStatusConstants.CONSPEND.equalsIgnoreCase(status)) {
+			query.append("AND ph.ppsts IN ('").append(OfsStatusConstants.CONSUMED).append("', '")
+					.append(OfsStatusConstants.CONSPEND).append("') ");
+		} else {
+			query.append("AND ph.ppsts != '").append(OfsStatusConstants.CONSUMED).append("' ");
+		}
+
+		filterQueryUsingFilterList = query.toString();
+		if (!filterList.isEmpty()) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList(filterList, query.toString());
+		}
+
+		return filterQueryUsingFilterList;
+
+	}
+
+	public String getMainSlabeStockQueryCount(String status) {
+		StringBuilder countQuery = new StringBuilder();
+		countQuery.append("SELECT COUNT(ph.id.ppid) ").append("FROM PphMt ph ")
+				.append("LEFT JOIN PppostprodtaskMt pppt ON ph.id.ppid = pppt.id.ppid ")
+				.append("JOIN PoprlSt p ON ph.poid = p.id.poid AND ph.poprctr = p.id.poprctr ")
+				.append("JOIN SolSt sos ON p.soid = sos.id.soid AND p.solid = sos.id.solid ")
+				.append("LEFT JOIN H1mh02Hm1millPdoLi mh02 ON TRIM(mh02.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN H1mh01Hm1millPdoLi mh01 ON TRIM(mh01.id.slabid) = TRIM(ph.id.ppid) ")
+				.append("LEFT JOIN HsmschdslbdPt schd ON TRIM(schd.actslbid) = TRIM(ph.id.ppid) ")
+				.append("WHERE (:selectedHeat IS NULL OR TRIM(ph.heatid) IN :selectedHeat) ")
+				.append("  AND (:selectedSlab IS NULL OR TRIM(ph.id.ppid) IN :selectedSlab) ")
+				.append("  AND (:selectedStatus IS NULL OR ph.ppsts IN :selectedStatus) ")
+				.append("  AND (:selectedShift IS NULL OR ph.shiftid = :selectedShift) ")
+				.append("  AND (:fromDate IS NULL OR ph.prodDt >= :fromDate)")
+				.append("  AND (:toDate IS NULL OR ph.prodDt<= :toDate ) ")
+				.append("  AND (:selectedSource IS NULL OR ph.source IN :selectedSource) ")
+				.append("  AND (:selectedLocation IS NULL OR ph.slocid LIKE CONCAT(:selectedLocation, '%')) ");
+
+		if (OfsStatusConstants.CONSUMED.equalsIgnoreCase(status)
+				|| OfsStatusConstants.CONSPEND.equalsIgnoreCase(status)) {
+			countQuery.append("AND ph.ppsts IN ('").append(OfsStatusConstants.CONSUMED).append("', '")
+					.append(OfsStatusConstants.CONSPEND).append("') ");
+		} else {
+			countQuery.append("AND ph.ppsts != '").append(OfsStatusConstants.CONSUMED).append("' ");
+		}
+
+		return countQuery.toString();
+	}
+
+	/**
+	 * Adjust the filter list if necessary.
+	 */
+	private List<String> adjustFilterList(List<String> filterList) {
+		if (filterList.contains("or") && !DevExtGridFilterUtils.isNumberOrStringCheck(filterList.get(2))) {
+			filterList = DevExtGridFilterUtils.removeNumberFieldsFromString(filterList, SlabStockDto.class);
+		}
+		return filterList;
+	}
+
+	private String applySorting(List<String> sortList, String query) {
+		if (!sortList.isEmpty()) {
+			Map<String, String> columnAlias = checkClassAleasWithNoStop();
+
+			if (sortList.get(3).equals("true")) {
+				query += OfsConstants.ORDER_BY + columnAlias.get(sortList.get(1)) + " DESC";
+			} else {
+				query += OfsConstants.ORDER_BY + columnAlias.get(sortList.get(1));
+			}
+		} else {
+			query += " ORDER BY ph.prodDt DESC ";
+		}
+
+		return query;
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T buildGroupedDataResponse(Page<Object[]> groupingListData, Long mainQueryCount, Long totalDistCount) {
+		GroupedDataResponse<SlabStockDto> result = new GroupedDataResponse<>(null, 0L, 0L);
+		List<Group<SlabStockDto>> list = new ArrayList<>();
+
+		for (Object[] row : groupingListData) {
+			String groupKey = row[0] instanceof BigDecimal ? ((BigDecimal) row[0]).toPlainString()
+					: String.valueOf(row[0]);
+			Long count = row[1] instanceof BigDecimal ? ((BigDecimal) row[1]).longValue() : (Long) row[1];
+			list.add(new Group<>(groupKey, null, count));
+		}
+
+		result.setData(list);
+		result.setTotalCount(mainQueryCount);
+		result.setGroupCount(totalDistCount);
+		return (T) result;
+	}
+
+	public int findIndexOfKey(List<String> list, String key, int targetIndex) {
+		int count = 0;
+		for (int i = 0; i < list.size(); i++) {
+			if (list.get(i).equals(key)) {
+				if (count == targetIndex) {
+					return i; // Return the index of the nth occurrence of the key
+				}
+				count++;
+			}
+		}
+		return targetIndex; // If the targetIndex doesn't match an occurrence, return targetIndex itself
+	}
+
+	@Override
+	public List<Chemistry> getSlabStocksChemistryForEachSalbStock(SlabStockRequest request) {
+
+		return slabStockCustRepository.getSlabStocksChemistryForEachSlab(request);
+	}
+
+	@Override
+	@Transactional(rollbackFor = TransactionException.class)
+	public OfsCommonResponse cleanSlabCurrentLocations(SlabStockRequest request) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		OfsCommonResponse response = new OfsCommonResponse();
+		List<SlabStockDto> slabLocationList = slabStockCustRepository.getSlabLocationUpdateDetails(request);
+
+		if (slabLocationList != null) {
+			for (SlabStockDto slab : slabLocationList) {
+				PphMt pphmt = new PphMt();
+				PphMtPK pk = new PphMtPK();
+
+				pk.setPpid(slab.getPpid());
+				pk.setPpctr(slab.getPpctr());
+
+				pphmt.setId(pk);
+				Optional<PphMt> optional = pphMtRepository.findById(pk);
+
+				if (optional.isPresent()) {
+					PphMt newPphMt = optional.get();
+					newPphMt.setPrevslocid(newPphMt.getSlocid());
+					newPphMt.setPrevslocseq(newPphMt.getSlocseq());
+					newPphMt.setSlocid(" ");
+					newPphMt.setSlocseq(null);
+					pphMtRepository.save(newPphMt);
+				}
+			}
+		}
+		response.addInfoMsg("updated successfully");
+		return response;
+	}
+
+}

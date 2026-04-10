@@ -1,0 +1,218 @@
+package com.hindindustec.fluenta.reports.repository;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Repository;
+
+import com.hindindustec.fluenta.reports.common.OfsConstants;
+import com.hindindustec.fluenta.reports.dto.MaterialRollingSummaryKpiDto;
+import com.hindindustec.fluenta.reports.dto.MaterialRollingSummaryReportDto;
+import com.hindindustec.fluenta.reports.dto.MaterialRollingSummaryReportRequest;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
+import jakarta.persistence.TypedQuery;
+
+@Repository
+public class MaterialRollingSummaryCustRepository {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(MaterialRollingSummaryCustRepository.class);
+
+	public MaterialRollingSummaryCustRepository(EntityManager entityManager) {
+		super();
+		this.entityManager = entityManager;
+	}
+
+	private final EntityManager entityManager;
+
+	public List<String> searchInternalGrades(String query) {
+		TypedQuery<String> q = entityManager.createQuery(
+				"SELECT DISTINCT int.grdid FROM GrdCm int WHERE LOWER(int.grdid) LIKE LOWER(:query)", String.class);
+		q.setMaxResults(10);
+		q.setParameter(OfsConstants.QUERY, "%" + query.toLowerCase() + "%");
+		return q.getResultList();
+	}
+
+	public List<String> searchExternalGrades(String query) {
+		TypedQuery<String> q = entityManager.createQuery(
+				"SELECT DISTINCT ex.extgrdnm FROM ExternalGradeEntity ex WHERE LOWER(ex.extgrdnm) LIKE LOWER(:query)",
+				String.class);
+		q.setMaxResults(10);
+		q.setParameter(OfsConstants.QUERY, "%" + query.toLowerCase() + "%");
+		return q.getResultList();
+	}
+
+ public List<MaterialRollingSummaryReportDto> getMaterialRollingSummaryReportDetails(
+            MaterialRollingSummaryReportRequest request, int pageNumber, int chunkSize) {
+
+        LOGGER.info("Fetching material rolling Details, request repo: {}", request);
+
+        StringBuilder jpql = new StringBuilder();
+        jpql.append("SELECT NEW com.hindindustec.fluenta.reports.dto.MaterialRollingSummaryReportDto( ")
+            .append("   p.extgrd, ")
+            .append("   p.grdid, ")
+            .append("   p.wdt, ")
+            .append("   p.thk, ")
+            .append("   COALESCE(SUM(p.wgt), 0), ")
+            .append("   COUNT(p.id.ppid), ")
+            .append("   COALESCE(MAX(p.crDt), CURRENT_DATE), ")
+            .append("   '").append(OfsConstants.STSACTIVE).append("' ")
+            .append(") ")
+            .append("FROM PphMt p WHERE 1=1 ");
+
+        // Dynamic filters
+        if (request.getExtgrd() != null && !request.getExtgrd().isEmpty()) {
+            jpql.append(" AND p.extgrd IN :").append(OfsConstants.PARAM_EXTGRD);
+        }
+        if (request.getGrdid() != null && !request.getGrdid().isEmpty()) {
+            jpql.append(" AND p.grdid IN :").append(OfsConstants.PARAM_GRDID);
+        }
+
+        jpql.append(" AND (:").append(OfsConstants.PARAM_MIN_WIDTH).append(" IS NULL OR p.wdt >= :").append(OfsConstants.PARAM_MIN_WIDTH).append(") ")
+            .append(" AND (:").append(OfsConstants.PARAM_MAX_WIDTH).append(" IS NULL OR p.wdt <= :").append(OfsConstants.PARAM_MAX_WIDTH).append(") ")
+            .append(" AND (:").append(OfsConstants.PARAM_MIN_THICKNESS).append(" IS NULL OR p.thk >= :").append(OfsConstants.PARAM_MIN_THICKNESS).append(") ")
+            .append(" AND (:").append(OfsConstants.PARAM_MAX_THICKNESS).append(" IS NULL OR p.thk <= :").append(OfsConstants.PARAM_MAX_THICKNESS).append(") ")
+            .append(" AND (:").append(OfsConstants.FROM_DATE).append(" IS NULL OR p.crDt >= :").append(OfsConstants.FROM_DATE).append(") ")
+            .append(" AND (:").append(OfsConstants.TO_DATE).append(" IS NULL OR p.crDt <= :").append(OfsConstants.TO_DATE).append(") ")
+            .append(" GROUP BY p.extgrd, p.grdid, p.wdt, p.thk");
+
+        TypedQuery<MaterialRollingSummaryReportDto> query =
+                entityManager.createQuery(jpql.toString(), MaterialRollingSummaryReportDto.class);
+
+        // ✅ Bind list parameters safely
+        if (request.getExtgrd() != null && !request.getExtgrd().isEmpty()) {
+            query.setParameter(OfsConstants.PARAM_EXTGRD,
+                request.getExtgrd().stream().map(String::trim).collect(Collectors.toList()));
+        }
+        if (request.getGrdid() != null && !request.getGrdid().isEmpty()) {
+            query.setParameter(OfsConstants.PARAM_GRDID,
+                request.getGrdid().stream().map(String::trim).collect(Collectors.toList()));
+        }
+
+        // ✅ Bind scalar params
+        query.setParameter(OfsConstants.PARAM_MIN_WIDTH, request.getMinWidth());
+        query.setParameter(OfsConstants.PARAM_MAX_WIDTH, request.getMaxWidth());
+        query.setParameter(OfsConstants.PARAM_MIN_THICKNESS, request.getMinThickness());
+        query.setParameter(OfsConstants.PARAM_MAX_THICKNESS, request.getMaxThickness());
+        query.setParameter(OfsConstants.FROM_DATE, request.getFromDate());
+        query.setParameter(OfsConstants.TO_DATE, request.getToDate());
+
+        // ✅ Pagination
+        query.setFirstResult(pageNumber * chunkSize);
+        query.setMaxResults(chunkSize);
+
+        List<MaterialRollingSummaryReportDto> results = query.getResultList();
+        LOGGER.info("Fetching material rolling Details, records found repo: {}", results.size());
+
+        return results;
+    }
+
+	public MaterialRollingSummaryKpiDto getKpis(MaterialRollingSummaryReportRequest request) {
+	    StringBuilder sb = new StringBuilder();
+
+	    sb.append("SELECT NEW com.hindindustec.fluenta.reports.dto.MaterialRollingSummaryKpiDto( ")
+	      .append("   COALESCE(SUM(p.wgt), 0), ")  // Total Qty
+	      .append("   COUNT(p.id.ppid), ")          // Total Coils
+	      .append("   COUNT(DISTINCT CONCAT(p.extgrd, '-', p.grdid, '-', p.wdt, '-', p.thk)), ") // Combinations
+	      .append("   SUM(CASE WHEN p.wgt IS NULL OR p.wdt IS NULL OR p.thk IS NULL OR p.prodDt IS NULL THEN 1 ELSE 0 END) ") // Inactive grades
+	      .append(") ")
+	      .append(" FROM PphMt p ")
+	      .append(" WHERE 1=1 ");
+
+	    if (request.getExtgrd() != null && !request.getExtgrd().isEmpty()) {
+	        sb.append(" AND TRIM(p.extgrd) IN :extgrd ");
+	    }
+	    if (request.getGrdid() != null && !request.getGrdid().isEmpty()) {
+	        sb.append(" AND TRIM(p.grdid) IN :grdid ");
+	    }
+
+	    sb.append(" AND (:" + OfsConstants.PARAM_MIN_WIDTH + " IS NULL OR p.wdt >= :" + OfsConstants.PARAM_MIN_WIDTH + ") ")
+	      .append(" AND (:" + OfsConstants.PARAM_MAX_WIDTH + " IS NULL OR p.wdt <= :" + OfsConstants.PARAM_MAX_WIDTH + ") ")
+	      .append(" AND (:" + OfsConstants.PARAM_MIN_THICKNESS + " IS NULL OR p.thk >= :" + OfsConstants.PARAM_MIN_THICKNESS + ") ")
+	      .append(" AND (:" + OfsConstants.PARAM_MAX_THICKNESS + " IS NULL OR p.thk <= :" + OfsConstants.PARAM_MAX_THICKNESS + ") ")
+	      .append(" AND (:" + OfsConstants.TO_DATE + " IS NULL OR p.crDt <= :" + OfsConstants.TO_DATE + ") ")
+	      .append(" AND (:" + OfsConstants.FROM_DATE + " IS NULL OR p.crDt >= :" + OfsConstants.FROM_DATE + ") ");
+
+
+	    TypedQuery<MaterialRollingSummaryKpiDto> query =
+	            entityManager.createQuery(sb.toString(), MaterialRollingSummaryKpiDto.class);
+
+	    if (request.getExtgrd() != null && !request.getExtgrd().isEmpty()) {
+	        query.setParameter(OfsConstants.PARAM_EXTGRD,
+	                request.getExtgrd().stream().map(String::trim).collect(Collectors.toList()));
+	    }
+	    if (request.getGrdid() != null && !request.getGrdid().isEmpty()) {
+	        query.setParameter(OfsConstants.PARAM_GRDID,
+	                request.getGrdid().stream().map(String::trim).collect(Collectors.toList()));
+	    }
+
+	    query.setParameter(OfsConstants.PARAM_MIN_WIDTH, request.getMinWidth());
+	    query.setParameter(OfsConstants.PARAM_MAX_WIDTH, request.getMaxWidth());
+	    query.setParameter(OfsConstants.PARAM_MIN_THICKNESS, request.getMinThickness());
+	    query.setParameter(OfsConstants.PARAM_MAX_THICKNESS, request.getMaxThickness());
+	    query.setParameter(OfsConstants.FROM_DATE, request.getFromDate());
+	    query.setParameter(OfsConstants.TO_DATE, request.getToDate());
+
+	    MaterialRollingSummaryKpiDto result = null;
+	    try {
+	        result = query.getSingleResult();  // ✅ Now safe → only one row
+	    } catch (NoResultException e) {
+	        LOGGER.warn("No KPI records found, defaulting to zero");
+	    }
+
+	    if (result == null) {
+	        result = new MaterialRollingSummaryKpiDto(
+	                BigDecimal.ZERO,
+	                0L,
+	                0L,
+	                0L
+	        );
+	    }
+
+	    LOGGER.info("KPIs fetched: {}", result);
+	    return result;
+	}
+
+
+	public Long getTotalRecordsCount(MaterialRollingSummaryReportRequest request) {
+	    StringBuilder queryString = new StringBuilder("SELECT COUNT(p) FROM PphMt p WHERE 1=1");
+
+	    if (request.getExtgrd() != null && !request.getExtgrd().isEmpty()) {
+	        queryString.append(" AND p.extgrd IN :extgrd");
+	    }
+	    if (request.getGrdid() != null && !request.getGrdid().isEmpty()) {
+	        queryString.append(" AND p.grdid IN :grdid");
+	    }
+
+	    TypedQuery<Long> q = entityManager.createQuery(queryString.toString(), Long.class);
+
+	    if (request.getExtgrd() != null && !request.getExtgrd().isEmpty()) {
+	        q.setParameter("extgrd", request.getExtgrd());
+	    }
+	    if (request.getGrdid() != null && !request.getGrdid().isEmpty()) {
+	        q.setParameter("grdid", request.getGrdid());
+	    }
+
+	    Long result = q.getSingleResult();
+	    return result == null ? 0L : result;
+	}
+	public List<String> findInternalGradesByExternalGrades(List<String> extgrds) {
+	    StringBuilder sb = new StringBuilder();
+	    sb.append("SELECT DISTINCT TRIM(cg.id.grdid) ")
+	      .append("FROM CatalogigdJm cg ")
+	      .append("JOIN ExternalGradeEntity e ON TRIM(e.extgrdnm) IN :extgrds  ")
+	      .append("JOIN ProdCatalogueJmEntity pc ON TRIM(e.extgrdnm) = TRIM(pc.extGridName) ")
+	      .append("JOIN CatalogueJm c ON cg.id.capabilityid = c.capabilityid and TRIM(c.catalogueid) = TRIM(pc.catalogId) ");
+
+	    TypedQuery<String> query = entityManager.createQuery(sb.toString(), String.class);
+	    query.setParameter("extgrds", extgrds.stream().map(String::trim).toList());
+
+	    return query.getResultList();
+	}
+
+   
+}

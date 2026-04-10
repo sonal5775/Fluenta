@@ -1,0 +1,70 @@
+package com.hindindustec.fluenta.sales.dto;
+
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
+@Setter
+@ToString
+public class AttachmentDto {
+
+	private String seid;
+
+	private long selid;
+
+	private long docctr;
+
+	private String doctyid;
+
+	private byte[] docattach;
+
+	private String docfilety;
+
+	private List<DocDetails> docattachList;
+
+	private String docdesc;
+
+	private BigDecimal isactv;
+
+	private String crBy;
+
+	private Date crDt;
+
+	private String crMacAddr;
+
+	private String moBy;
+
+	private Date moDt;
+
+	private String moMacAddr;
+
+	public AttachmentDto(String seid, long selid, long docctr, String doctyid, byte[] docattach, String docfilety,
+			String docdesc, BigDecimal isactv, String crBy, Date crDt, String crMacAddr, String moBy, Date moDt,
+			String moMacAddr) {
+		super();
+		this.seid = seid;
+		this.selid = selid;
+		this.docctr = docctr;
+		this.doctyid = doctyid;
+		this.docattach = docattach;
+		this.docfilety = docfilety;
+		this.docdesc = docdesc;
+		this.isactv = isactv;
+		this.crBy = crBy;
+		this.crDt = crDt;
+		this.crMacAddr = crMacAddr;
+		this.moBy = moBy;
+		this.moDt = moDt;
+		this.moMacAddr = moMacAddr;
+	}
+
+}

@@ -1,0 +1,131 @@
+package com.hindindustec.fluenta.hsm.masters.repository;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Repository;
+
+import com.hindindustec.fluenta.hsm.masters.dto.AreaDto;
+import com.hindindustec.fluenta.hsm.masters.dto.AreaTypeDto;
+import com.hindindustec.fluenta.hsm.masters.dto.ProdLineDto;
+import com.hindindustec.fluenta.hsm.masters.dto.SiteDto;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+
+@Repository
+public class FacilityOverviewCustRepository {
+	
+	private EntityManager entityManager;
+	private static final Logger logger = LoggerFactory.getLogger(FacilityOverviewCustRepository.class);
+	
+	public FacilityOverviewCustRepository(EntityManager entityManager) {
+		super();
+		this.entityManager = entityManager;
+	}
+
+	public List<SiteDto> getSiteData() {
+		logger.info("FacilityOverviewCustRepository: Fetching all Site data");
+        StringBuilder queryString = new StringBuilder();
+        queryString.append("SELECT new ").append(SiteDto.class.getName()).append("(")
+        .append("st.stid, ")
+        .append("st.country, ")
+        .append("st.crBy, ")
+        .append("st.crDt, ")
+        .append("st.crMacAddr, ")
+        .append("st.erpStid, ")
+        .append("st.isactv, ")
+        .append("st.logoImgPath, ")
+        .append("st.moBy, ")
+        .append("st.moDt, ")
+        .append("st.moMacAddr, ")
+        .append("st.staddr, ")
+        .append("st.state, ")
+        .append("st.stnm, ")
+        .append("st.location ")
+        .append(") ")
+        .append("FROM StCs st ")
+        .append("ORDER BY st.crDt");
+
+        TypedQuery<SiteDto> q = entityManager.createQuery(queryString.toString(), SiteDto.class);
+        logger.info("Number of results getSiteData: {}", q.getResultList().size());
+        return q.getResultList();
+	}
+
+	public List<AreaTypeDto> getAreaTypeData() {
+		logger.info("FacilityOverviewCustRepository: Fetching all Area Type data");
+        StringBuilder queryString = new StringBuilder();
+        queryString.append("SELECT new ").append(AreaTypeDto.class.getName()).append("(")
+        .append("ar.artyid, ")
+        .append("ar.artynm, ")
+        .append("ar.crBy, ")
+        .append("ar.crDt, ")
+        .append("ar.crMacAddr, ")
+        .append("ar.isactv, ")
+        .append("ar.moBy, ")
+        .append("ar.moDt, ")
+        .append("ar.moMacAddr ")
+        .append(") ")
+        .append("FROM ArtyCs ar ")
+        .append("ORDER BY ar.crDt");
+
+        TypedQuery<AreaTypeDto> q = entityManager.createQuery(queryString.toString(), AreaTypeDto.class);
+        logger.info("Number of results getAreaTypeData: {}", q.getResultList().size());
+        return q.getResultList();
+	}
+
+	public List<AreaDto> getAreaData() {
+		logger.info("FacilityOverviewCustRepository: Fetching all Area data");
+        StringBuilder queryString = new StringBuilder();
+        queryString.append("SELECT new ").append(AreaDto.class.getName()).append("(")
+        .append("a.arid, ")
+        .append("a.arnm, ")
+        .append("a.artyid, ")
+        .append("a.crBy, ")
+        .append("a.crDt, ")
+        .append("a.crMacAddr, ")
+        .append("a.isactv, ")
+        .append("a.moBy, ")
+        .append("a.moDt, ")
+        .append("a.moMacAddr, ")
+        .append("a.stid ")
+        .append(") ")
+        .append("FROM ArCs a ")
+        .append("ORDER BY a.crDt");
+
+        TypedQuery<AreaDto> q = entityManager.createQuery(queryString.toString(), AreaDto.class);
+        logger.info("Number of results getAreaData: {}", q.getResultList().size());
+        return q.getResultList();
+	}
+
+	public List<ProdLineDto> getProdLineData() {
+		logger.info("FacilityOverviewCustRepository: Fetching all Prod Line data");
+        StringBuilder queryString = new StringBuilder();
+        queryString.append("SELECT new ").append(ProdLineDto.class.getName()).append("(")
+        .append("pl.plid, ")
+        .append("pl.arid, ")
+        .append("pl.crBy, ")
+        .append("pl.crDt, ")
+        .append("pl.crMacAddr, ")
+        .append("pl.defsprdmax, ")
+        .append("pl.defsquzmax, ")
+        .append("pl.erpplid, ")
+        .append("pl.isactv, ")
+        .append("pl.moBy, ")
+        .append("pl.moDt, ")
+        .append("pl.moMacAddr, ")
+        .append("pl.pldesc, ")
+        .append("pl.plnm, ")
+        .append("pl.pltyid ")
+        .append(") ")
+        .append("FROM PlCm pl ")
+        .append("ORDER BY pl.crDt");
+
+
+        TypedQuery<ProdLineDto> q = entityManager.createQuery(queryString.toString(), ProdLineDto.class);
+        logger.info("Number of results getProdLineData: {}", q.getResultList().size());
+        return q.getResultList();
+	}
+
+}

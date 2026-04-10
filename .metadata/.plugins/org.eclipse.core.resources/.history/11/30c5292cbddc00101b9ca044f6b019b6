@@ -1,0 +1,1307 @@
+package com.hindindustec.fluenta.hsm.quality.service.impl;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.quality.common.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.quality.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.quality.common.DevExtGridFilterUtils;
+import com.hindindustec.fluenta.hsm.quality.common.exception.TransactionException;
+import com.hindindustec.fluenta.hsm.quality.common.response.FluentaApiResponse;
+import com.hindindustec.fluenta.hsm.quality.common.response.FluentaPaginatedResponse;
+import com.hindindustec.fluenta.hsm.quality.common.response.Group;
+import com.hindindustec.fluenta.hsm.quality.common.response.GroupedDataResponse;
+import com.hindindustec.fluenta.hsm.quality.common.response.MessageType;
+import com.hindindustec.fluenta.hsm.quality.common.response.ResponseUtil;
+import com.hindindustec.fluenta.hsm.quality.constants.QualityConstants;
+import com.hindindustec.fluenta.hsm.quality.dto.CheckListImagesPostdto;
+import com.hindindustec.fluenta.hsm.quality.dto.CheckListPostDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HsmOnlineInspCoilDto;
+import com.hindindustec.fluenta.hsm.quality.dto.HsmOnlineInspectionRequestDto;
+import com.hindindustec.fluenta.hsm.quality.dto.OnlineDefectPostDto;
+import com.hindindustec.fluenta.hsm.quality.dto.OnlineInspDefectDto;
+import com.hindindustec.fluenta.hsm.quality.dto.PhysicalInspCheckListDto;
+import com.hindindustec.fluenta.hsm.quality.dto.PhysicalInspChkListImageDto;
+import com.hindindustec.fluenta.hsm.quality.dto.PhysicalInspectionCoilDto;
+import com.hindindustec.fluenta.hsm.quality.model.DefectHeaderEntity;
+import com.hindindustec.fluenta.hsm.quality.model.DefectHeaderEntityPK;
+import com.hindindustec.fluenta.hsm.quality.model.InspChecklistMasterEntity;
+import com.hindindustec.fluenta.hsm.quality.model.InspChecklistMasterEntityPK;
+import com.hindindustec.fluenta.hsm.quality.model.PostProdTaskMtEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PpInspChecklistEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PpInspChecklistEntityPK;
+import com.hindindustec.fluenta.hsm.quality.model.PpInspDefectEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PpInspDefectEntityPK;
+import com.hindindustec.fluenta.hsm.quality.model.PpInspImagesEntity;
+import com.hindindustec.fluenta.hsm.quality.model.PpInspImagesEntityPK;
+import com.hindindustec.fluenta.hsm.quality.repository.DefectHeaderRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.HsmOnlineInspectionRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.InspChecklistMasterRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PostProdTaskMtRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PpInspChecklistRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PpInspDefectRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PpInspImagesRepository;
+import com.hindindustec.fluenta.hsm.quality.service.HsmOnlineInspectionService;
+import com.hindindustec.fluenta.hsm.quality.util.DownCoilerValidationUtil;
+import com.hindindustec.fluenta.hsm.quality.util.FileConversionUtil;
+
+@Service
+public class HsmOnlineInspectionServiceImpl implements HsmOnlineInspectionService {
+
+	public static final String ORDER_BY = " ORDER BY ";
+	public static final String NOT_LIKE = " NOT LIKE ";
+	public static final String LIKE = " LIKE ";
+	public static final String ENDSWITH = "endswith";
+	public static final String STARTSWITH = "startswith";
+	public static final String NOTCONTAINS = "notcontains";
+	public static final String CONTAINS = "contains";
+	public static final String CLOB = "CLOB";
+	public static final String DATE_FORMAT = "YYYY-MM-DD";
+	public static final String TO_CHAR = "TO_CHAR";
+	public static final String VARCHAR2 = "VARCHAR2";
+	public static final String OR = "or";
+	public static final String AND = "and";
+	public static final String UTF_8 = "UTF-8";
+	public static final String NUMBER = "NUMBER";
+	public static final String UN_KNOWN = "UNKNOWN";
+
+	private static final Logger logger = LoggerFactory.getLogger(HsmOnlineInspectionServiceImpl.class);
+
+	private HsmOnlineInspectionRepository hsmOnlineInspectionRepository;
+
+	private DefectHeaderRepository defectHeaderRepository;
+
+	private PpInspDefectRepository ppInspDefectRepository;
+
+	private InspChecklistMasterRepository inspChecklistMasterRepository;
+
+	private PpInspChecklistRepository ppInspChecklistRepository;
+
+	private PpInspImagesRepository ppInspImagesRepository;
+
+	private PostProdTaskMtRepository postProdTaskMtRepository;
+
+	private DBSessionService dbSessionService;
+
+	public HsmOnlineInspectionServiceImpl(HsmOnlineInspectionRepository hsmOnlineInspectionRepository,
+			DefectHeaderRepository defectHeaderRepository, PpInspDefectRepository ppInspDefectRepository,
+			InspChecklistMasterRepository inspChecklistMasterRepository,
+			PpInspChecklistRepository ppInspChecklistRepository, PpInspImagesRepository ppInspImagesRepository,
+			PostProdTaskMtRepository postProdTaskMtRepository, DBSessionService dbSessionService) {
+		super();
+		this.hsmOnlineInspectionRepository = hsmOnlineInspectionRepository;
+		this.defectHeaderRepository = defectHeaderRepository;
+		this.ppInspDefectRepository = ppInspDefectRepository;
+		this.inspChecklistMasterRepository = inspChecklistMasterRepository;
+		this.ppInspChecklistRepository = ppInspChecklistRepository;
+		this.ppInspImagesRepository = ppInspImagesRepository;
+		this.postProdTaskMtRepository = postProdTaskMtRepository;
+		this.dbSessionService = dbSessionService;
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<String>>> getCoilId() {
+		List<String> coilId = hsmOnlineInspectionRepository.getCoilId();
+		return ResponseUtil.createResponse(coilId, "Fetching Coil Ids", true);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<String>>> getSalesOrderNo() {
+		List<String> salesOrderNo = hsmOnlineInspectionRepository.getSalesOrderNo();
+		return ResponseUtil.createResponse(salesOrderNo, "Fetching Sales Order No", true);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<String>>> getSalesItemNo() {
+		List<String> salesItemNo = hsmOnlineInspectionRepository.getSalesItemNo();
+		return ResponseUtil.createResponse(salesItemNo, "Fetching Sales Item No", true);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<HsmOnlineInspCoilDto>>> getInspectionCoilList(
+			HsmOnlineInspectionRequestDto request) {
+		List<HsmOnlineInspCoilDto> coilList = hsmOnlineInspectionRepository.getOnlineInspectionList(request);
+		logger.info("{}", coilList.size());
+		return ResponseUtil.createResponse(coilList, "Fetching Coil List", true);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<OnlineInspDefectDto>>> getInspectionDefects(
+			HsmOnlineInspCoilDto request) {
+		List<OnlineInspDefectDto> inspectionDefects = hsmOnlineInspectionRepository.getInspectionDefects(request);
+		return ResponseUtil.createResponse(inspectionDefects, "Fetching Insp Defects", true);
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<PhysicalInspCheckListDto>>> getInspectionCheckList(
+			HsmOnlineInspCoilDto request) {
+		List<PhysicalInspCheckListDto> inspectionCheckList = hsmOnlineInspectionRepository
+				.getInspectionCheckList(request);
+		return ResponseUtil.createResponse(inspectionCheckList, "Fetching Insp Checklist", true);
+	}
+
+	@Override
+	@Transactional(rollbackFor = TransactionException.class)
+	public ResponseEntity<FluentaApiResponse<CheckListPostDto>> saveInspectionCheckList(CheckListPostDto request) {
+		logger.info("{}", request);
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		ResponseEntity<FluentaApiResponse<CheckListPostDto>> response = null;
+		List<PhysicalInspCheckListDto> checkList = request.getCheckList();
+		HsmOnlineInspCoilDto coilDto = request.getCoilDto();
+		PostProdTaskMtEntity task = null;
+		Optional<PostProdTaskMtEntity> taskOptional = postProdTaskMtRepository.getTasksByPpidAndPrid(
+				coilDto.getPpId().trim(), QualityConstants.ONLINE_INSP, QualityConstants.INSP_FLAG_YES);
+		if (taskOptional.isPresent()) {
+			task = taskOptional.get();
+			for (PhysicalInspCheckListDto dto : checkList) {
+				InspChecklistMasterEntity checklistMasterEntity = new InspChecklistMasterEntity();
+				InspChecklistMasterEntityPK checklistMasterEntityPK = new InspChecklistMasterEntityPK();
+				PpInspChecklistEntity checklistEntity = new PpInspChecklistEntity();
+				PpInspChecklistEntityPK checklistEntityPK = new PpInspChecklistEntityPK();
+				logger.info("{}", dto);
+				checklistMasterEntityPK.setPrid(QualityConstants.ONLINE_INSP);
+				checklistMasterEntityPK.setAtrid(dto.getAttribute());
+				Optional<InspChecklistMasterEntity> masterOptional = inspChecklistMasterRepository
+						.findById(checklistMasterEntityPK);
+				if (masterOptional.isPresent()) {
+					checklistMasterEntity = masterOptional.get();
+					checklistMasterEntity.setMoBy(ClientIpUtils.getClient());
+					checklistMasterEntity.setMoDt(new Date());
+					checklistMasterEntity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+				} else {
+					checklistMasterEntity.setId(checklistMasterEntityPK);
+					checklistMasterEntity.setIsactv(BigDecimal.ONE);
+					checklistMasterEntity.setCrBy(ClientIpUtils.getClient());
+					checklistMasterEntity.setCrDt(new Date());
+					checklistMasterEntity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+				}
+				logger.info("{}", "saving master");
+				inspChecklistMasterRepository.save(checklistMasterEntity);
+				logger.info("{}", "saved master");
+				checklistEntityPK.setPpid(coilDto.getPpId());
+				checklistEntityPK.setPpctr(0);
+				checklistEntityPK.setTaskstepid(task.getId().getTaskstepId());
+				checklistEntityPK.setAtrid(dto.getAttribute());
+				Optional<PpInspChecklistEntity> optional = ppInspChecklistRepository.findById(checklistEntityPK);
+				if (optional.isPresent()) {
+					checklistEntity = optional.get();
+					checklistEntity.setMoBy(ClientIpUtils.getClient());
+					checklistEntity.setMoDt(new Date());
+					checklistEntity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+				} else {
+					checklistEntity.setId(checklistEntityPK);
+					checklistEntity.setCrBy(ClientIpUtils.getClient());
+					checklistEntity.setCrDt(new Date());
+					checklistEntity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+					checklistEntity.setIsactv(BigDecimal.ONE);
+					checklistEntity.setPrid(QualityConstants.ONLINE_INSP);
+				}
+				if (dto.isInspectionFlag()) {
+					checklistEntity.setInspflg(QualityConstants.INSP_FLAG_YES);
+				} else {
+					checklistEntity.setInspflg(QualityConstants.INSP_FLAG_NO);
+				}
+				checklistEntity.setInsprem(dto.getRemarks());
+				checklistEntity.setInsprslt(dto.getInspResult());
+				logger.info("{}", checklistEntity);
+				PpInspChecklistEntity save = ppInspChecklistRepository.save(checklistEntity);
+				logger.info("{}", save);
+				response = ResponseUtil.createResponse(request, "Save/Update Successful  ", false);
+			}
+		} else {
+			response = ResponseUtil.createResponse(request, "Task Id Not Found  ", false);
+		}
+		return response;
+
+	}
+
+	@Override
+	@SuppressWarnings("all")
+	@Transactional(rollbackFor = TransactionException.class)
+	public ResponseEntity<FluentaApiResponse<CheckListImagesPostdto>> saveInspectionCheckListImages(
+			CheckListImagesPostdto request) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		ResponseEntity<FluentaApiResponse<CheckListImagesPostdto>> response = null;
+		HsmOnlineInspCoilDto coilDto = request.getCoilDto();
+		PhysicalInspCheckListDto checkListDto = request.getCheckListDto();
+		List<PhysicalInspChkListImageDto> imageList = request.getImageList();
+		CheckListPostDto checkListPostDto = new CheckListPostDto();
+		checkListPostDto.setCoilDto(coilDto);
+		ArrayList<PhysicalInspCheckListDto> checkList = new ArrayList<>();
+		checkList.add(checkListDto);
+		checkListPostDto.setCheckList(checkList);
+		saveInspectionCheckList(checkListPostDto);
+		PostProdTaskMtEntity task = null;
+		Optional<PostProdTaskMtEntity> taskOptional = postProdTaskMtRepository.getTasksByPpidAndPrid(
+				coilDto.getPpId().trim(), QualityConstants.ONLINE_INSP, QualityConstants.INSP_FLAG_YES);
+		if (taskOptional.isPresent()) {
+			task = taskOptional.get();
+		}
+		for (PhysicalInspChkListImageDto dto : imageList) {
+			byte[] bytesFromBase64Url = FileConversionUtil.getBytesFromBase64Url(dto.getCapturedImage());
+			dto.setImgfile(bytesFromBase64Url);
+			PpInspImagesEntityPK pk = new PpInspImagesEntityPK();
+			PpInspImagesEntity entity = new PpInspImagesEntity();
+			pk.setAtrid(checkListDto.getAttribute());
+			pk.setPpid(coilDto.getPpId());
+			pk.setPpctr(0);
+			pk.setTaskstepid(task.getId().getTaskstepId());
+			pk.setImgcnt(dto.getImageCount());
+			Optional<PpInspImagesEntity> optional = ppInspImagesRepository.findById(pk);
+			if (optional.isPresent()) {
+				entity = optional.get();
+				entity.setMoBy(ClientIpUtils.getClient());
+				entity.setMoDt(new Date());
+				entity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+			} else {
+				long maxDefectCtr = ppInspImagesRepository.getMaxImgCount(coilDto.getPpId(),
+						checkListDto.getAttribute());
+				pk.setImgcnt(maxDefectCtr + 1);
+				entity.setId(pk);
+				entity.setCrBy(ClientIpUtils.getClient());
+				entity.setCrDt(new Date());
+				entity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+				entity.setIsactv(BigDecimal.ONE);
+			}
+			entity.setImgdesc(dto.getImageDesc());
+			entity.setImgfile(dto.getImgfile());
+			entity.setImgnm(dto.getImageName());
+			entity.setImgpos(dto.getImgposition());
+			ppInspImagesRepository.save(entity);
+			response = ResponseUtil.createResponse(request, "Save/Update Successful", false);
+		}
+		return response;
+	}
+
+	@Override
+	public ResponseEntity<FluentaApiResponse<List<PhysicalInspChkListImageDto>>> getInspectionCheckListImages(
+			PhysicalInspCheckListDto request) {
+		List<PhysicalInspChkListImageDto> checkListImages = hsmOnlineInspectionRepository
+				.getInspectionCheckListImages(request);
+		for (PhysicalInspChkListImageDto dto : checkListImages) {
+			String base64UrlFromBytes = FileConversionUtil.getBase64UrlFromBytes(dto.getImgfile(), dto.getImageName());
+			dto.setCapturedImage(base64UrlFromBytes);
+			dto.setImageName(FileConversionUtil.removeExtension(dto.getImageName()));
+		}
+		return ResponseUtil.createResponse(checkListImages, "Successfully retrieved Images", true);
+	}
+
+	@Override
+	@Transactional(rollbackFor = TransactionException.class)
+	public ResponseEntity<FluentaApiResponse<String>> releaseCoils(List<PhysicalInspectionCoilDto> dtoList) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+
+		List<String> missingFinalResultCoils = new ArrayList<>();
+
+		for (PhysicalInspectionCoilDto dto : dtoList) {
+			Optional<PostProdTaskMtEntity> taskOptional = postProdTaskMtRepository.getTasksByPpidAndPrid(
+					dto.getPpId().trim(), QualityConstants.ONLINE_INSP, QualityConstants.INSP_FLAG_YES);
+
+			if (taskOptional.isEmpty() || taskOptional.get().getFinalResult() == null
+					|| taskOptional.get().getFinalResult().trim().isEmpty()) {
+				missingFinalResultCoils.add(dto.getPpId());
+			}
+		}
+
+		if (!missingFinalResultCoils.isEmpty()) {
+			String errorMessage = "Submit Final Result for Coil(s): " + String.join(", ", missingFinalResultCoils);
+
+			FluentaApiResponse<String> response = new FluentaApiResponse<>();
+			response.setStatus(FluentaApiResponse.Status.FAILURE);
+			response.setData(null);
+			response.addMessage(MessageType.ERROR, errorMessage);
+
+			return ResponseEntity.ok(response);
+		}
+
+		for (PhysicalInspectionCoilDto dto : dtoList) {
+			hsmOnlineInspectionRepository.savePostProduction(dto.getPpId().trim(), QualityConstants.ONLINE_INSP,
+					QualityConstants.RELEASE);
+		}
+
+		FluentaApiResponse<String> successResponse = new FluentaApiResponse<>("Coil Released");
+		successResponse.addMessage(MessageType.SUCCESS, "Update Successful");
+
+		return ResponseEntity.ok(successResponse);
+	}
+
+	@Override
+	@Transactional(rollbackFor = TransactionException.class)
+	public ResponseEntity<FluentaApiResponse<List<HsmOnlineInspCoilDto>>> saveCoilsDetails(
+			List<HsmOnlineInspCoilDto> dtoList) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		ResponseEntity<FluentaApiResponse<List<HsmOnlineInspCoilDto>>> response = null;
+
+		for (HsmOnlineInspCoilDto dto : dtoList) {
+			PostProdTaskMtEntity task = null;
+			Optional<PostProdTaskMtEntity> taskOptional = postProdTaskMtRepository.getTasksByPpidAndPrid(
+					dto.getPpId().trim(), QualityConstants.ONLINE_INSP, QualityConstants.INSP_FLAG_YES);
+			if (taskOptional.isPresent()) {
+				task = taskOptional.get();
+				task.setQaRemark(dto.getQaRemark());
+				task.setFinalResult(dto.getFinalresult());
+				postProdTaskMtRepository.save(task);
+			}
+			CheckListPostDto checkListPostDto = new CheckListPostDto();
+			checkListPostDto.setCoilDto(dto);
+			checkListPostDto.setCheckList(buildCheckListDto(dto));
+			saveInspectionCheckList(checkListPostDto);
+			response = ResponseUtil.createResponse(dtoList, "Update Successful", false);
+		}
+
+		return response;
+	}
+
+	private List<PhysicalInspCheckListDto> buildCheckListDto(HsmOnlineInspCoilDto dto) {
+		List<PhysicalInspCheckListDto> resultList = new ArrayList<>();
+
+		List<String> attributes = List.of("Waviness", "Burs", "Circum Straps", "Stickers", "Telescopicity",
+				"Eye Straps", "Surface", "Manual Marking");
+		for (String atr : attributes) {
+			PhysicalInspCheckListDto checkListDto = new PhysicalInspCheckListDto();
+			checkListDto.setPpid(dto.getPpId());
+			checkListDto.setPpctr(0);
+			checkListDto.setAttribute(atr);
+			PhysicalInspCheckListDto buildCheckListObject = buildCheckListObject(dto, checkListDto);
+			resultList.add(buildCheckListObject);
+		}
+		return resultList;
+	}
+
+	private PhysicalInspCheckListDto buildCheckListObject(HsmOnlineInspCoilDto dto,
+			PhysicalInspCheckListDto checkListDto) {
+		switch (checkListDto.getAttribute()) {
+		case "Waviness": {
+			checkListDto.setInspResult(dto.getWavinessFlag());
+			break;
+		}
+		case "Burs": {
+			checkListDto.setInspResult(dto.getBursFlag());
+			break;
+		}
+		case "Circum Straps": {
+			checkListDto.setInspResult(dto.getCircumstFlag());
+			break;
+		}
+		case "Stickers": {
+			checkListDto.setInspResult(dto.getStickersFlag());
+			break;
+		}
+		case "Telescopicity": {
+			checkListDto.setInspResult(dto.getTelescopicityFlag());
+			break;
+		}
+		case "Eye Straps": {
+			checkListDto.setInspResult(dto.getEyestrapsFlag());
+			break;
+		}
+		case "Surface": {
+			checkListDto.setInspResult(dto.getSurfaceFlag());
+			break;
+		}
+		case "Manual Marking": {
+			checkListDto.setInspResult(dto.getManualmarkingFlag());
+			break;
+		}
+		default:
+		}
+		return checkListDto;
+	}
+
+	@Override
+	@Transactional(rollbackFor = TransactionException.class)
+	public ResponseEntity<FluentaApiResponse<OnlineDefectPostDto>> saveInspectionDefects(OnlineDefectPostDto request) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		ResponseEntity<FluentaApiResponse<OnlineDefectPostDto>> response = null;
+		HsmOnlineInspCoilDto coilDto = request.getCoilDto();
+		List<OnlineInspDefectDto> defectList = request.getDefectList();
+		PostProdTaskMtEntity task = null;
+		Optional<PostProdTaskMtEntity> taskOptional = postProdTaskMtRepository.getTasksByPpidAndPrid(
+				coilDto.getPpId().trim(), QualityConstants.ONLINE_INSP, QualityConstants.INSP_FLAG_YES);
+		if (taskOptional.isPresent()) {
+			task = taskOptional.get();
+			for (OnlineInspDefectDto dto : defectList) {
+				DefectHeaderEntity headerEntity = new DefectHeaderEntity();
+				DefectHeaderEntityPK headerPk = new DefectHeaderEntityPK();
+				headerPk.setPrid(QualityConstants.ONLINE_INSP);
+				headerPk.setDefectid(dto.getDefectid());
+
+				Optional<DefectHeaderEntity> headerOptional = defectHeaderRepository.findById(headerPk);
+				if (headerOptional.isPresent()) {
+					headerEntity = headerOptional.get();
+					headerEntity.setMoBy(ClientIpUtils.getClient());
+					headerEntity.setMoDt(new Date());
+					headerEntity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+					headerEntity.setDefectdesc(dto.getDefectdesc());
+				} else {
+					headerEntity.setId(headerPk);
+					headerEntity.setDefectdesc(dto.getDefectdesc());
+					headerEntity.setCrBy(ClientIpUtils.getClient());
+					headerEntity.setCrDt(new Date());
+					headerEntity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+				}
+				defectHeaderRepository.save(headerEntity);
+
+				PpInspDefectEntity inspDefectEntity = new PpInspDefectEntity();
+				PpInspDefectEntityPK inspDefectEntityPK = new PpInspDefectEntityPK();
+				inspDefectEntityPK.setPpid(coilDto.getPpId());
+				inspDefectEntityPK.setPpctr(0);
+				inspDefectEntityPK.setTaskstepid(task.getId().getTaskstepId());
+				inspDefectEntityPK.setDefectctr(dto.getDefectctr());
+				Optional<PpInspDefectEntity> optional = ppInspDefectRepository.findById(inspDefectEntityPK);
+				if (optional.isPresent()) {
+					inspDefectEntity = optional.get();
+					inspDefectEntity.setMoBy(ClientIpUtils.getClient());
+					inspDefectEntity.setMoDt(new Date());
+					inspDefectEntity.setMoMacAddr(ClientIpUtils.getClientIpAddress());
+				} else {
+					long maxDefectCtr = ppInspDefectRepository.getMaxDefectCtr(coilDto.getPpId());
+					inspDefectEntityPK.setDefectctr(maxDefectCtr + 1);
+					inspDefectEntity.setId(inspDefectEntityPK);
+					inspDefectEntity.setCrBy(ClientIpUtils.getClient());
+					inspDefectEntity.setCrDt(new Date());
+					inspDefectEntity.setCrMacAddr(ClientIpUtils.getClientIpAddress());
+					inspDefectEntity.setPrid(QualityConstants.ONLINE_INSP);
+					inspDefectEntity.setDefectid(dto.getDefectid());
+
+				}
+				inspDefectEntity.setDefectside(dto.getDefectside());
+				inspDefectEntity.setDefectpos(dto.getDefectpos());
+				inspDefectEntity.setStartlen(dto.getStartlen());
+				inspDefectEntity.setEndlen(dto.getEndlen());
+				ppInspDefectRepository.save(inspDefectEntity);
+				response = ResponseUtil.createResponse(request, "Save/Update Successful ", false);
+			}
+		} else {
+			response = ResponseUtil.createResponse(request, "Save/Update UnSuccessful Due To Task Unavailability ",
+					false);
+		}
+
+		return response;
+	}
+
+	@Override
+	public <T> T getOnlineInspDetails(HsmOnlineInspectionRequestDto request, String status, int pageNumber,
+			int pageSize, String filter, String sort, String group, int skip, boolean requireTotalCount,
+			boolean requireGroupCount, String searchValue, Integer pageStore, Integer latestGroupCount) {
+
+		List<String> filterList = DevExtGridFilterUtils.extractElements(filter);
+
+		// new
+		int[] pageSizeArr = processPageAndSize(pageNumber, pageSize, pageStore);
+		pageNumber = pageSizeArr[0];
+		pageSize = pageSizeArr[1];
+
+		List<String> groupList = DevExtGridFilterUtils.getSortListFromString(group);
+
+		List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);
+
+		if (DevExtGridFilterUtils.isGroupWithoutFilterOrSort(group, filter, sort)) {
+			return handleGroupOnly(request, groupList, pageNumber, pageSize, skip, status, pageStore, latestGroupCount);
+		}
+
+		if (DevExtGridFilterUtils.isGroupWithFilterOrSort(group, filter, sort)) {
+			return handleGroupWithFilterOrSort(request, groupList, filterList, sortList, pageNumber, pageSize, skip,
+					requireTotalCount, status, pageStore, latestGroupCount);
+		}
+
+		if (DevExtGridFilterUtils.isFilterOrSortOnly(group, filter, sort)) {
+			return handleFilterOrSort(request, filterList, sortList, pageNumber, pageSize, skip, requireTotalCount,
+					status, pageStore, latestGroupCount);
+		}
+		return null;
+	}
+
+	private int[] processPageAndSize(Integer pageNumber, Integer pageSize, Integer pageStore) {
+		if (pageNumber == null) {
+			pageNumber = 0;
+		}
+		if (pageSize == null) {
+			pageSize = pageStore;
+		}
+		return new int[] { pageNumber, pageSize };
+	}
+
+	@SuppressWarnings("squid:S107")
+	private <T> T handleGroupOnly(HsmOnlineInspectionRequestDto request, List<String> groupList, int pageNumber,
+			int pageSize, int skip, String status, Integer pageStore, Integer latestGroupCount) {
+		pageSize = pageNumber + pageSize;
+		pageNumber = 0;
+
+		String groupQuery = getQueryForGrouping(groupList, status);
+		String groupCountQuery = getQueryForGroupingCount(groupList, status);
+		String mainCountQuery = getMainOnlineInspQueryCount(status);
+		Long mainQueryCount = hsmOnlineInspectionRepository.getMainOnlineInspQueryCount(request, mainCountQuery,
+				status);
+		Page<Object[]> groupingListData = hsmOnlineInspectionRepository.getGroupingListData(groupQuery, groupCountQuery,
+				pageNumber, pageSize, skip, request, status);
+		Long totalDistCount = hsmOnlineInspectionRepository.groupCountQuery(groupCountQuery, request, status);
+
+		return buildGroupedDataResponse(groupingListData, mainQueryCount, totalDistCount);
+	}
+
+	private String getQueryForGrouping(List<String> groupList, String status) {
+
+		if (groupList == null || groupList.isEmpty()) {
+			throw new IllegalArgumentException("groupList cannot be null or empty");
+		}
+
+		String desc = groupList.get(3);
+		String groupColumn = groupList.get(1);
+
+		StringBuilder query = new StringBuilder();
+
+//		query.append("SELECT ").append(checkClassAleas().get(groupColumn)).append(", COUNT(*) ")
+		if ("crDt".equals(groupColumn)) {
+			query.append("SELECT TO_CHAR(").append(checkClassAleas().get("crDt"))
+					.append(", 'DD-MM-YYYY HH24:MI'), COUNT(*) ");
+		} else {
+			query.append("SELECT ").append(checkClassAleas().get(groupColumn)).append(", COUNT(*) ");
+		}
+
+		query.append(" FROM QualityScheduleLinesEntity z ")
+				.append(" JOIN PostProdTaskMtEntity task ON task.id.ppId = z.ppId ")
+				.append(" AND task.id.ppCtr = z.ppCtr ").append(" AND task.tpiRequired = :hsmQc ")
+				.append(" AND task.taskStatus = :status ").append(" AND task.latestFlag = 'Y' ")
+				.append(" JOIN PostProdTaskMtEntity onlineInsp ON onlineInsp.id.ppId = z.ppId ")
+				.append(" AND onlineInsp.id.ppCtr = z.ppCtr ").append(" AND onlineInsp.tpiRequired = :onlineInsp ")
+				.append(" AND onlineInsp.taskStatus = :status ").append(" AND onlineInsp.latestFlag = 'Y' ")
+
+				// original 8 checklist joins
+				.append(" LEFT JOIN PpInspChecklistEntity waviness ON waviness.id.ppid = z.ppId ")
+				.append(" AND waviness.id.ppctr = z.ppCtr ")
+				.append(" AND waviness.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND waviness.id.atrid = :waviness ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity burs ON burs.id.ppid = z.ppId ")
+				.append(" AND burs.id.ppctr = z.ppCtr ").append(" AND burs.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND burs.id.atrid = :burs ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity circumst ON circumst.id.ppid = z.ppId ")
+				.append(" AND circumst.id.ppctr = z.ppCtr ")
+				.append(" AND circumst.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND circumst.id.atrid = :circumst ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity stickers ON stickers.id.ppid = z.ppId ")
+				.append(" AND stickers.id.ppctr = z.ppCtr ")
+				.append(" AND stickers.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND stickers.id.atrid = :stickers ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity telescopicity ON telescopicity.id.ppid = z.ppId ")
+				.append(" AND telescopicity.id.ppctr = z.ppCtr ")
+				.append(" AND telescopicity.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND telescopicity.id.atrid = :telescopicity ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity eyestraps ON eyestraps.id.ppid = z.ppId ")
+				.append(" AND eyestraps.id.ppctr = z.ppCtr ")
+				.append(" AND eyestraps.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND eyestraps.id.atrid = :eyestraps ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity surface ON surface.id.ppid = z.ppId ")
+				.append(" AND surface.id.ppctr = z.ppCtr ")
+				.append(" AND surface.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND surface.id.atrid = :surface ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity manualmarking ON manualmarking.id.ppid = z.ppId ")
+				.append(" AND manualmarking.id.ppctr = z.ppCtr ")
+				.append(" AND manualmarking.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND manualmarking.id.atrid = :manualmarking ")
+				.append(" LEFT JOIN HrCoilOutputEntity pdo ON pdo.id.coilid = z.ppId ")
+
+				// filters
+				.append(" WHERE 1=1 ").append(" AND (:solid IS NULL OR z.solId = :solid) ")
+				.append(" AND (:soid IS NULL OR z.soId = :soid) ")
+				.append(" AND (:fromDate IS NULL OR z.crDt >= :fromDate) ")
+				.append(" AND (:toDate IS NULL OR z.crDt <= :toDate) ")
+
+				.append(" AND ( (:coilIdFrom IS NULL AND :coilIdTo IS NULL) ")
+				.append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(z.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+				.append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(z.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)) ) ");
+		query.append(" GROUP BY ").append(checkClassAleas().get(groupColumn));
+		if ("true".equals(desc)) {
+			query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn)).append(" DESC");
+		} else {
+			query.append(" ORDER BY ").append(checkClassAleas().get(groupColumn));
+		}
+		return query.toString();
+	}
+
+	public Map<String, String> checkClassAleas() {
+		Map<String, String> fieldTypes = new HashMap<>();
+		fieldTypes.put("ppId", "z.ppId");
+		fieldTypes.put("parentPpId", "z.parentPpId");
+		fieldTypes.put("heatId", "z.heatId");
+		fieldTypes.put("extGrdNm", "z.extGrdNm");
+		fieldTypes.put("grdId", "z.grdId");
+		fieldTypes.put("wavinessFlag", "waviness.insprslt");
+		fieldTypes.put("bursFlag", "burs.insprslt");
+		fieldTypes.put("circumstFlag", "circumst.insprslt");
+		fieldTypes.put("stickersFlag", "stickers.insprslt");
+		fieldTypes.put("telescopicityFlag", "telescopicity.insprslt");
+		fieldTypes.put("eyestrapsFlag", "eyestraps.insprslt");
+		fieldTypes.put("surfaceFlag", "surface.insprslt");
+		fieldTypes.put("manualmarkingFlag", "manualmarking.insprslt");
+		fieldTypes.put("finalresult", "onlineInsp.finalResult"); // same as in no-stop
+		fieldTypes.put("inspFlag", "pdo.actCoilerNum");
+		fieldTypes.put("coilEntryInspLineFlg", "pdo.coilEntryInspLineFlg");
+		fieldTypes.put("soItemNo", "CONCAT(z.soId, '-', z.solId)");
+		fieldTypes.put("custNm", "z.custNm");
+		fieldTypes.put("tdcId", "z.tdcId");
+		fieldTypes.put("schdId", "z.id.schdId");
+		fieldTypes.put("schdSeqId", "z.id.schdSeqId");
+		fieldTypes.put("crDt", "z.crDt");
+		fieldTypes.put("qaRemark", "onlineInsp.qaRemark");
+		fieldTypes.put("tpiRequired", "(CASE WHEN tpi.id.ppId IS NOT NULL THEN 'YES' ELSE 'NO' END)");
+		fieldTypes.put("finalResult", "hsmProcessInsp.finalResult");
+		fieldTypes.put("processRemarks", "hsmProcessInsp.releaseRemark");
+		fieldTypes.put("actCoilerNum", "pdo.actCoilerNum");
+		return fieldTypes;
+	}
+
+	private <T> T buildGroupedDataResponse(Page<Object[]> groupingListData, Long mainQueryCount, Long totalDistCount) {
+		GroupedDataResponse<HsmOnlineInspectionRequestDto> result = new GroupedDataResponse<>(null, 0L, 0L);
+		List<Group<HsmOnlineInspectionRequestDto>> list = new ArrayList<>();
+
+		for (Object[] row : groupingListData) {
+			String groupKey = row[0] instanceof BigDecimal ? ((BigDecimal) row[0]).toPlainString()
+					: String.valueOf(row[0]);
+			Long count = null;
+			if (row[1] == null) {
+				count = 0L;
+			} else if (row[1] instanceof BigDecimal) {
+				count = ((BigDecimal) row[1]).longValue();
+			} else if (row[1] instanceof Number) {
+				count = ((Number) row[1]).longValue();
+			} else {
+				try {
+					count = Long.parseLong(row[1].toString());
+				} catch (NumberFormatException e) {
+					count = 0L; // fallback if string not numeric
+				}
+			}
+			list.add(new Group<>(groupKey, new ArrayList<>(), count));
+		}
+
+		result.setData(list);
+		result.setTotalCount(mainQueryCount);
+		result.setGroupCount(totalDistCount);
+		return (T) result;
+	}
+
+	private String getQueryForGroupingCount(List<String> groupList, String status) {
+
+		String groupColumn = groupList.get(1); // alias for grouping column
+
+		StringBuilder query = new StringBuilder();
+
+		query.append("SELECT COUNT(DISTINCT ").append(checkClassAleas().get(groupColumn)).append(") ")
+				.append(" FROM QualityScheduleLinesEntity z ")
+				.append(" JOIN PostProdTaskMtEntity task ON task.id.ppId = z.ppId ")
+				.append(" AND task.id.ppCtr = z.ppCtr ").append(" AND task.tpiRequired = :hsmQc ")
+				.append(" AND task.taskStatus = :status ").append(" AND task.latestFlag = 'Y' ")
+				.append(" JOIN PostProdTaskMtEntity onlineInsp ON onlineInsp.id.ppId = z.ppId ")
+				.append(" AND onlineInsp.id.ppCtr = z.ppCtr ").append(" AND onlineInsp.tpiRequired = :onlineInsp ")
+				.append(" AND onlineInsp.taskStatus = :status ").append(" AND onlineInsp.latestFlag = 'Y' ")
+				.append(" LEFT JOIN PpInspChecklistEntity waviness ON waviness.id.ppid = z.ppId ")
+				.append(" AND waviness.id.ppctr = z.ppCtr ")
+				.append(" AND waviness.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND waviness.id.atrid = :waviness ")
+				.append(" LEFT JOIN PpInspChecklistEntity burs ON burs.id.ppid = z.ppId ")
+				.append(" AND burs.id.ppctr = z.ppCtr ").append(" AND burs.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND burs.id.atrid = :burs ")
+				.append(" LEFT JOIN PpInspChecklistEntity circumst ON circumst.id.ppid = z.ppId ")
+				.append(" AND circumst.id.ppctr = z.ppCtr ")
+				.append(" AND circumst.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND circumst.id.atrid = :circumst ")
+				.append(" LEFT JOIN PpInspChecklistEntity stickers ON stickers.id.ppid = z.ppId ")
+				.append(" AND stickers.id.ppctr = z.ppCtr ")
+				.append(" AND stickers.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND stickers.id.atrid = :stickers ")
+				.append(" LEFT JOIN PpInspChecklistEntity telescopicity ON telescopicity.id.ppid = z.ppId ")
+				.append(" AND telescopicity.id.ppctr = z.ppCtr ")
+				.append(" AND telescopicity.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND telescopicity.id.atrid = :telescopicity ")
+				.append(" LEFT JOIN PpInspChecklistEntity eyestraps ON eyestraps.id.ppid = z.ppId ")
+				.append(" AND eyestraps.id.ppctr = z.ppCtr ")
+				.append(" AND eyestraps.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND eyestraps.id.atrid = :eyestraps ")
+				.append(" LEFT JOIN PpInspChecklistEntity surface ON surface.id.ppid = z.ppId ")
+				.append(" AND surface.id.ppctr = z.ppCtr ")
+				.append(" AND surface.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND surface.id.atrid = :surface ")
+				.append(" LEFT JOIN PpInspChecklistEntity manualmarking ON manualmarking.id.ppid = z.ppId ")
+				.append(" AND manualmarking.id.ppctr = z.ppCtr ")
+				.append(" AND manualmarking.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND manualmarking.id.atrid = :manualmarking ")
+				.append(" LEFT JOIN HrCoilOutputEntity pdo ON pdo.id.coilid = z.ppId ").append(" WHERE 1=1 ")
+				.append(" AND (:solid IS NULL OR z.solId = :solid) ").append(" AND (:soid IS NULL OR z.soId = :soid) ")
+				.append(" AND (:fromDate IS NULL OR z.crDt >= :fromDate) ")
+				.append(" AND (:toDate IS NULL OR z.crDt <= :toDate) ")
+				.append(" AND ( (:coilIdFrom IS NULL AND :coilIdTo IS NULL) ")
+				.append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(z.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+				.append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(z.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)) ) ");
+		return query.toString();
+	}
+
+	public String getMainOnlineInspQueryCount(String status) {
+
+		StringBuilder countQuery = new StringBuilder();
+
+		countQuery.append("SELECT COUNT(z.id) ").append(" FROM QualityScheduleLinesEntity z ")
+				.append(" JOIN PostProdTaskMtEntity task ON task.id.ppId = z.ppId ")
+				.append(" AND task.id.ppCtr = z.ppCtr ").append(" AND task.tpiRequired = :hsmQc ")
+				.append(" AND task.taskStatus = :status ").append(" AND task.latestFlag = 'Y' ")
+
+				.append(" JOIN PostProdTaskMtEntity onlineInsp ON onlineInsp.id.ppId = z.ppId ")
+				.append(" AND onlineInsp.id.ppCtr = z.ppCtr ").append(" AND onlineInsp.tpiRequired = :onlineInsp ")
+				.append(" AND onlineInsp.taskStatus = :status ").append(" AND onlineInsp.latestFlag = 'Y' ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity waviness ON waviness.id.ppid = z.ppId ")
+				.append(" AND waviness.id.ppctr = z.ppCtr ")
+				.append(" AND waviness.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND waviness.id.atrid = :waviness ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity burs ON burs.id.ppid = z.ppId ")
+				.append(" AND burs.id.ppctr = z.ppCtr ").append(" AND burs.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND burs.id.atrid = :burs ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity circumst ON circumst.id.ppid = z.ppId ")
+				.append(" AND circumst.id.ppctr = z.ppCtr ")
+				.append(" AND circumst.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND circumst.id.atrid = :circumst ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity stickers ON stickers.id.ppid = z.ppId ")
+				.append(" AND stickers.id.ppctr = z.ppCtr ")
+				.append(" AND stickers.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND stickers.id.atrid = :stickers ")
+				.append(" LEFT JOIN PpInspChecklistEntity telescopicity ON telescopicity.id.ppid = z.ppId ")
+				.append(" AND telescopicity.id.ppctr = z.ppCtr ")
+				.append(" AND telescopicity.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND telescopicity.id.atrid = :telescopicity ")
+				.append(" LEFT JOIN PpInspChecklistEntity eyestraps ON eyestraps.id.ppid = z.ppId ")
+				.append(" AND eyestraps.id.ppctr = z.ppCtr ")
+				.append(" AND eyestraps.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND eyestraps.id.atrid = :eyestraps ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity surface ON surface.id.ppid = z.ppId ")
+				.append(" AND surface.id.ppctr = z.ppCtr ")
+				.append(" AND surface.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND surface.id.atrid = :surface ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity manualmarking ON manualmarking.id.ppid = z.ppId ")
+				.append(" AND manualmarking.id.ppctr = z.ppCtr ")
+				.append(" AND manualmarking.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND manualmarking.id.atrid = :manualmarking ")
+
+				.append(" LEFT JOIN HrCoilOutputEntity pdo ON pdo.id.coilid = z.ppId ")
+
+				.append(" WHERE 1=1 ")
+
+				.append(" AND (:solid IS NULL OR z.solId = :solid) ").append(" AND (:soid IS NULL OR z.soId = :soid) ")
+				.append(" AND (:fromDate IS NULL OR z.crDt >= :fromDate) ")
+				.append(" AND (:toDate IS NULL OR z.crDt <= :toDate) ")
+
+				.append(" AND ( (:coilIdFrom IS NULL AND :coilIdTo IS NULL) ")
+				.append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(z.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+				.append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(z.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)) )");
+
+		return countQuery.toString();
+	}
+
+	@SuppressWarnings("squid:S107")
+	private <T> T handleGroupWithFilterOrSort(HsmOnlineInspectionRequestDto request, List<String> groupList,
+			List<String> filterList, List<String> sortList, Integer page, Integer size, Integer skip,
+			boolean requireTotalCount, String status, Integer pageStore, Integer latestGroupCounts) {
+		if (requireTotalCount && size == null) {
+			size = pageStore;
+		} else {
+			size = page + size;
+			page = 0;
+		}
+
+		String queryForGrouping = getOnlineInspQueryForGroupingAndFiltering(groupList, filterList, status);
+
+		String queryForGroupingAndFilteringCount = getOnlineInspQueryForGroupingAndFilteringCount(groupList, filterList,
+				sortList, status);
+
+		String mainCountQuery = getMainOnlineInspQueryCount(status);
+
+		Long mainQueryCount = hsmOnlineInspectionRepository.getMainOnlineInspQueryCount(request, mainCountQuery,
+				status);
+		Page<Object[]> groupingListData = hsmOnlineInspectionRepository.getGroupingListData(queryForGrouping,
+				queryForGroupingAndFilteringCount, page, size, skip, request, status);
+		Long totalDistCount = hsmOnlineInspectionRepository.groupCountQuery(queryForGroupingAndFilteringCount, request,
+				status);
+		groupingListData.getContent().parallelStream().forEach(row -> {
+			Object schdSeqObj = row[1]; // assuming schdSeqId is at index 0
+			long schdSeqId = schdSeqObj != null ? (long) schdSeqObj : null;
+
+			HsmOnlineInspCoilDto dto = new HsmOnlineInspCoilDto();
+			dto.setSchdSeqId(schdSeqId);
+
+			boolean isSeqValid = DownCoilerValidationUtil.checkNumber(dto.getSchdSeqId());
+//		    dto.setInspFlag(isSeqValid ? "YES" : "");
+			int lastIndex = row.length - 1;
+			row[lastIndex] = isSeqValid ? "YES" : "";
+		});
+		return buildGroupedDataResponse(groupingListData, mainQueryCount,
+				(totalDistCount != null && totalDistCount != 0) ? totalDistCount : latestGroupCounts);
+
+	}
+
+	public String getOnlineInspQueryForGroupingAndFiltering(List<String> groupList, List<String> filterList,
+			String status) {
+
+		String groupColumn = groupList.get(1);
+		String desc = groupList.get(3);
+
+		StringBuilder query = new StringBuilder();
+
+		query.append("SELECT ").append(checkClassAleas().get(groupColumn)).append(" ,COUNT(*) ")
+		
+				.append(" FROM QualityScheduleLinesEntity z ")
+				.append(" JOIN PostProdTaskMtEntity task ON task.id.ppId = z.ppId ")
+				.append(" AND task.id.ppCtr = z.ppCtr ").append(" AND task.tpiRequired = :hsmQc ")
+				.append(" AND task.taskStatus = :status ").append(" AND task.latestFlag = 'Y' ")
+				.append(" JOIN PostProdTaskMtEntity onlineInsp ON onlineInsp.id.ppId = z.ppId ")
+				.append(" AND onlineInsp.id.ppCtr = z.ppCtr ").append(" AND onlineInsp.tpiRequired = :onlineInsp ")
+				.append(" AND onlineInsp.taskStatus = :status ").append(" AND onlineInsp.latestFlag = 'Y' ")
+
+				// original 8 checklist joins
+				.append(" LEFT JOIN PpInspChecklistEntity waviness ON waviness.id.ppid = z.ppId ")
+				.append(" AND waviness.id.ppctr = z.ppCtr ")
+				.append(" AND waviness.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND waviness.id.atrid = :waviness ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity burs ON burs.id.ppid = z.ppId ")
+				.append(" AND burs.id.ppctr = z.ppCtr ").append(" AND burs.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND burs.id.atrid = :burs ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity circumst ON circumst.id.ppid = z.ppId ")
+				.append(" AND circumst.id.ppctr = z.ppCtr ")
+				.append(" AND circumst.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND circumst.id.atrid = :circumst ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity stickers ON stickers.id.ppid = z.ppId ")
+				.append(" AND stickers.id.ppctr = z.ppCtr ")
+				.append(" AND stickers.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND stickers.id.atrid = :stickers ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity telescopicity ON telescopicity.id.ppid = z.ppId ")
+				.append(" AND telescopicity.id.ppctr = z.ppCtr ")
+				.append(" AND telescopicity.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND telescopicity.id.atrid = :telescopicity ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity eyestraps ON eyestraps.id.ppid = z.ppId ")
+				.append(" AND eyestraps.id.ppctr = z.ppCtr ")
+				.append(" AND eyestraps.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND eyestraps.id.atrid = :eyestraps ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity surface ON surface.id.ppid = z.ppId ")
+				.append(" AND surface.id.ppctr = z.ppCtr ")
+				.append(" AND surface.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND surface.id.atrid = :surface ")
+
+				.append(" LEFT JOIN PpInspChecklistEntity manualmarking ON manualmarking.id.ppid = z.ppId ")
+				.append(" AND manualmarking.id.ppctr = z.ppCtr ")
+				.append(" AND manualmarking.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND manualmarking.id.atrid = :manualmarking ")
+				.append(" LEFT JOIN HrCoilOutputEntity pdo ON pdo.id.coilid = z.ppId ")
+
+				// filters
+				.append(" WHERE 1=1 ").append(" AND (:solid IS NULL OR z.solId = :solid) ")
+				.append(" AND (:soid IS NULL OR z.soId = :soid) ")
+				.append(" AND (:fromDate IS NULL OR z.crDt >= :fromDate) ")
+				.append(" AND (:toDate IS NULL OR z.crDt <= :toDate) ")
+
+				.append(" AND ( (:coilIdFrom IS NULL AND :coilIdTo IS NULL) ")
+				.append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(z.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+				.append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(z.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)) ) ");
+		String finalQuery = query.toString();
+
+		if (!filterList.isEmpty()) {
+			finalQuery = filterQueryUsingFilterList(filterList, finalQuery);
+		}
+
+		finalQuery += " GROUP BY " + checkClassAleas().get(groupColumn);
+		finalQuery += " ORDER BY " + checkClassAleas().get(groupColumn);
+
+		if ("true".equals(desc)) {
+			finalQuery += " DESC";
+		}
+
+		return finalQuery;
+	}
+
+	public String filterQueryUsingFilterList(List<String> filterList, String query) {
+
+	    StringBuilder queryBuilder = new StringBuilder(query).append(" AND (");
+
+	    List<String> columnNames =
+	            DevExtGridFilterUtils.getAllFields(HsmOnlineInspCoilDto.class);
+
+	    Map<String, String> columnDataTypesKeyValuePair =
+	            DevExtGridFilterUtils.getAllFieldsWithTypes(HsmOnlineInspCoilDto.class);
+
+	    Map<String, String> columnAlise = checkClassAleas();
+
+	    boolean isClobObject = false;
+	    boolean isStringObject = false;
+	    boolean isDateObject = false;
+	    boolean isContains = false;
+	    boolean isNotContains = false;
+	    boolean isStartWith = false;
+	    boolean isEndWith = false;
+	    boolean isNullCheck = false;
+	    boolean isDateString = false;
+
+	    for (int i = 0; i < filterList.size(); i++) {
+
+	        String item = filterList.get(i);
+
+	        /* ================= COLUMN NAME ================= */
+	        if (columnNames.contains(item)) {
+
+	            String dataType = columnDataTypesKeyValuePair.get(item);
+
+	            if ("CLOB".equals(dataType)) {
+
+	                queryBuilder.append(" DBMS_LOB.INSTR(")
+	                            .append(columnAlise.get(item))
+	                            .append(",");
+	                isClobObject = true;
+
+	            } else if ("DATE".equals(dataType)) {
+
+	                queryBuilder.append(" TO_CHAR(")
+	                            .append(columnAlise.get(item))
+	                            .append(", 'YYYY-MM-DD') ");
+	                isDateObject = true;
+
+	            } else if ("dischargingDate".equals(item)) {
+
+	                queryBuilder.append(" TO_DATE(SUBSTR(")
+	                            .append(columnAlise.get(item))
+	                            .append(",1,8),'YYYYMMDD') ");
+	                isDateString = true;
+
+	            } else if ("VARCHAR2".equals(dataType)) {
+
+	                // 🔥 CASE-INSENSITIVE FIX
+	                queryBuilder.append(" UPPER(")
+	                            .append(columnAlise.get(item))
+	                            .append(") ");
+
+	                int columnIndex = findIndexOfKey(filterList, item, i);
+	                if ("null".equals(filterList.get(columnIndex + 2))) {
+	                    isNullCheck = true;
+	                }
+
+	                isStringObject = true;
+
+	            } else {
+	                queryBuilder.append(columnAlise.get(item));
+	            }
+
+	        }
+
+	        /* ================= NULL CHECK ================= */
+	        else if (isNullCheck) {
+	            queryBuilder.append(" IS NULL ");
+	            isNullCheck = false;
+	            isStringObject = false;
+	            i++;
+	        }
+
+	        /* ================= DATE STRING ================= */
+	        else if (isDateString) {
+
+	            if (item.matches("\\d{4}-\\d{2}-\\d{2}T.*Z")) {
+	                try {
+	                    Instant instant = Instant.parse(item);
+	                    LocalDate localDate =
+	                            instant.atZone(ZoneId.systemDefault()).toLocalDate();
+	                    String dateOnly =
+	                            localDate.format(DateTimeFormatter.BASIC_ISO_DATE);
+
+	                    queryBuilder.append(" TO_DATE('")
+	                                .append(dateOnly)
+	                                .append("','YYYYMMDD') ");
+	                } catch (Exception e) {
+	                    queryBuilder.append(" '").append(item).append("' ");
+	                }
+	                isDateString = false;
+	                continue;
+	            }
+
+	            queryBuilder.append(" ").append(item).append(" ");
+	        }
+
+	        /* ================= OPERATORS ================= */
+	        else if (item.equals(CONTAINS) || item.equals(NOTCONTAINS)
+	                || item.equals(STARTSWITH) || item.equals(ENDSWITH)) {
+
+	            if (isDateObject) {
+	                queryBuilder.append(" LIKE ");
+	            } else if (!isClobObject) {
+
+	                if (item.equals(CONTAINS)) {
+	                    queryBuilder.append(" LIKE ");
+	                    isContains = true;
+	                } else if (item.equals(NOTCONTAINS)) {
+	                    queryBuilder.append(" NOT LIKE ");
+	                    isNotContains = true;
+	                } else if (item.equals(STARTSWITH)) {
+	                    queryBuilder.append(" LIKE ");
+	                    isStartWith = true;
+	                } else if (item.equals(ENDSWITH)) {
+	                    queryBuilder.append(" LIKE ");
+	                    isEndWith = true;
+	                }
+	            }
+	        }
+
+	        /* ================= LOGICAL OPS ================= */
+	        else if ("and".equals(item) || "or".equals(item)) {
+	            if ("and".equals(item)) {
+	                queryBuilder.append(" ) AND ( ");
+	            } else {
+	                queryBuilder.append(" OR ");
+	            }
+	        }
+
+	        /* ================= COMPARISON OPS ================= */
+	        else if (item.matches("=|<>|>=|<=|<|>")) {
+	            queryBuilder.append(" ").append(item).append(" ");
+	        }
+
+	        /* ================= VALUES ================= */
+	        else {
+
+	            if (isClobObject) {
+	                queryBuilder.append("'")
+	                            .append(item)
+	                            .append("') > 0 ");
+	                isClobObject = false;
+	            }
+
+	            else if (isStringObject) {
+
+	                String value = item.trim().toUpperCase(); // 🔥 FIX
+
+	                if (isContains) {
+	                    queryBuilder.append(" '%").append(value).append("%' ");
+	                    isContains = false;
+	                } else if (isNotContains) {
+	                    queryBuilder.append(" '%").append(value).append("%' ");
+	                    isNotContains = false;
+	                } else if (isStartWith) {
+	                    queryBuilder.append(" '").append(value).append("%' ");
+	                    isStartWith = false;
+	                } else if (isEndWith) {
+	                    queryBuilder.append(" '%").append(value).append("' ");
+	                    isEndWith = false;
+	                } else {
+	                    queryBuilder.append(" '").append(value).append("' ");
+	                }
+
+	                isStringObject = false;
+	            }
+
+	            else if (isDateObject) {
+
+	                LocalDate localDate;
+
+	                if (item.matches("\\d{4}/\\d{2}/\\d{2}")) {
+	                    localDate =
+	                            LocalDate.parse(item,
+	                                    DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+	                } else {
+	                    OffsetDateTime odt =
+	                            OffsetDateTime.parse(item.replace(" ", "+"));
+	                    localDate = odt.toLocalDate();
+	                }
+
+	                queryBuilder.append(" '").append(localDate).append("' ");
+	                isDateObject = false;
+	            }
+
+	            else {
+	                queryBuilder.append(" ").append(item).append(" ");
+	            }
+	        }
+	    }
+
+	    queryBuilder.append(" )");
+
+	    return queryBuilder.toString();
+	}
+
+	public int findIndexOfKey(List<String> list, String key, int targetIndex) {
+		int count = 0;
+		for (int i = 0; i < list.size(); i++) {
+			if (list.get(i).equals(key)) {
+				if (count == targetIndex) {
+					return i;
+				}
+				count++;
+			}
+		}
+		return targetIndex;
+	}
+
+	public String getOnlineInspQueryForGroupingAndFilteringCount(List<String> groupList, List<String> filterList,
+			List<String> sortList, String status) {
+
+		String filterQueryUsingFilterList = null;
+		String groupColumn = groupList.get(1);
+
+		StringBuilder query = new StringBuilder();
+
+		query.append("SELECT COUNT(DISTINCT ").append(checkClassAleas().get(groupColumn)).append(") ")
+
+				.append(" FROM QualityScheduleLinesEntity z ")
+				.append(" JOIN PostProdTaskMtEntity task ON task.id.ppId = z.ppId ")
+				.append(" AND task.id.ppCtr = z.ppCtr ").append(" AND task.tpiRequired = :hsmQc ")
+				.append(" AND task.taskStatus = :status ").append(" AND task.latestFlag = 'Y' ")
+				.append(" JOIN PostProdTaskMtEntity onlineInsp ON onlineInsp.id.ppId = z.ppId ")
+				.append(" AND onlineInsp.id.ppCtr = z.ppCtr ").append(" AND onlineInsp.tpiRequired = :onlineInsp ")
+				.append(" AND onlineInsp.taskStatus = :status ").append(" AND onlineInsp.latestFlag = 'Y' ")
+				.append(" LEFT JOIN PpInspChecklistEntity waviness ON waviness.id.ppid = z.ppId ")
+				.append(" AND waviness.id.ppctr = z.ppCtr ")
+				.append(" AND waviness.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND waviness.id.atrid = :waviness ")
+				.append(" LEFT JOIN PpInspChecklistEntity burs ON burs.id.ppid = z.ppId ")
+				.append(" AND burs.id.ppctr = z.ppCtr ").append(" AND burs.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND burs.id.atrid = :burs ")
+				.append(" LEFT JOIN PpInspChecklistEntity circumst ON circumst.id.ppid = z.ppId ")
+				.append(" AND circumst.id.ppctr = z.ppCtr ")
+				.append(" AND circumst.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND circumst.id.atrid = :circumst ")
+				.append(" LEFT JOIN PpInspChecklistEntity stickers ON stickers.id.ppid = z.ppId ")
+				.append(" AND stickers.id.ppctr = z.ppCtr ")
+				.append(" AND stickers.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND stickers.id.atrid = :stickers ")
+				.append(" LEFT JOIN PpInspChecklistEntity telescopicity ON telescopicity.id.ppid = z.ppId ")
+				.append(" AND telescopicity.id.ppctr = z.ppCtr ")
+				.append(" AND telescopicity.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND telescopicity.id.atrid = :telescopicity ")
+				.append(" LEFT JOIN PpInspChecklistEntity eyestraps ON eyestraps.id.ppid = z.ppId ")
+				.append(" AND eyestraps.id.ppctr = z.ppCtr ")
+				.append(" AND eyestraps.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND eyestraps.id.atrid = :eyestraps ")
+				.append(" LEFT JOIN PpInspChecklistEntity surface ON surface.id.ppid = z.ppId ")
+				.append(" AND surface.id.ppctr = z.ppCtr ")
+				.append(" AND surface.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND surface.id.atrid = :surface ")
+				.append(" LEFT JOIN PpInspChecklistEntity manualmarking ON manualmarking.id.ppid = z.ppId ")
+				.append(" AND manualmarking.id.ppctr = z.ppCtr ")
+				.append(" AND manualmarking.id.taskstepid = onlineInsp.id.taskstepId ")
+				.append(" AND manualmarking.id.atrid = :manualmarking ")
+				.append(" LEFT JOIN HrCoilOutputEntity pdo ON pdo.id.coilid = z.ppId ").append(" WHERE 1=1 ")
+				.append(" AND (:solid IS NULL OR z.solId = :solid) ").append(" AND (:soid IS NULL OR z.soId = :soid) ")
+				.append(" AND (:fromDate IS NULL OR z.crDt >= :fromDate) ")
+				.append(" AND (:toDate IS NULL OR z.crDt <= :toDate) ")
+				.append(" AND ( (:coilIdFrom IS NULL AND :coilIdTo IS NULL) ")
+				.append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NULL AND TO_NUMBER(TRIM(z.ppId)) = TO_NUMBER(TRIM(:coilIdFrom))) ")
+				.append(" OR (:coilIdFrom IS NOT NULL AND :coilIdTo IS NOT NULL AND TO_NUMBER(TRIM(z.ppId)) BETWEEN TO_NUMBER(:coilIdFrom) AND TO_NUMBER(:coilIdTo)) ) ");
+
+		// Assign base query
+		filterQueryUsingFilterList = query.toString();
+
+		// Add dynamic filters
+		if (!filterList.isEmpty()) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList(filterList, filterQueryUsingFilterList);
+		}
+
+		return filterQueryUsingFilterList;
+	}
+
+	private <T> T handleFilterOrSort(HsmOnlineInspectionRequestDto request, List<String> filterList,
+			List<String> sortList, Integer page, Integer size, Integer skip, boolean requireTotalCount, String status,
+			Integer pageStore, Integer latestGroupCount) {
+
+		if (!requireTotalCount) {
+			size = page + size;
+			page = 0;
+		}
+	
+		String query = hsmOnlineInspectionRepository.getAllPaginatedOnlCoilInString();
+		String countQuery = getMainOnlineInspQueryCount(status);
+		if (!filterList.isEmpty()) {
+			query = filterQueryUsingFilterList(filterList, query);
+			countQuery = filterQueryUsingFilterList(filterList, countQuery);
+		}
+
+		query = applySorting(sortList, query);
+		Page<HsmOnlineInspCoilDto> processInsp = hsmOnlineInspectionRepository.getOnlineInsp(request, status, page,
+				size, query, countQuery, skip);
+
+		processInsp.getContent().parallelStream().forEach(onlineInspectionCoilDto -> {
+			boolean isSeqValid = DownCoilerValidationUtil.checkNumber(onlineInspectionCoilDto.getSchdSeqId());
+			onlineInspectionCoilDto.setInspFlag(isSeqValid ? "YES" : "");
+		});
+
+		return (T) new FluentaPaginatedResponse<>(processInsp.getContent(), processInsp.getTotalElements());
+	}
+
+	private String applySorting(List<String> sortList, String query) {
+		if (!sortList.isEmpty()) {
+			Map<String, String> columnAlias = checkClassAleasWithNoStop();
+			if (sortList.get(3).equals("true")) {
+				query += QualityConstants.ORDER_BY + columnAlias.get(sortList.get(1)) + QualityConstants.DESC;
+			} else {
+				query += QualityConstants.ORDER_BY + columnAlias.get(sortList.get(1));
+			}
+		}
+
+		return query;
+	}
+
+	public Map<String, String> checkClassAleasWithNoStop() {
+		Map<String, String> fieldTypes = new HashMap<>();
+		fieldTypes.put("ppId", "z.ppId");
+		fieldTypes.put("parentPpId", "z.parentPpId");
+		fieldTypes.put("heatId", "z.heatId");
+		fieldTypes.put("extGrdNm", "z.extGrdNm");
+		fieldTypes.put("grdId", "z.grdId");
+		fieldTypes.put("wavinessFlag", "waviness.insprslt ");
+		fieldTypes.put("bursFlag", "burs.insprslt");
+		fieldTypes.put("circumstFlag", "circumst.insprslt");
+		fieldTypes.put("stickersFlag", "stickers.insprslt");
+		fieldTypes.put("telescopicityFlag", "telescopicity.insprslt");
+		fieldTypes.put("eyestrapsFlag", "eyestraps.insprslt");
+		fieldTypes.put("surfaceFlag", "surface.insprslt");
+		fieldTypes.put("manualmarkingFlag", "manualmarking.insprslt");
+		fieldTypes.put("finalresult", "pdo.coilEntryInspLineFlg");
+		fieldTypes.put("inspFlag", "pdo.actCoilerNum");
+		fieldTypes.put("coilEntryInspLineFlg", "pdo.coilEntryInspLineFlg");
+		fieldTypes.put("soItemNo", "CONCAT(z.soId, '-', z.solId)");
+		fieldTypes.put("custNm", "z.custNm");
+		fieldTypes.put("tdcId", "z.tdcId");
+		fieldTypes.put("schdId", "z.id.schdId");
+		fieldTypes.put("schdSeqId", "z.id.schdSeqId");
+		fieldTypes.put("crDt", "z.crDt");
+
+		return fieldTypes;
+	}
+
+}

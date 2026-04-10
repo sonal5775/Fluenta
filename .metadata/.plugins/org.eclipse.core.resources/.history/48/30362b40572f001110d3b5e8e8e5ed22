@@ -1,0 +1,364 @@
+package com.hindindustec.fluenta.hsm.masters.common;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.regex.Pattern;
+
+public class DevExtGridFilterUtils {
+    private static final Logger LOGGER = LoggerFactory.getLogger(DevExtGridFilterUtils.class);
+
+    private DevExtGridFilterUtils() {
+
+    }
+
+    public static String extractFilterValue(String queryString) {
+        if (queryString == null) {
+            return null; // Early exit if queryString is null
+        }
+
+        String prefix = OfsConstants.FILTER;
+        String suffix = "&";
+
+        // Check if queryString contains 'filter' parameter
+        if (!queryString.contains(prefix)) {
+            return null; // 'filter' parameter not found
+        }
+
+        // Find the start index of the 'filter' parameter
+        int startIndex = queryString.indexOf(prefix);
+        if (startIndex == -1) {
+            return null; // 'filter' parameter not found
+        }
+
+        // Adjust startIndex to the actual start of the value
+        startIndex += prefix.length();
+
+        // Find the end index of the 'filter' parameter value
+        int endIndex = queryString.indexOf(suffix, startIndex);
+        if (endIndex == -1) {
+            endIndex = queryString.length(); // 'filter' parameter is the last one
+        }
+
+        // Extract the value of the 'filter' parameter
+        return queryString.substring(startIndex, endIndex);
+    }
+
+    public static String listToJsonString(List<Object> list) throws JsonProcessingException {
+        ObjectMapper mapper = new ObjectMapper();
+        return mapper.writeValueAsString(list);
+    }
+
+    public static List<String> extractElements(String jsonString) {
+
+        List<String> result = new ArrayList<>();
+        if (jsonString != null) {
+            StringBuilder sb = new StringBuilder();
+            boolean inQuotes = false;
+
+            for (int i = 0; i < jsonString.length(); i++) {
+                char c = jsonString.charAt(i);
+
+                if (c == '"') {
+                    inQuotes = !inQuotes; // Toggle the inQuotes flag
+                    toggleInQuotes(result, sb, inQuotes);
+                } else if (inQuotes) {
+                    sb.append(c);
+                } else if (Character.isLetterOrDigit(c) || c == '.' || c == '-' || c == '_') {
+                    sb.append(c);
+                } else if (sb.length() > 0) {
+                    result.add(sb.toString());
+                    sb.setLength(0); // Clear the StringBuilder
+                }
+            }
+
+            if (sb.length() > 0) {
+                result.add(sb.toString()); // Add remaining buffer if any
+            }
+
+        }
+        return result;
+    }
+
+    private static void toggleInQuotes(List<String> result, StringBuilder sb, boolean inQuotes) {
+        if (!inQuotes && sb.length() > 0) {
+            result.add(sb.toString());
+            sb.setLength(0); // Clear the StringBuilder
+        }
+    }
+
+    public static List<String> getSortListFromString(String sort) {
+
+        List<String> resultList = new ArrayList<>();
+        if (sort != null) {
+            String cleanedInput = sort.replaceAll("[\\[\\]{}]", "");
+
+            String[] parts = cleanedInput.split(",");
+
+            for (String part : parts) {
+                String[] keyValue = part.split(":");
+                for (String element : keyValue) {
+                    resultList.add(element.replace("\"", "").trim());
+                }
+            }
+
+
+        }
+        return resultList;
+    }
+
+    public static boolean isNumberOrStringCheck(String str) {
+        Pattern numberPattern = Pattern.compile("-?\\d+(\\.\\d+)?");
+        if (str == null || str.isEmpty()) {
+            return false;
+        }
+        return numberPattern.matcher(str).matches();
+    }
+
+    public static String urlDecoderForFilter(String tempFilter, StringBuilder requestURL, String queryString) throws JsonProcessingException {
+
+        LOGGER.info("In the urlDecoderForFilter : {}", requestURL);
+        String s = DevExtGridFilterUtils.extractFilterValue(queryString);
+        String filterPathString = null;
+        if (s != null) {
+            String decodedFilter = "";
+            try {
+                decodedFilter = URLDecoder.decode(tempFilter, OfsConstants.UTF_8);
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+
+            ObjectMapper mapper = new ObjectMapper();
+
+            if (decodedFilter != null) {
+                JsonNode rootNode = mapper.readTree(decodedFilter);
+
+                List<Object> flattenedList = new ArrayList<>();
+                flattenJson(rootNode, flattenedList);
+
+                String flattenedJsonString = listToJsonString(flattenedList);
+                filterPathString = flattenedJsonString;
+            }
+        }
+        return filterPathString;
+    }
+
+    public static void flattenJson(JsonNode node, List<Object> flatList) {
+        if (node.isArray()) {
+            for (JsonNode element : node) {
+                flattenJson(element, flatList);
+            }
+        } else {
+            if (node.isTextual()) {
+                flatList.add(node.textValue());
+            } else if (node.isNumber()) {
+                flatList.add(node.numberValue());
+            } else if (node.isBoolean()) {
+                flatList.add(node.booleanValue());
+            }
+        }
+    }
+
+    public static List<String> getAllFields(Class<?> clazz) {
+        List<String> fieldNames = new ArrayList<>();
+        Field[] fields = clazz.getDeclaredFields();
+
+        for (Field field : fields) {
+            fieldNames.add(field.getName());
+        }
+
+        return fieldNames;
+    }
+
+    public static Map<String, String> getAllFieldsWithTypes(Class<?> clazz) {
+        Map<String, String> fieldMap = new HashMap<>();
+        Field[] fields = clazz.getDeclaredFields();
+
+        for (Field field : fields) {
+            String fieldType;
+            if (field.getType().equals(String.class)) {
+                fieldType = "VARCHAR2";
+            } else if (field.getType().equals(int.class) || field.getType().equals(Integer.class) ||
+                    field.getType().equals(long.class) || field.getType().equals(Long.class) ||
+                    field.getType().equals(float.class) || field.getType().equals(Float.class) ||
+                    field.getType().equals(double.class) || field.getType().equals(Double.class) ||
+                    field.getType().equals(BigDecimal.class) ||
+                    field.getType().equals(short.class) || field.getType().equals(Short.class) ||
+                    field.getType().equals(byte.class) || field.getType().equals(Byte.class)) {
+                fieldType = "NUMBER";
+            } else if (field.getType().equals(Date.class) || field.getType().equals(java.sql.Date.class) ||
+                    field.getType().equals(java.sql.Timestamp.class)) {
+                fieldType = "DATE";
+            } else {
+                fieldType = "UNKNOWN"; // Default value for types not specified
+            }
+            fieldMap.put(field.getName(), fieldType);
+        }
+
+        return fieldMap;
+    }
+
+    public static List<String> removeNumberFieldsFromString(List<String> listForFilter, Class<?> clazz) {
+
+        List<String> columnNames = getAllFields(clazz);
+
+        Map<String, String> columnDataTypesKeyValuePair = getAllFieldsWithTypes(clazz);
+
+
+        List<String> updatedList = new ArrayList<>(listForFilter);
+        Iterator<String> iterator = updatedList.iterator();
+
+        while (iterator.hasNext()) {
+            String field = iterator.next();
+            boolean isRemove = false;
+
+            // Check if field matches the condition
+            if (columnNames.contains(field) &&
+                    "NUMBER".equals(columnDataTypesKeyValuePair.get(field))) {
+                iterator.remove();  // Remove the current field
+                isRemove = true;
+            }
+
+            // If a field is removed, remove the next two elements
+            if (isRemove) {
+                for (int i = 0; i < 3; i++) {
+                    if (iterator.hasNext()) {
+                        iterator.next();
+                        iterator.remove();
+                    }
+                }
+            }
+        }
+
+        return updatedList;
+    }
+
+    public static String urlDecoderForFilter(String tempFilter, String queryString) throws JsonProcessingException {
+        String s = DevExtGridFilterUtils.extractFilterValue(queryString);
+        String filterPathString = null;
+        if (s != null) {
+            String decodedFilter = "";
+            try {
+                decodedFilter = URLDecoder.decode(tempFilter, OfsConstants.UTF_8);
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+
+            }
+            ObjectMapper mapper = new ObjectMapper();
+
+            if (decodedFilter != null) {
+                JsonNode rootNode = mapper.readTree(decodedFilter);
+
+                List<Object> flattenedList = new ArrayList<>();
+                flattenJson(rootNode, flattenedList);
+
+                String flattenedJsonString = listToJsonString(flattenedList);
+                filterPathString = flattenedJsonString;
+            }
+        }
+        return filterPathString;
+    }
+
+    public static String decodeFilter(String filter, String queryString) throws UnsupportedEncodingException {
+        if (filter == null) {
+            return null;
+        }
+
+        String temp = decodeFunctionForFilter(queryString);
+        String decodedFilter = URLDecoder.decode(temp, "UTF-8");
+        return URLDecoder.decode(decodedFilter, "UTF-8");
+    }
+
+    public static String decodeFunctionForFilter(String queryString) {
+        // Extract the part after "group="
+        String groupValue = null;
+        if (queryString.contains(OfsConstants.FILTER)) {
+            int startIndex = queryString.indexOf("filter=") + "filter=".length();
+            int endIndex = queryString.indexOf('&', startIndex);
+            if (endIndex == -1) {
+                groupValue = queryString.substring(startIndex);
+            } else {
+                groupValue = queryString.substring(startIndex, endIndex);
+            }
+        }
+
+        // Decode the group value
+        if (groupValue != null) {
+        	return URLDecoder.decode(groupValue, StandardCharsets.UTF_8);
+        } else {
+            return null;
+        }
+    }
+
+    public static String decodeGroup(String group, String queryString) throws UnsupportedEncodingException {
+        if (group == null) {
+            return null;
+        }
+
+        String firstDecode = decodeFunctionForGroup(queryString);
+        String decodedGroup = URLDecoder.decode(firstDecode, "UTF-8");
+
+        return decodedGroup != null ? decodedGroup : group;
+    }
+
+    public static String decodeFunctionForGroup(String queryString) {
+        // Extract the part after "group="
+        String groupValue = null;
+        if (queryString.contains("group=")) {
+            int startIndex = queryString.indexOf("group=") + "group=".length();
+            int endIndex = queryString.indexOf('&', startIndex);
+            if (endIndex == -1) {
+                groupValue = queryString.substring(startIndex);
+            } else {
+                groupValue = queryString.substring(startIndex, endIndex);
+            }
+        }
+
+        // Decode the group value
+        if (groupValue != null) {
+        	return URLDecoder.decode(groupValue, StandardCharsets.UTF_8);
+
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Check if the request is for grouping without filter or sort.
+     */
+    public static boolean isGroupWithoutFilterOrSort(String group, String filterPathString, String sort) {
+        return group != null && filterPathString == null && sort == null;
+    }
+
+    /**
+     * Check if the request is for grouping with filter or sort.
+     */
+    public static boolean isGroupWithFilterOrSort(String group, String filterPathString, String sort) {
+        return group != null && (filterPathString != null || sort != null);
+    }
+
+    /**
+     * Check if the request is for filter or sort only.
+     */
+    public static boolean isFilterOrSortOnly(String group, String filterPathString, String sort) {
+        return group == null && ((filterPathString != null || sort != null) || (filterPathString == null && sort == null));
+    }
+    
+    public static int[] processPageAndSize(Integer pageNumber, Integer pageSize, Integer pageStore) {
+	    if (pageNumber == null) {
+	    	pageNumber = 0;
+	    }
+	    if (pageSize == null) {
+	    	pageSize = pageStore;
+	    }
+	    return new int[]{pageNumber, pageSize};
+	}
+}

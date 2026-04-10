@@ -1,0 +1,913 @@
+package com.hindindustec.fluenta.hsm.quality.service.impl;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.quality.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.quality.common.exception.ResourceNotFoundException;
+import com.hindindustec.fluenta.hsm.quality.common.response.FluentaApiResponse;
+import com.hindindustec.fluenta.hsm.quality.common.response.ResponseUtil;
+import com.hindindustec.fluenta.hsm.quality.constants.QualityConstants;
+import com.hindindustec.fluenta.hsm.quality.dto.DimToleranceDto;
+import com.hindindustec.fluenta.hsm.quality.dto.SampleRecieptDropdownData;
+import com.hindindustec.fluenta.hsm.quality.dto.SampleRecieptDto;
+import com.hindindustec.fluenta.hsm.quality.dto.SearchRequest;
+import com.hindindustec.fluenta.hsm.quality.dto.SpecimenGenerationDto;
+import com.hindindustec.fluenta.hsm.quality.model.Inventory;
+import com.hindindustec.fluenta.hsm.quality.model.InventoryPk;
+import com.hindindustec.fluenta.hsm.quality.model.NormHardnessJmEntity;
+import com.hindindustec.fluenta.hsm.quality.model.NormImpactJmEntity;
+import com.hindindustec.fluenta.hsm.quality.model.NormbendJmEntity;
+import com.hindindustec.fluenta.hsm.quality.model.NormdwttJmEntity;
+import com.hindindustec.fluenta.hsm.quality.model.NormhtttJmEntity;
+import com.hindindustec.fluenta.hsm.quality.model.NorminclusionJmEntity;
+import com.hindindustec.fluenta.hsm.quality.model.NormothrtestJmEntity;
+import com.hindindustec.fluenta.hsm.quality.model.NormtensileJmEntity;
+import com.hindindustec.fluenta.hsm.quality.model.NormtestdtlJm;
+import com.hindindustec.fluenta.hsm.quality.model.NormtestdtlJmEntityPK;
+import com.hindindustec.fluenta.hsm.quality.model.NormztestJmEntity;
+import com.hindindustec.fluenta.hsm.quality.model.QualityScheduleLinesEntity;
+import com.hindindustec.fluenta.hsm.quality.model.SampleQualityEntity;
+import com.hindindustec.fluenta.hsm.quality.model.SpecimenQualityTransactionEntity;
+import com.hindindustec.fluenta.hsm.quality.model.TdcJmEntity;
+import com.hindindustec.fluenta.hsm.quality.model.TdcJmEntityPK;
+import com.hindindustec.fluenta.hsm.quality.model.UserGrpCodeDtlEntity;
+import com.hindindustec.fluenta.hsm.quality.repository.ExternalGradeNormBendRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.ExternalGradeNormDwttRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.ExternalGradeNormHardnessRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.ExternalGradeNormHtttRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.ExternalGradeNormImpactRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.ExternalGradeNormInclusionRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.ExternalGradeNormOthrtestRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.ExternalGradeNormTensileRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.ExternalGradeNormZtestRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.NormtestdtlJmRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.PphMtRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.QualityScheduleLineItemRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.SampleQtMasterRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.SampleRecieptRepo;
+import com.hindindustec.fluenta.hsm.quality.repository.SpecimenQualityTransactionRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.TdcJmRepository;
+import com.hindindustec.fluenta.hsm.quality.repository.UserGrpCodeDtlRepository;
+import com.hindindustec.fluenta.hsm.quality.service.SampleRecieptService;
+
+@Service
+public class SampleRecieptServiceimpl implements SampleRecieptService {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(SampleRecieptServiceimpl.class);
+
+	private SampleRecieptRepo sampleRecieptRepo;
+
+	private DBSessionService dbSessionService;
+
+	private SpecimenQualityTransactionRepository specimenQualityTransactionRepository;
+
+	private ExternalGradeNormTensileRepository externalGradeNormTensileRepository;
+
+	private ExternalGradeNormImpactRepository externalGradeNormImpactRepository;
+
+	private ExternalGradeNormHardnessRepository externalGradeNormHardnessRepository;
+
+	private ExternalGradeNormInclusionRepository externalGradeNormInclusionRepository;
+
+	private TdcJmRepository tdcJmRepository;
+
+	private PphMtRepository pphMtRepository;
+
+	private ExternalGradeNormDwttRepository externalGradeNormDwttRepository;
+
+	private ExternalGradeNormZtestRepository externalGradeNormZtestRepository;
+
+	private ExternalGradeNormHtttRepository externalGradeNormHtttRepository;
+
+	private ExternalGradeNormBendRepository externalGradeNormBendRepository;
+
+	private QualityScheduleLineItemRepository qualityScheduleLineItemRepository;
+
+	private ExternalGradeNormOthrtestRepository externalGradeNormOthrtestRepository;
+
+	private NormtestdtlJmRepository normtestdtlJmRepository;
+
+	private SampleQtMasterRepository sampleQtMasterRepository;
+
+	private UserGrpCodeDtlRepository userGrpCodeDtlRepository;
+
+	public SampleRecieptServiceimpl(SampleRecieptRepo sampleRecieptRepo, DBSessionService dbSessionService,
+			SpecimenQualityTransactionRepository specimenQualityTransactionRepository,
+			ExternalGradeNormTensileRepository externalGradeNormTensileRepository,
+			ExternalGradeNormImpactRepository externalGradeNormImpactRepository,
+			ExternalGradeNormHardnessRepository externalGradeNormHardnessRepository,
+			ExternalGradeNormInclusionRepository externalGradeNormInclusionRepository, TdcJmRepository tdcJmRepository,
+			PphMtRepository pphMtRepository, ExternalGradeNormDwttRepository externalGradeNormDwttRepository,
+			ExternalGradeNormZtestRepository externalGradeNormZtestRepository,
+			ExternalGradeNormHtttRepository externalGradeNormHtttRepository,
+			ExternalGradeNormBendRepository externalGradeNormBendRepository,
+			QualityScheduleLineItemRepository qualityScheduleLineItemRepository,
+			ExternalGradeNormOthrtestRepository externalGradeNormOthrtestRepository,
+			NormtestdtlJmRepository normtestdtlJmRepository, SampleQtMasterRepository sampleQtMasterRepository,
+			UserGrpCodeDtlRepository userGrpCodeDtlRepository) {
+		super();
+		this.sampleRecieptRepo = sampleRecieptRepo;
+		this.dbSessionService = dbSessionService;
+		this.specimenQualityTransactionRepository = specimenQualityTransactionRepository;
+		this.externalGradeNormTensileRepository = externalGradeNormTensileRepository;
+		this.externalGradeNormImpactRepository = externalGradeNormImpactRepository;
+		this.externalGradeNormHardnessRepository = externalGradeNormHardnessRepository;
+		this.externalGradeNormInclusionRepository = externalGradeNormInclusionRepository;
+		this.tdcJmRepository = tdcJmRepository;
+		this.pphMtRepository = pphMtRepository;
+		this.externalGradeNormDwttRepository = externalGradeNormDwttRepository;
+		this.externalGradeNormZtestRepository = externalGradeNormZtestRepository;
+		this.externalGradeNormHtttRepository = externalGradeNormHtttRepository;
+		this.externalGradeNormBendRepository = externalGradeNormBendRepository;
+		this.qualityScheduleLineItemRepository = qualityScheduleLineItemRepository;
+		this.externalGradeNormOthrtestRepository = externalGradeNormOthrtestRepository;
+		this.normtestdtlJmRepository = normtestdtlJmRepository;
+		this.sampleQtMasterRepository = sampleQtMasterRepository;
+		this.userGrpCodeDtlRepository = userGrpCodeDtlRepository;
+	}
+
+	@Override
+	public List<SampleRecieptDto> getSampleDetails(SampleRecieptDto sampleRecieptDto) {
+		return sampleRecieptRepo.getSampleDetails(sampleRecieptDto);
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<SpecimenGenerationDto> saveSpecimenGeneration(List<SpecimenGenerationDto> list) {
+		LOGGER.info("Starting the process to save specimen generation details. List size: {}", list.size());
+		LOGGER.info("specimen generation details. List : {}", list);
+		checkListValidity(list);
+		try {
+			dbSessionService.setSessionInfo(this.getClass().getName());
+			for (SpecimenGenerationDto dto : list) {
+				generateSpecimenIdForNonChildParent(dto);
+				if (dto.getSpecimenId() != null && !dto.getSpecimenId().trim().isEmpty()) {
+					processSpecimenUpdate(dto);
+				} else {
+					LOGGER.info("specimen parent child type found : {}", dto);
+					processChildExistingParent(dto);
+				}
+			}
+
+			LOGGER.info("Successfully saved specimen generation details.");
+			return list;
+		} catch (Exception e) {
+			LOGGER.error("Error occurred while saving specimen generation details", e);
+			return list;
+		}
+	}
+
+	private void processChildExistingParent(SpecimenGenerationDto dto) {
+		if (QualityConstants.Z_TEST.equals(dto.getTestType()) || QualityConstants.DWTT.equals(dto.getTestType())
+				|| QualityConstants.IMPACT_CVN.equals(dto.getTestType())
+				|| QualityConstants.IMPACT_CUN.equals(dto.getTestType())) {
+			switch (dto.getTestType()) {
+			case QualityConstants.Z_TEST -> processZTest(dto);
+			case QualityConstants.DWTT -> processDwtt(dto);
+			case QualityConstants.IMPACT_CVN -> processImpact(dto);
+			case QualityConstants.IMPACT_CUN -> processImpact(dto);
+			default -> throw new IllegalArgumentException("Unknown test type: " + dto.getTestType());
+			}
+		}
+	}
+
+	private void generateSpecimenIdForNonChildParent(SpecimenGenerationDto dto) {
+		if ((dto.getSpecimenId() == null || dto.getSpecimenId().trim().isEmpty())
+				&& !(QualityConstants.Z_TEST.equals(dto.getTestType())
+						|| QualityConstants.DWTT.equals(dto.getTestType())
+						|| QualityConstants.IMPACT_CVN.equals(dto.getTestType())
+						|| QualityConstants.IMPACT_CUN.equals(dto.getTestType()))) {
+			LOGGER.info("specimen ID prev : {}", dto.getSpecimenId());
+			specimenIdGeneration(dto);
+		}
+
+	}
+
+	private void processSpecimenUpdate(SpecimenGenerationDto dto) {
+		Optional<SpecimenQualityTransactionEntity> optionalEntity = specimenQualityTransactionRepository
+				.findById(dto.getSpecimenId().trim());
+
+		SpecimenQualityTransactionEntity specimenQualityTransactionEntity = optionalEntity
+				.orElseGet(SpecimenQualityTransactionEntity::new);
+
+		if (optionalEntity.isEmpty()) {
+			BigDecimal newSpecimenCounter = BigDecimal
+					.valueOf(specimenQualityTransactionRepository.findMaxSpecimenCtr(dto.getSampleId()) + 1);
+			specimenQualityTransactionEntity.setSpecimenCounter(newSpecimenCounter);
+		}
+
+		specimenQualityTransactionEntity.setSampleId(dto.getSampleId());
+		specimenQualityTransactionEntity.setSpecimenId(dto.getSpecimenId());
+		specimenQualityTransactionEntity.setSpecification(dto.getSpecification());
+		specimenQualityTransactionEntity.setTestType(dto.getTestType());
+		specimenQualityTransactionEntity.setTestSpecimenType(dto.getTestSpecimenType());
+		specimenQualityTransactionEntity.setThickness(dto.getThickness());
+		specimenQualityTransactionEntity.setLength(dto.getLength());
+		specimenQualityTransactionEntity.setWidth(dto.getWidth());
+		if (dto.getTestMethod() != null && QualityConstants.SPECIMEN_TYPE_CHILD.equals(dto.getTestMethod())) {
+			specimenQualityTransactionEntity.setTestMethod(QualityConstants.SPECIMEN_TYPE_CHILD);
+		} else {
+			specimenQualityTransactionEntity.setTestMethod(QualityConstants.SPECIMEN_TYPE_PARENT);
+		}
+		specimenQualityTransactionEntity.setSpecimenStatus(QualityConstants.PENDING);
+		specimenQualityTransactionEntity.setPreparationMethod(dto.getPreparationMethod());
+		specimenQualityTransactionEntity.setDirection(dto.getDirection());
+		specimenQualityTransactionEntity.setCondition(dto.getCondition());
+		specimenQualityTransactionEntity.setTemperature(dto.getTemperature());
+		specimenQualityTransactionEntity.setTestSource(dto.getTestSource());
+		LOGGER.info("saving entity {}", specimenQualityTransactionEntity);
+		specimenQualityTransactionRepository.save(specimenQualityTransactionEntity);
+	}
+
+	private void processImpact(SpecimenGenerationDto dto) {
+		Optional<SpecimenQualityTransactionEntity> parentSpecimenOpt = specimenQualityTransactionRepository
+				.getParentSpecimenBySampleIdAndTestTypeAndTestMethod(dto.getSampleId(), dto.getTestType(),
+						QualityConstants.SPECIMEN_TYPE_PARENT);
+		if (parentSpecimenOpt.isPresent()) {
+			SpecimenQualityTransactionEntity parentSpecimen = parentSpecimenOpt.get();
+			Long totalNoOfChildCount = specimenQualityTransactionRepository.getTotalNoOfChildCount(dto.getSampleId(),
+					dto.getTestType(), QualityConstants.SPECIMEN_TYPE_CHILD);
+			if (totalNoOfChildCount == null) {
+				totalNoOfChildCount = 0L;
+			}
+
+			dto.setSpecimenId(generateChildSpecimenByParentId(parentSpecimen.getSpecimenId(), totalNoOfChildCount + 1));
+			sampleRecieptRepo.generatePredefinedChildSpecimens(dto);
+		} else {
+			List<UserGrpCodeDtlEntity> userGroupCodeList = userGrpCodeDtlRepository
+					.findByLovid(QualityConstants.IMPACT_CHILD_SAMP);
+			UserGrpCodeDtlEntity userGrpCodeDtlEntity = userGroupCodeList.get(0);
+
+			if (true) {
+				ArrayList<SpecimenGenerationDto> parentList = new ArrayList<>();
+				parentList.add(dto);
+				List<SpecimenGenerationDto> generatedPredefinedSpecimens = sampleRecieptRepo
+						.generatePredefinedSpecimens(parentList);
+				SpecimenGenerationDto parentSpecimen = generatedPredefinedSpecimens.get(0);
+				String parentSpecimenId = parentSpecimen.getSpecimenId();
+				for (int i = 0; i < Long.valueOf(userGrpCodeDtlEntity.getValdesc()); i++) {
+					dto.setSpecimenId(generateChildSpecimenByParentId(parentSpecimenId, i + 1l));
+					sampleRecieptRepo.generatePredefinedChildSpecimens(dto);
+				}
+			}
+		}
+
+	}
+
+	private void processDwtt(SpecimenGenerationDto dto) {
+		Optional<SpecimenQualityTransactionEntity> parentSpecimenOpt = specimenQualityTransactionRepository
+				.getParentSpecimenBySampleIdAndTestTypeAndTestMethod(dto.getSampleId(), dto.getTestType(),
+						QualityConstants.SPECIMEN_TYPE_PARENT);
+		if (parentSpecimenOpt.isPresent()) {
+			SpecimenQualityTransactionEntity parentSpecimen = parentSpecimenOpt.get();
+			Long totalNoOfChildCount = specimenQualityTransactionRepository.getTotalNoOfChildCount(dto.getSampleId(),
+					dto.getTestType(), QualityConstants.SPECIMEN_TYPE_CHILD);
+			if (totalNoOfChildCount == null) {
+				totalNoOfChildCount = 0L;
+			}
+
+			dto.setSpecimenId(generateChildSpecimenByParentId(parentSpecimen.getSpecimenId(), totalNoOfChildCount + 1));
+			sampleRecieptRepo.generatePredefinedChildSpecimens(dto);
+		} else {
+			List<UserGrpCodeDtlEntity> userGroupCodeList = userGrpCodeDtlRepository
+					.findByLovid(QualityConstants.DWTT_CHILD_SAMP);
+			UserGrpCodeDtlEntity userGrpCodeDtlEntity = userGroupCodeList.get(0);
+
+			if (true) {
+				ArrayList<SpecimenGenerationDto> parentList = new ArrayList<>();
+				parentList.add(dto);
+				List<SpecimenGenerationDto> generatedPredefinedSpecimens = sampleRecieptRepo
+						.generatePredefinedSpecimens(parentList);
+				SpecimenGenerationDto parentSpecimen = generatedPredefinedSpecimens.get(0);
+				String parentSpecimenId = parentSpecimen.getSpecimenId();
+				for (int i = 0; i < Long.valueOf(userGrpCodeDtlEntity.getValdesc()); i++) {
+					dto.setSpecimenId(generateChildSpecimenByParentId(parentSpecimenId, i + 1l));
+					sampleRecieptRepo.generatePredefinedChildSpecimens(dto);
+				}
+			}
+		}
+
+	}
+
+	private void processZTest(SpecimenGenerationDto dto) {
+		Optional<SpecimenQualityTransactionEntity> parentSpecimenOpt = specimenQualityTransactionRepository
+				.getParentSpecimenBySampleIdAndTestTypeAndTestMethod(dto.getSampleId(), dto.getTestType(),
+						QualityConstants.SPECIMEN_TYPE_PARENT);
+		LOGGER.info("specimen parent ztest ispresent>> : {}", parentSpecimenOpt.isPresent());
+		if (parentSpecimenOpt.isPresent()) {
+			SpecimenQualityTransactionEntity parentSpecimen = parentSpecimenOpt.get();
+			Long totalNoOfChildCount = specimenQualityTransactionRepository.getTotalNoOfChildCount(dto.getSampleId(),
+					dto.getTestType(), QualityConstants.SPECIMEN_TYPE_CHILD);
+			if (totalNoOfChildCount == null) {
+				totalNoOfChildCount = 0L;
+			}
+
+			dto.setSpecimenId(generateChildSpecimenByParentId(parentSpecimen.getSpecimenId(), totalNoOfChildCount + 1));
+			sampleRecieptRepo.generatePredefinedChildSpecimens(dto);
+		} else {
+			// get groupcode child list
+			List<UserGrpCodeDtlEntity> userGroupCodeList = userGrpCodeDtlRepository
+					.findByLovid(QualityConstants.Z_TEST_CHILD_SAMP);
+			UserGrpCodeDtlEntity userGrpCodeDtlEntity = userGroupCodeList.get(0);
+
+			if (true) {
+				ArrayList<SpecimenGenerationDto> parentList = new ArrayList<>();
+				parentList.add(dto);
+				List<SpecimenGenerationDto> generatedPredefinedSpecimens = sampleRecieptRepo
+						.generatePredefinedSpecimens(parentList);
+				SpecimenGenerationDto parentSpecimen = generatedPredefinedSpecimens.get(0);
+				String parentSpecimenId = parentSpecimen.getSpecimenId();
+				for (int i = 0; i < Long.valueOf(userGrpCodeDtlEntity.getValdesc()); i++) {
+					dto.setSpecimenId(generateChildSpecimenByParentId(parentSpecimenId, i + 1l));
+					sampleRecieptRepo.generatePredefinedChildSpecimens(dto);
+				}
+			}
+		}
+
+	}
+
+	private void checkListValidity(List<SpecimenGenerationDto> list) {
+		if (list == null || list.isEmpty()) {
+			LOGGER.warn("Provided list is null or empty.");
+			throw new IllegalArgumentException("The list of specimen generation details cannot be null or empty.");
+		}
+	}
+
+	private void specimenIdGeneration(SpecimenGenerationDto dto) {
+		if (dto.getSpecimenId() == null || dto.getSpecimenId().isEmpty()) {
+			Long maxSuffix = specimenQualityTransactionRepository.findMaxSpecimenSuffix(dto.getSampleId());
+			if (maxSuffix == null) {
+				maxSuffix = 0L;
+			}
+			Long newSuffix = maxSuffix + 1;
+			String formattedSuffix = String.format("%02d", newSuffix);
+			String specimenId = dto.getSampleId() + "-" + formattedSuffix;
+			LOGGER.info("specimenId-----{}", specimenId);
+			dto.setSpecimenId(specimenId);
+		}
+	}
+
+	@Override
+	public SampleRecieptDropdownData getDropdownValues() {
+		LOGGER.info("Fetching dropdown values for customers");
+		SampleRecieptDropdownData dto = new SampleRecieptDropdownData();
+		List<SearchRequest> searchRequestSampleRecieptDto = sampleRecieptRepo.getSampleReceiptIds();
+		List<String> scheduleId = sampleRecieptRepo.getScheduleId();
+		List<String> sampleids = sampleRecieptRepo.getSampleId();
+		dto.setSearchRequestDto(searchRequestSampleRecieptDto);
+		dto.setSampleId(sampleids);
+		dto.setScheduleId(scheduleId);
+		return dto;
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public ResponseEntity<FluentaApiResponse<List<SpecimenGenerationDto>>> getPreDefinedSpecimens(
+			SampleRecieptDto request) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<SpecimenGenerationDto> specimenDetails = sampleRecieptRepo.getSpecimenDetails(request);
+		ResponseEntity<FluentaApiResponse<List<SpecimenGenerationDto>>> response = null;
+		if (specimenDetails.isEmpty()) {
+			InventoryPk pk = new InventoryPk();
+			pk.setPpid(request.getCoilid());
+			pk.setPpctr(0);
+			Optional<Inventory> pphMtOptional = this.pphMtRepository.findByPpId(request.getCoilid());
+			Inventory inventory = new Inventory();
+			QualityScheduleLinesEntity qualityScheduleLinesEntity = new QualityScheduleLinesEntity();
+			TdcJmEntity tdcJmEntity = new TdcJmEntity();
+			inventory = checkAndGetInventory(pphMtOptional, inventory);
+			Optional<QualityScheduleLinesEntity> qcLineItemOptional = this.qualityScheduleLineItemRepository
+					.findByPpid(request.getCoilid().trim());
+			qualityScheduleLinesEntity = checkAndGetQcSchdLine(qualityScheduleLinesEntity, qcLineItemOptional);
+			TdcJmEntityPK tdcJmEntityPK = new TdcJmEntityPK();
+			tdcJmEntityPK.settdcId(qualityScheduleLinesEntity.getTdcId());
+			Optional<TdcJmEntity> tdcOptional = this.tdcJmRepository.findById(tdcJmEntityPK);
+			tdcJmEntity = checkAndGetTdc(tdcJmEntity, tdcOptional);
+			LOGGER.info(tdcJmEntity.getNormId());
+			NormtestdtlJmEntityPK normtestdtlJmEntityPK = new NormtestdtlJmEntityPK();
+			normtestdtlJmEntityPK.setnormId(tdcJmEntity.getNormId());
+			normtestdtlJmEntityPK.settestMethod(QualityConstants.PRODUCT_SAMPLE);
+			Optional<NormtestdtlJm> prodChemOptional = normtestdtlJmRepository.findById(normtestdtlJmEntityPK);
+			List<NormtensileJmEntity> normTensile = externalGradeNormTensileRepository
+					.findByNormidAndThk(tdcJmEntity.getNormId());
+			List<NormImpactJmEntity> normImpactCvn = externalGradeNormImpactRepository
+					.findCvnByNormidAndThk(tdcJmEntity.getNormId());
+			List<NormImpactJmEntity> normImpactCun = externalGradeNormImpactRepository
+					.findCunByNormidAndThk(tdcJmEntity.getNormId());
+			List<NormHardnessJmEntity> normHardness = externalGradeNormHardnessRepository
+					.findByNormidAndThk(tdcJmEntity.getNormId());
+			List<NorminclusionJmEntity> normIncl = externalGradeNormInclusionRepository
+					.findByNormidAndThk(tdcJmEntity.getNormId());
+			List<NormztestJmEntity> normZtest = externalGradeNormZtestRepository
+					.findByNormidAndThk(tdcJmEntity.getNormId());
+			List<NormhtttJmEntity> normHttt = externalGradeNormHtttRepository
+					.findByNormidAndThk(tdcJmEntity.getNormId());
+			List<NormbendJmEntity> normBend = externalGradeNormBendRepository
+					.findByNormidAndThk(tdcJmEntity.getNormId());
+			List<NormdwttJmEntity> normDwtt = externalGradeNormDwttRepository
+					.findByNormidAndThk(tdcJmEntity.getNormId());
+			List<NormothrtestJmEntity> normOthers = externalGradeNormOthrtestRepository
+					.findByNormId(tdcJmEntity.getNormId());
+			List<DimToleranceDto> dimTolerance = sampleRecieptRepo.getDimTolerance(tdcJmEntity.getId().gettdcId(),
+					request.getThickness());
+			DimToleranceDto dimToleranceDto = (dimTolerance.isEmpty()) ? new DimToleranceDto() : dimTolerance.get(0);
+			List<SpecimenGenerationDto> list = new ArrayList<>();
+			processChemistrySpecimenGeneration(request, tdcJmEntity, prodChemOptional, list);
+			processTensileSpecimenGeneration(request, normTensile, dimToleranceDto, list);
+			processImpactSpecimenGeneration(request, tdcJmEntity, dimToleranceDto, normImpactCvn, list,
+					QualityConstants.IMPACT_CVN);
+			processImpactSpecimenGeneration(request, tdcJmEntity, dimToleranceDto, normImpactCun, list,
+					QualityConstants.IMPACT_CUN);
+			processHardnessSpecimenGeneration(request, normHardness, dimToleranceDto, list);
+			processInclSpecimenGeneration(request, normIncl, dimToleranceDto, list);
+			processZTestSpecimenGeneration(request, tdcJmEntity, normZtest, dimToleranceDto, list);
+			processHtttSpecimenGeneration(request, normHttt, dimToleranceDto, list);
+			processBendSpecimenGeneration(request, normBend, dimToleranceDto, list);
+			processDwttSpecimenGeneration(request, tdcJmEntity, normDwtt, dimToleranceDto, list);
+			processOtherTestSpecimenGeneration(request, normOthers, dimToleranceDto, list);
+			LOGGER.info("{}", list);
+			sampleRecieptRepo.generatePredefinedSpecimens(list);
+			Optional<SampleQualityEntity> sampleOptional = sampleQtMasterRepository.findById(request.getSampleId());
+			if (sampleOptional.isPresent()) {
+				SampleQualityEntity sampleQualityEntity = sampleOptional.get();
+				sampleQualityEntity.setSampleGenerationFlag(QualityConstants.SAMPLE_FLAG_YES);
+				sampleQtMasterRepository.save(sampleQualityEntity);
+			}
+			specimenDetails = sampleRecieptRepo.getSpecimenDetails(request);
+		}
+		if (!specimenDetails.isEmpty()) {
+			response = ResponseUtil.createResponse(specimenDetails, "fetch Successful", true);
+		} else {
+			response = ResponseUtil.createErrorResponse(
+					new ResourceNotFoundException("Specimen List", null, specimenDetails), "Saving Failed", LOGGER);
+		}
+		return response;
+	}
+
+	private void processOtherTestSpecimenGeneration(SampleRecieptDto request, List<NormothrtestJmEntity> normOthers,
+			DimToleranceDto dimToleranceDto, List<SpecimenGenerationDto> list) {
+		if (!normOthers.isEmpty()) {
+			for (NormothrtestJmEntity entity : normOthers) {
+				SpecimenGenerationDto dto = new SpecimenGenerationDto();
+				dto.setSampleId(request.getSampleId());
+				dto.setSpecimenId(null);
+				dto.setSpecification(null);
+				dto.setTestType(entity.getTestMethod());
+				dto.setTestSpecimenType(null);
+				dto.setThickness(null);
+				dto.setLength(null);
+				dto.setWidth(null);
+				dto.setPreparationMethod(null);
+				dto.setDirection(null);
+				dto.setCondition(null);
+				dto.setTemperature(null);
+				dto.setTestSource(QualityConstants.TEST_SOURCE_TDC);
+				list.add(dto);
+			}
+		}
+	}
+
+	private void processDwttSpecimenGeneration(SampleRecieptDto request, TdcJmEntity tdcJmEntity,
+			List<NormdwttJmEntity> normDwtt, DimToleranceDto dimToleranceDto, List<SpecimenGenerationDto> list) {
+		NormdwttJmEntity normDwttEntity;
+		if (!normDwtt.isEmpty()) {
+			BigDecimal dimTolNve = dimToleranceDto.getDimtolnve() != null ? dimToleranceDto.getDimtolnve()
+					: BigDecimal.ZERO;
+			BigDecimal dimTolPve = dimToleranceDto.getDimtolpve() != null ? dimToleranceDto.getDimtolpve()
+					: BigDecimal.ZERO;
+			List<NormdwttJmEntity> validDwtt = normDwtt.stream().filter(e -> isThicknessInRange(request.getThickness(),
+					e.getThkmin().subtract(dimTolNve), e.getMinopr(), e.getThkmax().add(dimTolPve), e.getMaxopr()))
+					.toList();
+			if (!validDwtt.isEmpty()) {
+				normDwttEntity = validDwtt.get(0);
+				SpecimenGenerationDto dto = new SpecimenGenerationDto();
+				dto.setSampleId(request.getSampleId());
+				dto.setSpecimenId(null);
+				dto.setSpecification(normDwttEntity.getSpecification());
+				dto.setTestType(QualityConstants.DWTT);
+				dto.setTestSpecimenType(null);
+				dto.setThickness(null);
+				dto.setLength(null);
+				dto.setWidth(null);
+				dto.setPreparationMethod(null);
+				dto.setDirection(normDwttEntity.getDirection());
+				dto.setCondition(normDwttEntity.getCondition());
+				dto.setTemperature(normDwttEntity.getTemperature());
+				dto.setTestSource(QualityConstants.TEST_SOURCE_TDC);
+				NormtestdtlJmEntityPK dwttNormtestdtlJmEntityPK = new NormtestdtlJmEntityPK();
+				dwttNormtestdtlJmEntityPK.setnormId(tdcJmEntity.getNormId());
+				dwttNormtestdtlJmEntityPK.settestMethod(QualityConstants.DWTTTEST);
+				Optional<NormtestdtlJm> dwttNormtestdtlJmOptional = normtestdtlJmRepository
+						.findById(dwttNormtestdtlJmEntityPK);
+				LOGGER.info("{}", dwttNormtestdtlJmOptional);
+				if (dwttNormtestdtlJmOptional.isPresent()) {
+					NormtestdtlJm normtestdtlJm = dwttNormtestdtlJmOptional.get();
+					LOGGER.info("{}", normtestdtlJm);
+					if (normtestdtlJm.getIndspecimencnt() != null
+							&& normtestdtlJm.getIndspecimencnt().longValue() > 1) {
+						ArrayList<SpecimenGenerationDto> parentList = new ArrayList<>();
+						parentList.add(dto);
+						List<SpecimenGenerationDto> generatedPredefinedSpecimens = sampleRecieptRepo
+								.generatePredefinedSpecimens(parentList);
+						SpecimenGenerationDto parentSpecimen = generatedPredefinedSpecimens.get(0);
+						String parentSpecimenId = parentSpecimen.getSpecimenId();
+						for (int i = 0; i < normtestdtlJm.getIndspecimencnt().longValue(); i++) {
+							dto.setSpecimenId(generateChildSpecimenByParentId(parentSpecimenId, i + 1l));
+							sampleRecieptRepo.generatePredefinedChildSpecimens(dto);
+						}
+					} else {
+						list.add(dto);
+					}
+				} else {
+					list.add(dto);
+				}
+			}
+		}
+	}
+
+	private void processBendSpecimenGeneration(SampleRecieptDto request, List<NormbendJmEntity> normBend,
+			DimToleranceDto dimToleranceDto, List<SpecimenGenerationDto> list) {
+		NormbendJmEntity normBendEntity;
+		if (!normBend.isEmpty()) {
+			BigDecimal dimTolNve = dimToleranceDto.getDimtolnve() != null ? dimToleranceDto.getDimtolnve()
+					: BigDecimal.ZERO;
+			BigDecimal dimTolPve = dimToleranceDto.getDimtolpve() != null ? dimToleranceDto.getDimtolpve()
+					: BigDecimal.ZERO;
+			List<NormbendJmEntity> validBend = normBend.stream().filter(e -> isThicknessInRange(request.getThickness(),
+					e.getThkmin().subtract(dimTolNve), e.getMinopr(), e.getThkmax().add(dimTolPve), e.getMaxopr()))
+					.toList();
+			if (!validBend.isEmpty()) {
+				normBendEntity = validBend.get(0);
+				SpecimenGenerationDto dto = new SpecimenGenerationDto();
+				dto.setSampleId(request.getSampleId());
+				dto.setSpecimenId(null);
+				dto.setSpecification(normBendEntity.getSpecification());
+				dto.setTestType(QualityConstants.BEND);
+				dto.setTestSpecimenType(null);
+				dto.setThickness(null);
+				dto.setLength(null);
+				dto.setWidth(null);
+				dto.setPreparationMethod(null);
+				dto.setDirection(normBendEntity.getDirection());
+				dto.setCondition(normBendEntity.getCondition());
+				dto.setTemperature(normBendEntity.getTemperature());
+				dto.setTestSource(QualityConstants.TEST_SOURCE_TDC);
+				list.add(dto);
+			}
+		}
+	}
+
+	private void processHtttSpecimenGeneration(SampleRecieptDto request, List<NormhtttJmEntity> normHttt,
+			DimToleranceDto dimToleranceDto, List<SpecimenGenerationDto> list) {
+		NormhtttJmEntity normHtttEntity;
+		if (!normHttt.isEmpty()) {
+			BigDecimal dimTolNve = dimToleranceDto.getDimtolnve() != null ? dimToleranceDto.getDimtolnve()
+					: BigDecimal.ZERO;
+			BigDecimal dimTolPve = dimToleranceDto.getDimtolpve() != null ? dimToleranceDto.getDimtolpve()
+					: BigDecimal.ZERO;
+			List<NormhtttJmEntity> validHttt = normHttt.stream().filter(e -> isThicknessInRange(request.getThickness(),
+					e.getThkmin().subtract(dimTolNve), e.getMinopr(), e.getThkmax().add(dimTolPve), e.getMaxopr()))
+					.toList();
+			if (!validHttt.isEmpty()) {
+				normHtttEntity = validHttt.get(0);
+				SpecimenGenerationDto dto = new SpecimenGenerationDto();
+				dto.setSampleId(request.getSampleId());
+				dto.setSpecimenId(null);
+				dto.setSpecification(normHtttEntity.getSpecification());
+				dto.setTestType(QualityConstants.HIGH_TEMP_TENSILE);
+				dto.setTestSpecimenType(null);
+				dto.setThickness(null);
+				dto.setLength(null);
+				dto.setWidth(null);
+				dto.setPreparationMethod(null);
+				dto.setDirection(normHtttEntity.getDirection());
+				dto.setCondition(normHtttEntity.getCondition());
+				dto.setTemperature(normHtttEntity.getTemperature());
+				dto.setTestSource(QualityConstants.TEST_SOURCE_TDC);
+				list.add(dto);
+			}
+		}
+	}
+
+	private void processZTestSpecimenGeneration(SampleRecieptDto request, TdcJmEntity tdcJmEntity,
+			List<NormztestJmEntity> normZtest, DimToleranceDto dimToleranceDto, List<SpecimenGenerationDto> list) {
+		NormztestJmEntity normZtestEntity;
+		if (!normZtest.isEmpty()) {
+			BigDecimal dimTolNve = dimToleranceDto.getDimtolnve() != null ? dimToleranceDto.getDimtolnve()
+					: BigDecimal.ZERO;
+			BigDecimal dimTolPve = dimToleranceDto.getDimtolpve() != null ? dimToleranceDto.getDimtolpve()
+					: BigDecimal.ZERO;
+			List<NormztestJmEntity> validZtest = normZtest.stream()
+					.filter(e -> isThicknessInRange(request.getThickness(), e.getThkmin().subtract(dimTolNve),
+							e.getMinopr(), e.getThkmax().add(dimTolPve), e.getMaxopr()))
+					.toList();
+			if (!validZtest.isEmpty()) {
+				normZtestEntity = validZtest.get(0);
+				SpecimenGenerationDto dto = new SpecimenGenerationDto();
+				dto.setSampleId(request.getSampleId());
+				dto.setSpecimenId(null);
+				dto.setSpecification(normZtestEntity.getSpecification());
+				dto.setTestType(QualityConstants.Z_TEST);
+				dto.setTestSpecimenType(null);
+				dto.setThickness(null);
+				dto.setLength(null);
+				dto.setWidth(null);
+				dto.setPreparationMethod(null);
+				dto.setDirection(normZtestEntity.getDirection());
+				dto.setCondition(normZtestEntity.getCondition());
+				dto.setTemperature(normZtestEntity.getTemperature());
+				dto.setTestSource(QualityConstants.TEST_SOURCE_TDC);
+				NormtestdtlJmEntityPK zTestNormtestdtlJmEntityPK = new NormtestdtlJmEntityPK();
+				zTestNormtestdtlJmEntityPK.setnormId(tdcJmEntity.getNormId());
+				zTestNormtestdtlJmEntityPK.settestMethod(QualityConstants.ZTEST);
+				Optional<NormtestdtlJm> zTestNormtestdtlJmOptional = normtestdtlJmRepository
+						.findById(zTestNormtestdtlJmEntityPK);
+				LOGGER.info("{}", zTestNormtestdtlJmOptional);
+				if (zTestNormtestdtlJmOptional.isPresent()) {
+					NormtestdtlJm normtestdtlJm = zTestNormtestdtlJmOptional.get();
+					LOGGER.info("{}", normtestdtlJm);
+					if (normtestdtlJm.getIndspecimencnt() != null
+							&& normtestdtlJm.getIndspecimencnt().longValue() > 1) {
+						ArrayList<SpecimenGenerationDto> parentList = new ArrayList<>();
+						parentList.add(dto);
+						List<SpecimenGenerationDto> generatedPredefinedSpecimens = sampleRecieptRepo
+								.generatePredefinedSpecimens(parentList);
+						SpecimenGenerationDto parentSpecimen = generatedPredefinedSpecimens.get(0);
+						String parentSpecimenId = parentSpecimen.getSpecimenId();
+						for (int i = 0; i < normtestdtlJm.getIndspecimencnt().longValue(); i++) {
+							dto.setSpecimenId(generateChildSpecimenByParentId(parentSpecimenId, i + 1l));
+							sampleRecieptRepo.generatePredefinedChildSpecimens(dto);
+						}
+					}
+				} else {
+					list.add(dto);
+				}
+			}
+		}
+	}
+
+	private void processInclSpecimenGeneration(SampleRecieptDto request, List<NorminclusionJmEntity> normIncl,
+			DimToleranceDto dimToleranceDto, List<SpecimenGenerationDto> list) {
+		NorminclusionJmEntity normInclEntity;
+		if (!normIncl.isEmpty()) {
+			normInclEntity = normIncl.get(0);
+			SpecimenGenerationDto dto = new SpecimenGenerationDto();
+			dto.setSampleId(request.getSampleId());
+			dto.setSpecimenId(null);
+			dto.setSpecification(normInclEntity.getSpecification());
+			dto.setTestType(QualityConstants.INCLUSION_RATING);
+			dto.setTestSpecimenType(null);
+			dto.setThickness(null);
+			dto.setLength(null);
+			dto.setWidth(null);
+			dto.setPreparationMethod(null);
+			dto.setDirection(normInclEntity.getDirection());
+			dto.setCondition(normInclEntity.getCondition());
+			dto.setTemperature(normInclEntity.getTemperature());
+			dto.setTestSource(QualityConstants.TEST_SOURCE_TDC);
+			list.add(dto);
+		}
+	}
+
+	private void processHardnessSpecimenGeneration(SampleRecieptDto request, List<NormHardnessJmEntity> normHardness,
+			DimToleranceDto dimToleranceDto, List<SpecimenGenerationDto> list) {
+		NormHardnessJmEntity normHardnessEntity;
+		if (!normHardness.isEmpty()) {
+			BigDecimal dimTolNve = dimToleranceDto.getDimtolnve() != null ? dimToleranceDto.getDimtolnve()
+					: BigDecimal.ZERO;
+			BigDecimal dimTolPve = dimToleranceDto.getDimtolpve() != null ? dimToleranceDto.getDimtolpve()
+					: BigDecimal.ZERO;
+			List<NormHardnessJmEntity> validHardness = normHardness.stream()
+					.filter(e -> isThicknessInRange(request.getThickness(), e.getThkmin().subtract(dimTolNve),
+							e.getMinopr(), e.getThkmax().add(dimTolPve), e.getMaxopr()))
+					.toList();
+			if (!validHardness.isEmpty()) {
+				normHardnessEntity = validHardness.get(0);
+				SpecimenGenerationDto dto = new SpecimenGenerationDto();
+				dto.setSampleId(request.getSampleId());
+				dto.setSpecimenId(null);
+				dto.setSpecification(normHardnessEntity.getSpecification());
+				dto.setTestType(QualityConstants.HARDNESS);
+				dto.setTestSpecimenType(null);
+				dto.setThickness(null);
+				dto.setLength(null);
+				dto.setWidth(null);
+				dto.setPreparationMethod(null);
+				dto.setDirection(normHardnessEntity.getDirection());
+				dto.setCondition(normHardnessEntity.getCondition());
+				dto.setTemperature(normHardnessEntity.getTemperature());
+				dto.setTestSource(QualityConstants.TEST_SOURCE_TDC);
+				list.add(dto);
+			}
+		}
+	}
+
+	private void processImpactSpecimenGeneration(SampleRecieptDto request, TdcJmEntity tdcJmEntity,
+			DimToleranceDto dimToleranceDto, List<NormImpactJmEntity> normImpact, List<SpecimenGenerationDto> list,
+			String testType) {
+		NormImpactJmEntity normImpactCvnEntity;
+		if (!normImpact.isEmpty()) {
+			BigDecimal dimTolNve = dimToleranceDto.getDimtolnve() != null ? dimToleranceDto.getDimtolnve()
+					: BigDecimal.ZERO;
+			BigDecimal dimTolPve = dimToleranceDto.getDimtolpve() != null ? dimToleranceDto.getDimtolpve()
+					: BigDecimal.ZERO;
+			List<NormImpactJmEntity> validImpact = normImpact.stream()
+					.filter(e -> isThicknessInRange(request.getThickness(), e.getThkmin().subtract(dimTolNve),
+							e.getMinopr(), e.getThkmax().add(dimTolPve), e.getMaxopr()))
+					.toList();
+			if (!validImpact.isEmpty()) {
+				normImpactCvnEntity = validImpact.get(0);
+				SpecimenGenerationDto dto = new SpecimenGenerationDto();
+				dto.setSampleId(request.getSampleId());
+				dto.setSpecimenId(null);
+				dto.setSpecification(normImpactCvnEntity.getSpecification());
+				dto.setTestType(testType);
+				dto.setTestSpecimenType(null);
+				dto.setThickness(null);
+				dto.setLength(null);
+				dto.setWidth(null);
+				dto.setPreparationMethod(null);
+				dto.setDirection(normImpactCvnEntity.getDirection());
+				dto.setCondition(normImpactCvnEntity.getCondition());
+				dto.setTemperature(normImpactCvnEntity.getTemperature());
+				dto.setTestSource(QualityConstants.TEST_SOURCE_TDC);
+				NormtestdtlJmEntityPK impactNormtestdtlJmEntityPK = new NormtestdtlJmEntityPK();
+				impactNormtestdtlJmEntityPK.setnormId(tdcJmEntity.getNormId());
+				impactNormtestdtlJmEntityPK.settestMethod(QualityConstants.CHILD_IMPACT);
+				Optional<NormtestdtlJm> impactNormtestdtlOptional = normtestdtlJmRepository
+						.findById(impactNormtestdtlJmEntityPK);
+				LOGGER.info("{}", impactNormtestdtlOptional);
+				if (impactNormtestdtlOptional.isPresent()) {
+					NormtestdtlJm normtestdtlJm = impactNormtestdtlOptional.get();
+					LOGGER.info("{}", normtestdtlJm);
+					if (normtestdtlJm.getIndspecimencnt() != null) {
+						ArrayList<SpecimenGenerationDto> parentList = new ArrayList<>();
+						parentList.add(dto);
+						List<SpecimenGenerationDto> generatedPredefinedSpecimens = sampleRecieptRepo
+								.generatePredefinedSpecimens(parentList);
+						SpecimenGenerationDto parentSpecimen = generatedPredefinedSpecimens.get(0);
+						String parentSpecimenId = parentSpecimen.getSpecimenId();
+						for (int i = 0; i < normtestdtlJm.getIndspecimencnt().longValue(); i++) {
+							dto.setSpecimenId(generateChildSpecimenByParentId(parentSpecimenId, i + 1l));
+							sampleRecieptRepo.generatePredefinedChildSpecimens(dto);
+						}
+					}
+				} else {
+					list.add(dto);
+				}
+			}
+		}
+	}
+
+	private void processTensileSpecimenGeneration(SampleRecieptDto request, List<NormtensileJmEntity> normTensile,
+			DimToleranceDto dimToleranceDto, List<SpecimenGenerationDto> list) {
+		if (!normTensile.isEmpty()) {
+			BigDecimal dimTolNve = dimToleranceDto.getDimtolnve() != null ? dimToleranceDto.getDimtolnve()
+					: BigDecimal.ZERO;
+			BigDecimal dimTolPve = dimToleranceDto.getDimtolpve() != null ? dimToleranceDto.getDimtolpve()
+					: BigDecimal.ZERO;
+			List<NormtensileJmEntity> validTensile = normTensile.stream()
+					.filter(e -> isThicknessInRange(request.getThickness(), e.getThkmin().subtract(dimTolNve),
+							e.getMinopr(), e.getThkmax().add(dimTolPve), e.getMaxopr()))
+					.toList();
+			if (!validTensile.isEmpty()) {
+				NormtensileJmEntity normTensileEntity = validTensile.get(0);
+				SpecimenGenerationDto dto = new SpecimenGenerationDto();
+				dto.setSampleId(request.getSampleId());
+				dto.setSpecimenId(null);
+				dto.setSpecification(normTensileEntity.getSpecification());
+				dto.setTestType(QualityConstants.TENSILE_TEST);
+				dto.setTestSpecimenType(null);
+				dto.setThickness(null);
+				dto.setLength(null);
+				dto.setWidth(null);
+				dto.setPreparationMethod(null);
+				dto.setDirection(normTensileEntity.getDirection());
+				dto.setCondition(normTensileEntity.getCondition());
+				dto.setTemperature(normTensileEntity.getTemperature());
+				dto.setTestSource(QualityConstants.TEST_SOURCE_TDC);
+				list.add(dto);
+			}
+		}
+	}
+
+	private boolean isThicknessInRange(BigDecimal thickness, BigDecimal thkmin, String minopr, BigDecimal thkmax,
+			String maxopr) {
+		if (thickness == null) {
+			return false;
+		}
+		thickness = thickness.setScale(2);
+		if (isAllNull(thkmin, minopr, thkmax, maxopr)) {
+			return true;
+		}
+		if (hasMinConditionOnly(thkmin, minopr, thkmax, maxopr)) {
+			return evaluateOperator(thickness, thkmin, minopr);
+		}
+		if (hasMaxConditionOnly(thkmin, minopr, thkmax, maxopr)) {
+			return evaluateOperator(thickness, thkmax, maxopr);
+		}
+		if (hasBothConditions(thkmin, minopr, thkmax, maxopr)) {
+			return evaluateOperator(thickness, thkmin, minopr) && evaluateOperator(thickness, thkmax, maxopr);
+		}
+		return false;
+	}
+
+	private boolean isAllNull(BigDecimal thkmin, String minopr, BigDecimal thkmax, String maxopr) {
+		return thkmin == null && minopr == null && thkmax == null && maxopr == null;
+	}
+
+	private boolean hasMinConditionOnly(BigDecimal thkmin, String minopr, BigDecimal thkmax, String maxopr) {
+		return thkmin != null && minopr != null && thkmax == null && maxopr == null;
+	}
+
+	private boolean hasMaxConditionOnly(BigDecimal thkmin, String minopr, BigDecimal thkmax, String maxopr) {
+		return thkmin == null && minopr == null && thkmax != null && maxopr != null;
+	}
+
+	private boolean hasBothConditions(BigDecimal thkmin, String minopr, BigDecimal thkmax, String maxopr) {
+		return thkmin != null && minopr != null && thkmax != null && maxopr != null;
+	}
+
+	private boolean evaluateOperator(BigDecimal value, BigDecimal limit, String operator) {
+		switch (operator) {
+		case ">":
+			return value.compareTo(limit) > 0;
+		case ">=":
+			return value.compareTo(limit) >= 0;
+		case "<":
+			return value.compareTo(limit) < 0;
+		case "<=":
+			return value.compareTo(limit) <= 0;
+		case "=":
+			return value.compareTo(limit) == 0;
+		default:
+			return false;
+		}
+	}
+
+	private void processChemistrySpecimenGeneration(SampleRecieptDto request, TdcJmEntity tdcJmEntity,
+			Optional<NormtestdtlJm> prodChemOptional, List<SpecimenGenerationDto> list) {
+		if (prodChemOptional.isPresent() && QualityConstants.INSP_FLAG_YES.equals(tdcJmEntity.getProdsampleflag())) {
+			NormtestdtlJm normtestdtlJm = prodChemOptional.get();
+			SpecimenGenerationDto dto = new SpecimenGenerationDto();
+			dto.setSampleId(request.getSampleId());
+			dto.setSpecimenId(null);
+			dto.setSpecification(normtestdtlJm.getSpecification());
+			dto.setTestType(QualityConstants.SPECTRO_TEST);
+			dto.setTestSpecimenType(null);
+			dto.setThickness(null);
+			dto.setLength(null);
+			dto.setWidth(null);
+			dto.setPreparationMethod(null);
+			dto.setDirection(normtestdtlJm.getDirection());
+			dto.setCondition(normtestdtlJm.getCondition());
+			dto.setTemperature(normtestdtlJm.getTemperature());
+			dto.setTestSource(QualityConstants.TEST_SOURCE_TDC);
+			list.add(dto);
+		}
+	}
+
+	private TdcJmEntity checkAndGetTdc(TdcJmEntity tdcJmEntity, Optional<TdcJmEntity> tdcOptional) {
+		if (tdcOptional.isPresent()) {
+			tdcJmEntity = tdcOptional.get();
+		} else {
+			LOGGER.info("TdcData NOT FOUND");
+		}
+		return tdcJmEntity;
+	}
+
+	private QualityScheduleLinesEntity checkAndGetQcSchdLine(QualityScheduleLinesEntity qualityScheduleLinesEntity,
+			Optional<QualityScheduleLinesEntity> qcLineItemOptional) {
+		if (qcLineItemOptional.isPresent()) {
+			qualityScheduleLinesEntity = qcLineItemOptional.get();
+		} else {
+			LOGGER.info("QCLineItem NOT FOUND");
+		}
+		return qualityScheduleLinesEntity;
+	}
+
+	private Inventory checkAndGetInventory(Optional<Inventory> pphMtOptional, Inventory inventory) {
+		if (pphMtOptional.isPresent()) {
+			inventory = pphMtOptional.get();
+		} else {
+			LOGGER.info("PPHMT NOT FOUND");
+		}
+		return inventory;
+	}
+
+	public String generateChildSpecimenByParentId(String parentSpecimenId, long counter) {
+		Long newSuffix = counter;
+		String formattedSuffix = String.format("%02d", newSuffix);
+		return parentSpecimenId + "." + formattedSuffix;
+	}
+
+}

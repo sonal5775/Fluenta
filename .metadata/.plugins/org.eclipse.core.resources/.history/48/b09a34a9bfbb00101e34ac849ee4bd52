@@ -1,0 +1,83 @@
+package com.hindindustec.fluenta.hsm.quality.model;
+
+import java.io.Serializable;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
+import lombok.Data;
+
+/**
+ * The primary key class for the TDCDIMTOLAIM_JM database table.
+ * 
+ */
+@Embeddable
+@Data
+public class TdcdimtolaimJmEntityPK implements Serializable {
+	//default serial version id, required for serializable classes.
+	private static final long serialVersionUID = 1L;
+
+	@Column(insertable=false, updatable=false)
+	private String tdcid;
+
+	@Column(insertable=false, updatable=false)
+	private long revid;
+
+	@Column(insertable=false, updatable=false)
+	private String dimatr;
+
+	private long dimctr;
+
+	public TdcdimtolaimJmEntityPK() {
+		//empty constructor
+	}
+	public String getTdcid() {
+		return this.tdcid;
+	}
+	public void setTdcid(String tdcid) {
+		this.tdcid = tdcid;
+	}
+	public long getRevid() {
+		return this.revid;
+	}
+	public void setRevid(long revid) {
+		this.revid = revid;
+	}
+	public String getDimatr() {
+		return this.dimatr;
+	}
+	public void setDimatr(String dimatr) {
+		this.dimatr = dimatr;
+	}
+	public long getDimctr() {
+		return this.dimctr;
+	}
+	public void setDimctr(long dimctr) {
+		this.dimctr = dimctr;
+	}
+
+	public boolean equals(Object other) {
+		if (this == other) {
+			return true;
+		}
+		if (!(other instanceof TdcdimtolaimJmEntityPK)) {
+			return false;
+		}
+		TdcdimtolaimJmEntityPK castOther = (TdcdimtolaimJmEntityPK)other;
+		return 
+			this.tdcid.equals(castOther.tdcid)
+			&& (this.revid == castOther.revid)
+			&& this.dimatr.equals(castOther.dimatr)
+			&& (this.dimctr == castOther.dimctr);
+	}
+
+	public int hashCode() {
+		final int prime = 31;
+		int hash = 17;
+		hash = hash * prime + this.tdcid.hashCode();
+		hash = hash * prime + ((int) (this.revid ^ (this.revid >>> 32)));
+		hash = hash * prime + this.dimatr.hashCode();
+		hash = hash * prime + ((int) (this.dimctr ^ (this.dimctr >>> 32)));
+		
+		return hash;
+	}
+}

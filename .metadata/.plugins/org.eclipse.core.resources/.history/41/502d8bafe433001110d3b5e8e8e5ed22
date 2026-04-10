@@ -1,0 +1,109 @@
+package com.hindindustec.fluenta.sales.dto;
+
+import java.math.BigDecimal;
+import java.util.Date;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class InclusionDto {
+
+	public InclusionDto(BigDecimal tyathinmax, BigDecimal tyathickmax, BigDecimal tybthinmax, BigDecimal tybthickmax,
+			BigDecimal tycthinmax, BigDecimal tycthickmax, BigDecimal tydthinmax, BigDecimal tydthickmax) {
+		super();
+		this.tyathinmax = tyathinmax;
+		this.tyathickmax = tyathickmax;
+		this.tybthinmax = tybthinmax;
+		this.tybthickmax = tybthickmax;
+		this.tycthinmax = tycthinmax;
+		this.tycthickmax = tycthickmax;
+		this.tydthinmax = tydthinmax;
+		this.tydthickmax = tydthickmax;
+	}
+
+	private String seid;
+
+	private long selid;
+	
+	private String condition;
+
+	private String crBy;
+
+	private Date crDt;
+
+	private String crMacAddr;
+
+	private String degrees;
+
+	private String direction;
+
+	private BigDecimal isactv;
+
+	private String location;
+
+	private BigDecimal lotsize;
+
+	private String mandrel;
+
+	private String moBy;
+
+	private Date moDt;
+
+	private String moMacAddr;
+
+	private String position;
+
+	private String reserve01;
+
+	private String reserve02;
+
+	private String reserve03;
+
+	private String reserve04;
+
+	private String reserve05;
+
+	private String specification;
+
+	private String specimenfreq;
+
+	private BigDecimal temperature;
+
+	private String teststd;
+
+	private BigDecimal tyathickmax;
+
+	private BigDecimal tyathickmin;
+
+	private BigDecimal tyathinmax;
+
+	private BigDecimal tyathinmin;
+
+	private BigDecimal tybthickmax;
+
+	private BigDecimal tybthickmin;
+
+	private BigDecimal tybthinmax;
+
+	private BigDecimal tybthinmin;
+
+	private BigDecimal tycthickmax;
+
+	private BigDecimal tycthickmin;
+
+	private BigDecimal tycthinmax;
+
+	private BigDecimal tycthinmin;
+
+	private BigDecimal tydthickmax;
+
+	private BigDecimal tydthickmin;
+
+	private BigDecimal tydthinmax;
+
+	private BigDecimal tydthinmin;
+}

@@ -1,0 +1,1005 @@
+package com.hindindustec.fluenta.hsm.masters.serviceimpl;
+
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.common.DBSessionService;
+import com.hindindustec.fluenta.hsm.masters.common.DevExtGridFilterUtils;
+import com.hindindustec.fluenta.hsm.masters.common.OfsConstants;
+import com.hindindustec.fluenta.hsm.masters.common.config.ClientIpUtils;
+import com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceDimensionDto;
+import com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceDto;
+import com.hindindustec.fluenta.hsm.masters.dto.FlatnessToleranceRequestDto;
+import com.hindindustec.fluenta.hsm.masters.entities.FlattolRngCa;
+import com.hindindustec.fluenta.hsm.masters.entities.FlattolRngCaPK;
+import com.hindindustec.fluenta.hsm.masters.entities.FlattolrngCm;
+import com.hindindustec.fluenta.hsm.masters.entities.FlattolvalCa;
+import com.hindindustec.fluenta.hsm.masters.entities.FlattolvalCaPK;
+import com.hindindustec.fluenta.hsm.masters.entities.FlattolvalCm;
+import com.hindindustec.fluenta.hsm.masters.entities.FlattolvalCmPK;
+import com.hindindustec.fluenta.hsm.masters.repository.FlatnessToleranceCustRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.FlattolRngCaRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.FlattolRngCmRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.FlattolValCaRepository;
+import com.hindindustec.fluenta.hsm.masters.repository.FlattolValCmRepository;
+import com.hindindustec.fluenta.hsm.masters.service.FlatnessToleranceService;
+import com.hindindustec.fluenta.logistics.common.response.FluentaPaginatedResponse;
+import com.hindindustec.fluenta.logistics.common.response.Group;
+import com.hindindustec.fluenta.logistics.common.response.GroupedDataResponse;
+
+@Service
+public class FlatnessToleranceServiceImpl implements FlatnessToleranceService {
+	private static final Logger logger = LoggerFactory.getLogger(FlatnessToleranceServiceImpl.class);
+	private static final String NOT_LIKE = " NOT LIKE ";
+	private static final String LIKE = " LIKE ";
+	private static final String ENDSWITH = "endswith";
+	private static final String STARTSWITH = "startswith";
+	private static final String NOTCONTAINS = "notcontains";
+	private static final String CONTAINS = "contains";
+	private static final String UPPER_TRIM_LIKE_PREFIX = OfsConstants.UPPER_TRIM_LIKE_PREFIX;
+	private static final String UPPER_TRIM_START_WITH = OfsConstants.UPPER_TRIM_START_WITH;
+	private static final String UPPER_TRIM_SUFFIX = OfsConstants.UPPER_TRIM_SUFFIX;
+	public static final String SHIFT_ID = "shiftid";
+	public static final String BOTTOM_ATTRVAL = "bottomAttrVal";
+	public static final String BOTTOM_INSPBY = "bottomInspBy";
+	public static final String PPPT_DOT = "pppt.";
+	public static final String INSP_DOT = "insp.";
+	public static final String ATTRSTRVAL = "attrstrval";
+	public static final String INSP_BY = "inspBy";
+	public static final String CR_BY = "crBy";
+	public static final String DECISION_BY = "decisionBy";
+	public static final String ADMIN = "admin";
+	public static final String HITTRAIN = "HITTRAIN";
+	public static final String ADMINCASE = "ADMIN";
+	public static final String HITTRAINCASE = "hittrain";
+
+	private FlatnessToleranceCustRepository custRepository;
+	private final DBSessionService dbSessionService;
+	private final FlattolRngCmRepository cmRngRepository;
+	private final FlattolRngCaRepository caRngRepository;
+	private final FlattolValCmRepository cmValRepository;
+	private final FlattolValCaRepository caValRepository;
+
+	public FlatnessToleranceServiceImpl(FlatnessToleranceCustRepository custRepository,
+			DBSessionService dbSessionService, FlattolRngCmRepository cmRngRepository,
+			FlattolRngCaRepository caRngRepository, FlattolValCmRepository cmValRepository,
+			FlattolValCaRepository caValRepository) {
+		super();
+		this.custRepository = custRepository;
+		this.dbSessionService = dbSessionService;
+		this.cmRngRepository = cmRngRepository;
+		this.caRngRepository = caRngRepository;
+		this.cmValRepository = cmValRepository;
+		this.caValRepository = caValRepository;
+	}
+
+	@Override
+	public List<String> fetchPgCode() {
+		logger.info("Fetching distinct validPgCode values from database");
+		return cmRngRepository.findDistinctValidPgCodes();
+	}
+
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<FlatnessToleranceDimensionDto> addOrUpdate(List<FlatnessToleranceDimensionDto> dtoList) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<FlatnessToleranceDimensionDto> savedDtos = new ArrayList<>();
+		for (FlatnessToleranceDimensionDto dto : dtoList) {
+			Long maxVersion = caRngRepository.findMaxVersionByRangeCode(dto.getRangeCode());
+			if (maxVersion == null) {
+				maxVersion = 0L;
+			}
+			long newVersion = maxVersion + 1;
+			Optional<FlattolrngCm> existingCmOpt = cmRngRepository.findById(dto.getRangeCode());
+			if (existingCmOpt.isPresent()) {
+				FlattolrngCm cmEntity = existingCmOpt.get();
+				cmEntity.setModifiedBy(ClientIpUtils.getClient());
+				cmEntity.setModifiedDate(new Date());
+				cmEntity.setModifiedMacAddress(ClientIpUtils.getClientIpAddress());
+				cmEntity.setCurrentVersion(newVersion);
+				cmEntity.setValidPgCode(dto.getValidPgCode());
+				cmRngRepository.save(cmEntity);
+			}
+
+			FlattolRngCaPK caEntityPK = new FlattolRngCaPK();
+			caEntityPK.setRangeCode(dto.getRangeCode());
+			caEntityPK.setVersion(dto.getVersion());
+
+			// 1️⃣ Update existing row if found
+			Optional<FlattolRngCa> existingOpt = caRngRepository.findById(caEntityPK);
+
+			if (existingOpt.isPresent()) {
+				FlattolRngCa existingEntity = existingOpt.get();
+				existingEntity.setModifiedBy(ClientIpUtils.getClient());
+				existingEntity.setModifiedDate(new Date());
+				existingEntity.setIsActive(BigDecimal.ZERO);
+				existingEntity.setModifiedMacAddress(ClientIpUtils.getClientIpAddress());
+
+				caRngRepository.save(existingEntity);
+			}
+
+			// 2️⃣ Insert new row with new version
+			FlattolRngCa newEntity = new FlattolRngCa();
+			FlattolRngCaPK newEntityPK = new FlattolRngCaPK();
+			newEntityPK.setRangeCode(dto.getRangeCode());
+			newEntityPK.setVersion(newVersion);
+
+			newEntity.setId(newEntityPK);
+			newEntity.setModItemStamp(dto.getModItemStamp());
+			newEntity.setThicknessMin(dto.getThicknessMin());
+			newEntity.setThicknessMinOperator(dto.getThicknessMinOperator());
+			newEntity.setThicknessMaxOperator(dto.getThicknessMaxOperator());
+			newEntity.setThicknessMax(dto.getThicknessMax());
+			newEntity.setWidthMin(dto.getWidthMin());
+			newEntity.setWidthMinOperator(dto.getWidthMinOperator());
+			newEntity.setWidthMaxOperator(dto.getWidthMaxOperator());
+			newEntity.setWidthMax(dto.getWidthMax());
+			newEntity.setValidPgCode(dto.getValidPgCode());
+			newEntity.setIsActive(BigDecimal.ONE);
+
+			// Audit fields for NEW record
+			newEntity.setCreatedBy(ClientIpUtils.getClient());
+			newEntity.setCreatedDate(new Date());
+			newEntity.setCreatedMacAddress(ClientIpUtils.getClientIpAddress());
+
+			caRngRepository.save(newEntity);
+
+			savedDtos.add(dto);
+		}
+		return savedDtos;
+
+	}
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public List<FlatnessToleranceDto> saveFlatnessTolerance(List<FlatnessToleranceDto> dtoList) {
+		dbSessionService.setSessionInfo(this.getClass().getName());
+		List<FlatnessToleranceDto> savedDtos = new ArrayList<>();
+		 logger.info("Received dtoList size={} data={}", dtoList.size(), dtoList);
+		for (FlatnessToleranceDto dto : dtoList) {
+			  logger.info("Processing DTO: {}", dto);
+			Long maxVersion = caValRepository.findMaxVersionByRangeCode(dto.getRangeCode(), dto.getProductGaranteeCode());
+			if (maxVersion == null) {
+				maxVersion = 0L;
+			}
+			long newVersion = maxVersion + 1;
+			logger.info("Calculated new version={} for rangeCode={}, pgCode={}", 
+                    newVersion, dto.getRangeCode(), dto.getProductGaranteeCode());
+
+			Optional<FlattolvalCm> existingCmOpt = cmValRepository.findById(new FlattolvalCmPK(dto.getRangeCode(), dto.getProductGaranteeCode()) 	); 
+			if (existingCmOpt.isPresent()) {
+				FlattolvalCm cmEntity = existingCmOpt.get();
+				cmEntity.setModifiedBy(ClientIpUtils.getClient());
+				cmEntity.setModifiedDate(new Date());
+				cmEntity.setModifiedMacAddress(ClientIpUtils.getClientIpAddress());
+				cmEntity.setInputUnitPositive(dto.getInputUnitPositive());
+				cmEntity.setInputUnitNegative(dto.getInputUnitNegative());
+				cmEntity.setCurrentVersion(newVersion);
+				cmValRepository.save(cmEntity);
+			} 
+			logger.info("Calculated old version={} for rangeCode={}, pgCode={}", 
+                    dto.getVersion(), dto.getRangeCode(), dto.getProductGaranteeCode());
+			FlattolvalCaPK caEntityPK = new FlattolvalCaPK(dto.getRangeCode(), dto.getProductGaranteeCode(), dto.getVersion());
+			Optional<FlattolvalCa> existingCaOpt = caValRepository.findById(caEntityPK);
+
+			if (existingCaOpt.isPresent()) {
+				FlattolvalCa existingEntity = existingCaOpt.get();
+				existingEntity.setModifiedBy(ClientIpUtils.getClient());
+				existingEntity.setModifiedDate(new Date());
+				existingEntity.setIsActive(BigDecimal.ZERO);
+				existingEntity.setModifiedMacAddress(ClientIpUtils.getClientIpAddress());
+
+				caValRepository.save(existingEntity);
+			}
+
+			FlattolvalCa newEntity = new FlattolvalCa();
+			FlattolvalCaPK newEntityPK = new FlattolvalCaPK(dto.getRangeCode(), dto.getProductGaranteeCode(), newVersion);
+			newEntity.setId(newEntityPK);
+			newEntity.setInputUnitPositive(dto.getInputUnitPositive());
+			newEntity.setInputUnitNegative(dto.getInputUnitNegative());
+			newEntity.setIsActive(BigDecimal.ONE);
+			newEntity.setCreatedBy(ClientIpUtils.getClient());
+			newEntity.setCreatedDate(new Date());
+			newEntity.setCreatedMacAddress(ClientIpUtils.getClientIpAddress());
+
+			caValRepository.save(newEntity);
+		    logger.info("Completed saving FlatnessTolerance. Total saved={}", savedDtos.size());
+			savedDtos.add(dto);
+		}
+		return savedDtos;
+	}
+
+	public Map<String, String> checkClassAleas() {
+	    Map<String, String> fieldTypes = new HashMap<>();
+
+	    fieldTypes.put(OfsConstants.RANGE_CODE, OfsConstants.CR_RANGE_CODE);
+	    fieldTypes.put(OfsConstants.CURRENT_VERSION, OfsConstants.CR_CURRENT_VERSION);
+	    fieldTypes.put(OfsConstants.VERSION, OfsConstants.FR_VERSION);
+	    fieldTypes.put(OfsConstants.MOD_ITEM_STAMP, OfsConstants.FR_MOD_ITEM_STAMP);
+	    fieldTypes.put(OfsConstants.THICKNESS_MIN, OfsConstants.FR_THICKNESS_MIN);
+	    fieldTypes.put(OfsConstants.THICKNESS_MIN_OPERATOR, OfsConstants.FR_THICKNESS_MIN_OPERATOR);
+	    fieldTypes.put(OfsConstants.THICKNESS_MAX_OPERATOR, OfsConstants.FR_THICKNESS_MAX_OPERATOR);
+	    fieldTypes.put(OfsConstants.THICKNESS_MAX, OfsConstants.FR_THICKNESS_MAX);
+	    fieldTypes.put(OfsConstants.WIDTH_MIN, OfsConstants.FR_WIDTH_MIN);
+	    fieldTypes.put(OfsConstants.WIDTH_MIN_OPERATOR, OfsConstants.FR_WIDTH_MIN_OPERATOR);
+	    fieldTypes.put(OfsConstants.WIDTH_MAX_OPERATOR, OfsConstants.FR_WIDTH_MAX_OPERATOR);
+	    fieldTypes.put(OfsConstants.WIDTH_MAX, OfsConstants.FR_WIDTH_MAX);
+	    fieldTypes.put(OfsConstants.VALID_PG_CODE, OfsConstants.FR_VALID_PG_CODE);
+	    fieldTypes.put(OfsConstants.IS_ACTIVE, OfsConstants.FR_IS_ACTIVE);
+	    fieldTypes.put(OfsConstants.CREATED_DATE, OfsConstants.FR_CREATED_DATE);
+	    fieldTypes.put(OfsConstants.CREATED_BY, OfsConstants.FR_CREATED_BY);
+	    fieldTypes.put(OfsConstants.MODIFIED_DATE, OfsConstants.FR_MODIFIED_DATE);
+	    fieldTypes.put(OfsConstants.MODIFIED_BY, OfsConstants.FR_MODIFIED_BY);
+	    fieldTypes.put(OfsConstants.CREATED_MAC_ADDRESS, OfsConstants.FR_CREATED_MAC_ADDRESS);
+	    fieldTypes.put(OfsConstants.MODIFIED_MAC_ADDRESS, OfsConstants.FR_MODIFIED_MAC_ADDRESS);
+
+	    return fieldTypes;
+	}
+
+
+	private Map<String, String> checkClassAleasWithNoStop() {
+		Map<String, String> columnAliasMap = new HashMap<>();
+
+		columnAliasMap.put(OfsConstants.RANGE_CODE, OfsConstants.CR_RANGE_CODE);
+		 columnAliasMap.put(OfsConstants.CURRENT_VERSION, OfsConstants.CR_CURRENT_VERSION);
+		    columnAliasMap.put(OfsConstants.VERSION, OfsConstants.FR_VERSION);
+		    columnAliasMap.put(OfsConstants.MOD_ITEM_STAMP, OfsConstants.FR_MOD_ITEM_STAMP);
+		    columnAliasMap.put(OfsConstants.THICKNESS_MIN, OfsConstants.FR_THICKNESS_MIN);
+		    columnAliasMap.put(OfsConstants.THICKNESS_MIN_OPERATOR, OfsConstants.FR_THICKNESS_MIN_OPERATOR);
+		    columnAliasMap.put(OfsConstants.THICKNESS_MAX_OPERATOR, OfsConstants.FR_THICKNESS_MAX_OPERATOR);
+		    columnAliasMap.put(OfsConstants.THICKNESS_MAX, OfsConstants.FR_THICKNESS_MAX);
+		    columnAliasMap.put(OfsConstants.WIDTH_MIN, OfsConstants.FR_WIDTH_MIN);
+		    columnAliasMap.put(OfsConstants.WIDTH_MIN_OPERATOR, OfsConstants.FR_WIDTH_MIN_OPERATOR);
+		    columnAliasMap.put(OfsConstants.WIDTH_MAX_OPERATOR, OfsConstants.FR_WIDTH_MAX_OPERATOR);
+		    columnAliasMap.put(OfsConstants.WIDTH_MAX, OfsConstants.FR_WIDTH_MAX);
+		    columnAliasMap.put(OfsConstants.VALID_PG_CODE, OfsConstants.FR_VALID_PG_CODE);
+		    columnAliasMap.put(OfsConstants.IS_ACTIVE, OfsConstants.FR_IS_ACTIVE);
+		    columnAliasMap.put(OfsConstants.CREATED_DATE, OfsConstants.FR_CREATED_DATE);
+		    columnAliasMap.put(OfsConstants.CREATED_BY, OfsConstants.FR_CREATED_BY);
+		    columnAliasMap.put(OfsConstants.MODIFIED_DATE, OfsConstants.FR_MODIFIED_DATE);
+		    columnAliasMap.put(OfsConstants.MODIFIED_BY, OfsConstants.FR_MODIFIED_BY);
+		    columnAliasMap.put(OfsConstants.CREATED_MAC_ADDRESS, OfsConstants.FR_CREATED_MAC_ADDRESS);
+		    columnAliasMap.put(OfsConstants.MODIFIED_MAC_ADDRESS, OfsConstants.FR_MODIFIED_MAC_ADDRESS);
+
+		return columnAliasMap;
+	}
+
+	public String filterQueryUsingFilterList(List<String> filterList, String query) {
+		StringBuilder queryBuilder = new StringBuilder(query);
+		queryBuilder.append(" AND ( ");
+
+		List<String> columnNames = DevExtGridFilterUtils.getAllFields(FlatnessToleranceDimensionDto.class);
+
+		Map<String, String> columnDataTypesKeyValuePair = DevExtGridFilterUtils
+				.getAllFieldsWithTypes(FlatnessToleranceDimensionDto.class);
+		Map<String, String> columnAlise = checkClassAleas();
+
+		boolean isClobObject = false;
+		boolean isStringObject = false;
+		boolean isDateObject = false;
+		boolean isContains = false;
+		boolean isNotContains = false;
+		boolean isStartWith = false;
+		boolean isEndWith = false;
+
+		for (int i = 0; i < filterList.size(); i++) {
+			String item = filterList.get(i);
+			if (columnNames.contains(item)) {
+				if ("CLOB".equals(columnDataTypesKeyValuePair.get(item))) {
+					queryBuilder.append("DBMS_LOB.INSTR(").append(columnAlise.get(item)).append(",");
+					isClobObject = true;
+				} else if ("DATE".equals(columnDataTypesKeyValuePair.get(item))) {
+					queryBuilder.append(" TO_CHAR(").append(columnAlise.get(item)).append(", 'YYYY-MM-DD')");
+					isDateObject = true;
+				} else if ("VARCHAR2".equals(columnDataTypesKeyValuePair.get(item))) {
+					queryBuilder.append("UPPER(TRIM(").append(columnAlise.get(item)).append("))");
+					isStringObject = true;
+				} else {
+					queryBuilder.append(columnAlise.get(item));
+				}
+
+			} else if (item.equals(CONTAINS) || item.equals(NOTCONTAINS) || item.equals(STARTSWITH)
+					|| item.equals(ENDSWITH)) {
+				if (isClobObject) {
+					//
+				} else if (isDateObject) {
+					queryBuilder.append(LIKE);
+				} else {
+					if (item.equals(CONTAINS)) {
+						queryBuilder.append(LIKE);
+						isContains = true;
+					} else if (item.equals(NOTCONTAINS)) {
+						queryBuilder.append(NOT_LIKE);
+						isNotContains = true;
+					} else if (item.equals(STARTSWITH)) {
+						queryBuilder.append(LIKE);
+						isStartWith = true;
+					} else if (item.equals(ENDSWITH)) {
+						queryBuilder.append(LIKE);
+						isEndWith = true;
+					} else {
+						queryBuilder.append(" = ");
+					}
+				}
+			} else if (item.equals("or") || item.equals("and")) {
+				queryBuilder.append(" ").append(item).append(" ");
+			} else if (item.equals("=") || item.equals("<>") || item.equals(">=") || item.equals("<")
+					|| item.equals(">")) {
+				queryBuilder.append(" ").append(item);
+			} else {
+				if (isClobObject) {
+					queryBuilder.append("'").append(item).append("') > 0");
+					isClobObject = false;
+				} else if (isStringObject) {
+					if (isContains) {
+						queryBuilder.append(UPPER_TRIM_LIKE_PREFIX).append(item).append(UPPER_TRIM_SUFFIX);
+						isContains = false;
+					} else if (isNotContains) {
+						queryBuilder.append(UPPER_TRIM_LIKE_PREFIX).append(item).append(UPPER_TRIM_SUFFIX);
+						isNotContains = false;
+					} else if (isStartWith) {
+						queryBuilder.append(UPPER_TRIM_START_WITH).append(item).append("%'))");
+						isStartWith = false;
+					} else if (isEndWith) {
+						queryBuilder.append(UPPER_TRIM_LIKE_PREFIX).append(item).append("'))");
+						isEndWith = false;
+					} else {
+						queryBuilder.append(UPPER_TRIM_START_WITH).append(item).append("'))");
+					}
+					isStringObject = false;
+
+				} else if (isDateObject) {
+					item = item.replace(" ", "+");
+					DateTimeFormatter formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+					OffsetDateTime dateTime = OffsetDateTime.parse(item, formatter);
+					String dateOnly = dateTime.toLocalDate().toString();
+
+					queryBuilder.append(" '").append(dateOnly).append("'");
+
+					isDateObject = false;
+				} else {
+					queryBuilder.append(" ").append(item);
+				}
+			}
+		}
+		queryBuilder.append(" ) ");
+		return queryBuilder.toString();
+	}
+
+
+
+	@Override
+	public <T> T fetchDimensionData(FlatnessToleranceRequestDto request, String status, int pageNumber, int pageSize,
+			String filter, String sort, String group, int skip, boolean requireTotalCount, boolean requireGroupCount,
+			String searchValue, Integer pageStore, Integer latestGroupCount) {
+
+		List<String> filterList = DevExtGridFilterUtils.extractElements(filter);
+		int[] pageSizeArr = processPageAndSize(pageNumber, pageSize, pageStore);
+		pageNumber = pageSizeArr[0];
+		pageSize = pageSizeArr[1];
+
+		List<String> groupList = DevExtGridFilterUtils.getSortListFromString(group);
+
+		List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);
+		if (DevExtGridFilterUtils.isGroupWithoutFilterOrSort(group, filter, sort)) {
+			return handleGroupOnly(request, groupList, pageNumber, pageSize, skip);
+
+		}
+
+		if (DevExtGridFilterUtils.isGroupWithFilterOrSort(group, filter, sort)) {
+			return handleGroupWithFilterOrSort(request, groupList, filterList, pageNumber, pageSize, skip,
+					requireTotalCount, pageStore, latestGroupCount);
+		}
+
+		if (DevExtGridFilterUtils.isFilterOrSortOnly(group, filter, sort)) {
+			return handleFilterOrSort(request, filterList, sortList, pageNumber, pageSize, skip, requireTotalCount);
+		}
+
+		return null;
+	}
+
+	private int[] processPageAndSize(Integer pageNumber, Integer pageSize, Integer pageStore) {
+		if (pageNumber == null) {
+			pageNumber = 0;
+		}
+		if (pageSize == null) {
+			pageSize = pageStore;
+		}
+		return new int[] { pageNumber, pageSize };
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T handleFilterOrSort(FlatnessToleranceRequestDto request, List<String> filterList,
+			List<String> sortList, Integer page, Integer size, Integer skip, boolean requireTotalCount) {
+
+		if (!requireTotalCount) {
+			size = page + size;
+			page = 0;
+		}
+		filterlistDetailsData(filterList);
+		String query = getMainDetailsQuery();
+		String countQuery = getMaindetailsQueryCount();
+		if (!filterList.isEmpty()) {
+			query = filterQueryUsingFilterList(filterList, query);
+			countQuery = filterQueryUsingFilterList(filterList, countQuery);
+		}
+
+		query = applySorting(sortList, query);
+		Page<FlatnessToleranceDimensionDto> paginatedResult = custRepository.getDetails(request, page, size, query,
+				countQuery, skip);
+		return (T) new FluentaPaginatedResponse<>(paginatedResult.getContent(), paginatedResult.getTotalElements());
+	}
+
+	private String applySorting(List<String> sortList, String query) {
+		StringBuilder queryBuilder = new StringBuilder(query);
+
+		if (!sortList.isEmpty()) {
+			Map<String, String> columnAlias = checkClassAleasWithNoStop();
+			String sortColumn = columnAlias.get(sortList.get(1));
+
+			queryBuilder.append(OfsConstants.ORDER_BY).append(sortColumn);
+
+			if ("true".equals(sortList.get(3))) {
+				queryBuilder.append(" ").append(OfsConstants.DESC).append(" ");
+			}
+		} else {
+			queryBuilder.append(" ORDER BY fr.id.rangeCode ASC ");
+		}
+
+		return queryBuilder.toString();
+	}
+
+	public String getMainDetailsQuery() {
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append(FlatnessToleranceCustRepository.DIM_QUERY)
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_WHERE_CONDITION);
+		return queryBuilder.toString();
+	}
+
+	public String getMaindetailsQueryCount() {
+		return new StringBuilder().append(OfsConstants.SELECT).append(" COUNT(fr) ")
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_WHERE_CONDITION).toString();
+	}
+
+	private <T> T handleGroupOnly(FlatnessToleranceRequestDto request, List<String> groupList, int pageNumber,
+			int pageSize, int skip) {
+		pageSize = pageNumber + pageSize;
+		pageNumber = 0;
+		String groupQuery = getQueryForGrouping(groupList);
+		String groupCountQuery = getQueryForGroupingCount(groupList);
+		String mainCountQuery = getMaindetailsQueryCount();
+		Long mainQueryCount = custRepository.getMaindetailsQueryCount(request, mainCountQuery);
+
+		Page<Object[]> groupingListData = custRepository.getGroupingListData(groupQuery, groupCountQuery, pageNumber,
+				pageSize, skip, request);
+		Long totalDistCount = custRepository.groupCountQuery(groupCountQuery, request);
+
+		return buildGroupedDataResponse(groupingListData, mainQueryCount, totalDistCount);
+	}
+
+	private String getQueryForGrouping(List<String> groupList) {
+		if (groupList == null || groupList.isEmpty()) {
+			throw new IllegalArgumentException("groupList cannot be null or empty");
+		}
+
+		String descFlag = groupList.get(3);
+		String groupColumn = groupList.get(1);
+
+		StringBuilder query = new StringBuilder().append(OfsConstants.SELECT).append(" ")
+				.append(checkClassAleas().get(groupColumn)).append(", COUNT(*) ")
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_WHERE_CONDITION).append(" ")
+				.append(OfsConstants.GROUP_BY).append(" ").append(checkClassAleas().get(groupColumn)).append(" ")
+				.append(OfsConstants.ORDER_BY).append(" ").append(checkClassAleas().get(groupColumn));
+
+		if ("true".equalsIgnoreCase(descFlag)) {
+			query.append(" ").append(OfsConstants.DESC);
+		}
+
+		return query.toString();
+	}
+
+	private String getQueryForGroupingCount(List<String> groupList) {
+		String groupColumn = groupList.get(1); // Assuming the second element is the group column
+
+		StringBuilder query = new StringBuilder().append(OfsConstants.SELECT).append(" ")
+				.append(OfsConstants.COUNT_DISTINCT).append(checkClassAleas().get(groupColumn)).append(")")
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_WHERE_CONDITION);
+
+		return query.toString();
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T buildGroupedDataResponse(Page<Object[]> groupingListData, Long mainQueryCount, Long totalDistCount) {
+		GroupedDataResponse<FlatnessToleranceDimensionDto> result = new GroupedDataResponse<>(null, 0L, 0L);
+		List<Group<FlatnessToleranceDimensionDto>> list = new ArrayList<>();
+
+		if (groupingListData != null && !groupingListData.isEmpty()) {
+			for (Object[] row : groupingListData) {
+				if (row == null || row.length < 2) {
+					continue;
+				}
+
+				String groupKey;
+				if (row[0] instanceof BigDecimal bigDecimal) {
+					groupKey = bigDecimal.toPlainString();
+				} else {
+					groupKey = String.valueOf(row[0]);
+				}
+
+				Long count;
+				if (row[1] instanceof BigDecimal bigDecimalCount) {
+					count = bigDecimalCount.longValue();
+				} else {
+					count = (Long) row[1];
+				}
+
+				list.add(new Group<>(groupKey, null, count));
+			}
+		}
+
+		result.setData(list);
+		result.setTotalCount(mainQueryCount);
+		result.setGroupCount(totalDistCount);
+		return (T) result;
+	}
+
+	private <T> T handleGroupWithFilterOrSort(FlatnessToleranceRequestDto request, List<String> groupList,
+			List<String> filterList, Integer page, Integer size, Integer skip, boolean requireTotalCount,
+			Integer pageStore, Integer latestGroupCounts) {
+		if (requireTotalCount && size == null) {
+			size = pageStore;
+		} else {
+			size = page + size;
+			page = 0;
+		}
+
+		String queryForGrouping = getDetailsQueryForGroupingAndFiltering(groupList, filterList);
+		String queryForGroupingAndFilteringCount = getDetailsQueryForGroupingAndFilteringCount(groupList, filterList);
+		String mainCountQuery = getMaindetailsQueryCount();
+		Long mainQueryCount = custRepository.getMaindetailsQueryCount(request, mainCountQuery);
+		Page<Object[]> groupingListData = custRepository.getGroupingListData(queryForGrouping,
+				queryForGroupingAndFilteringCount, page, size, skip, request);
+		Long totalDistCount = custRepository.groupCountQuery(queryForGroupingAndFilteringCount, request);
+		return buildGroupedDataResponse(groupingListData, mainQueryCount,
+				(totalDistCount != null && totalDistCount != 0) ? (long) totalDistCount : latestGroupCounts);
+	}
+
+	public String getDetailsQueryForGroupingAndFiltering(List<String> groupList, List<String> filterList) {
+		String groupColumn = groupList.get(1);
+		String desc = groupList.get(3);
+		filterlistDetailsData(filterList);
+		StringBuilder query = new StringBuilder();
+		query.append(OfsConstants.SELECT).append(" ").append(checkClassAleas().get(groupColumn)).append(" ,COUNT(*)")
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_WHERE_CONDITION);
+
+		String filterQueryUsingFilterList = query.toString();
+
+		if (!filterList.isEmpty()) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList(filterList, query.toString());
+		}
+		filterQueryUsingFilterList = new StringBuilder(filterQueryUsingFilterList).append(" ")
+				.append(OfsConstants.GROUP_BY).append(" ").append(checkClassAleas().get(groupColumn)).append(" ")
+				.append(OfsConstants.ORDER_BY).append(" ").append(checkClassAleas().get(groupColumn)).toString();
+		if ("true".equals(desc)) {
+			filterQueryUsingFilterList = new StringBuilder(filterQueryUsingFilterList).append(" ")
+					.append(OfsConstants.DESC).append(" ").toString();
+		}
+
+		return filterQueryUsingFilterList;
+
+	}
+
+	public String getDetailsQueryForGroupingAndFilteringCount(List<String> groupList, List<String> filterList) {
+		String filterQueryUsingFilterList = null;
+		String groupColumn = groupList.get(1);
+		filterlistDetailsData(filterList);
+		StringBuilder query = new StringBuilder();
+		query.append(OfsConstants.SELECT).append(" ").append(OfsConstants.COUNT_DISTINCT)
+				.append(checkClassAleas().get(groupColumn)).append(") ")
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.DIM_QUERY_WHERE_CONDITION);
+
+		filterQueryUsingFilterList = query.toString();
+
+		if (!filterList.isEmpty()) {
+			filterQueryUsingFilterList = filterQueryUsingFilterList(filterList, query.toString());
+		}
+
+		return filterQueryUsingFilterList;
+
+	}
+	public String filterQueryUsingFilterListFlatnessTolerance(List<String> filterList, String query) {
+		StringBuilder queryBuilder = new StringBuilder(query);
+		queryBuilder.append(" AND ( ");
+
+		List<String> columnNames = DevExtGridFilterUtils.getAllFields(FlatnessToleranceDto.class);
+
+		Map<String, String> columnDataTypesKeyValuePair = DevExtGridFilterUtils
+				.getAllFieldsWithTypes(FlatnessToleranceDto.class);
+		Map<String, String> columnAlise = checkClassAleasFlatnessTolerance();
+
+		boolean isClobObject = false;
+		boolean isStringObject = false;
+		boolean isDateObject = false;
+		boolean isContains = false;
+		boolean isNotContains = false;
+		boolean isStartWith = false;
+		boolean isEndWith = false;
+
+		for (int i = 0; i < filterList.size(); i++) {
+			String item = filterList.get(i);
+			if (columnNames.contains(item)) {
+				if ("CLOB".equals(columnDataTypesKeyValuePair.get(item))) {
+					queryBuilder.append("DBMS_LOB.INSTR(").append(columnAlise.get(item)).append(",");
+					isClobObject = true;
+				} else if ("DATE".equals(columnDataTypesKeyValuePair.get(item))) {
+					queryBuilder.append(" TO_CHAR(").append(columnAlise.get(item)).append(", 'YYYY-MM-DD')");
+					isDateObject = true;
+				} else if ("VARCHAR2".equals(columnDataTypesKeyValuePair.get(item))) {
+					queryBuilder.append("UPPER(TRIM(").append(columnAlise.get(item)).append("))");
+					isStringObject = true;
+				} else {
+					queryBuilder.append(columnAlise.get(item));
+				}
+
+			} else if (item.equals(CONTAINS) || item.equals(NOTCONTAINS) || item.equals(STARTSWITH)
+					|| item.equals(ENDSWITH)) {
+				if (isClobObject) {
+					//
+				} else if (isDateObject) {
+					queryBuilder.append(LIKE);
+				} else {
+					if (item.equals(CONTAINS)) {
+						queryBuilder.append(LIKE);
+						isContains = true;
+					} else if (item.equals(NOTCONTAINS)) {
+						queryBuilder.append(NOT_LIKE);
+						isNotContains = true;
+					} else if (item.equals(STARTSWITH)) {
+						queryBuilder.append(LIKE);
+						isStartWith = true;
+					} else if (item.equals(ENDSWITH)) {
+						queryBuilder.append(LIKE);
+						isEndWith = true;
+					} else {
+						queryBuilder.append(" = ");
+					}
+				}
+			} else if (item.equals("or") || item.equals("and")) {
+				queryBuilder.append(" ").append(item).append(" ");
+			} else if (item.equals("=") || item.equals("<>") || item.equals(">=") || item.equals("<")
+					|| item.equals(">")) {
+				queryBuilder.append(" ").append(item);
+			} else {
+				if (isClobObject) {
+					queryBuilder.append("'").append(item).append("') > 0");
+					isClobObject = false;
+				} else if (isStringObject) {
+					if (isContains) {
+						queryBuilder.append(UPPER_TRIM_LIKE_PREFIX).append(item).append(UPPER_TRIM_SUFFIX);
+						isContains = false;
+					} else if (isNotContains) {
+						queryBuilder.append(UPPER_TRIM_LIKE_PREFIX).append(item).append(UPPER_TRIM_SUFFIX);
+						isNotContains = false;
+					} else if (isStartWith) {
+						queryBuilder.append(UPPER_TRIM_START_WITH).append(item).append("%'))");
+						isStartWith = false;
+					} else if (isEndWith) {
+						queryBuilder.append(UPPER_TRIM_LIKE_PREFIX).append(item).append("'))");
+						isEndWith = false;
+					} else {
+						queryBuilder.append(UPPER_TRIM_START_WITH).append(item).append("'))");
+					}
+					isStringObject = false;
+
+				} else if (isDateObject) {
+					item = item.replace(" ", "+");
+					DateTimeFormatter formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+					OffsetDateTime dateTime = OffsetDateTime.parse(item, formatter);
+					String dateOnly = dateTime.toLocalDate().toString();
+
+					queryBuilder.append(" '").append(dateOnly).append("'");
+
+					isDateObject = false;
+				} else {
+					queryBuilder.append(" ").append(item);
+				}
+			}
+		}
+		queryBuilder.append(" ) ");
+		return queryBuilder.toString();
+	}
+	public Map<String, String> checkClassAleasFlatnessTolerance() {
+		Map<String, String> fieldTypes = new HashMap<>();	     
+		fieldTypes.put(OfsConstants.RANGE_CODE, "ca.id.rangeCode");
+		fieldTypes.put(OfsConstants.PRODUCTGARANTEECODE, "ca.id.productGaranteeCode");
+		fieldTypes.put(OfsConstants.VERSION, "ca.id.version");
+		fieldTypes.put(OfsConstants.CURRENT_VERSION, "cm.currentVersion");
+		fieldTypes.put(OfsConstants.MODIFICATION_TIMESTAMP, "ca.modificationTimestamp");
+		fieldTypes.put(OfsConstants.INPUT_UNIT_POSITIVE, "ca.inputUnitPositive");
+		fieldTypes.put(OfsConstants.INPUT_UNIT_NEGATIVE, "ca.inputUnitNegative");
+		fieldTypes.put(OfsConstants.IS_ACTIVE, "ca.isActive");
+		fieldTypes.put(OfsConstants.CREATED_DATE, "ca.createdDate");
+		fieldTypes.put(OfsConstants.CREATED_BY, "ca.createdBy");
+		fieldTypes.put(OfsConstants.MODIFIED_DATE, "ca.modifiedDate");
+		fieldTypes.put(OfsConstants.MODIFIED_BY, "ca.modifiedBy");
+		fieldTypes.put(OfsConstants.CREATED_MAC_ADDRESS, "ca.createdMacAddress");
+		fieldTypes.put(OfsConstants.MODIFIED_MAC_ADDRESS, "ca.modifiedMacAddress");
+	
+		return fieldTypes;
+	}
+
+	private Map<String, String> checkClassAleasWithNoStopFlatnessTolerance() {
+		Map<String, String> columnAliasMap = new HashMap<>();
+
+		columnAliasMap.put(OfsConstants.RANGE_CODE, "ca.id.rangeCode");
+		columnAliasMap.put(OfsConstants.PRODUCTGARANTEECODE, "ca.id.productGaranteeCode");
+		columnAliasMap.put(OfsConstants.VERSION, "ca.id.version");
+		columnAliasMap.put(OfsConstants.CURRENT_VERSION, "cm.currentVersion");
+		columnAliasMap.put(OfsConstants.MODIFICATION_TIMESTAMP, "ca.modificationTimestamp");
+		columnAliasMap.put(OfsConstants.INPUT_UNIT_POSITIVE, "ca.inputUnitPositive");
+		columnAliasMap.put(OfsConstants.INPUT_UNIT_NEGATIVE, "ca.inputUnitNegative");
+		columnAliasMap.put(OfsConstants.IS_ACTIVE, "ca.isActive");
+		columnAliasMap.put(OfsConstants.CREATED_DATE, "ca.createdDate");
+		columnAliasMap.put(OfsConstants.CREATED_BY, "ca.createdBy");
+		columnAliasMap.put(OfsConstants.MODIFIED_DATE, "ca.modifiedDate");
+		columnAliasMap.put(OfsConstants.MODIFIED_BY, "ca.modifiedBy");
+		columnAliasMap.put(OfsConstants.CREATED_MAC_ADDRESS, "ca.createdMacAddress");
+		columnAliasMap.put(OfsConstants.MODIFIED_MAC_ADDRESS, "ca.modifiedMacAddress");
+
+		return columnAliasMap;
+	}
+	@Override
+	public <T> T fetchFlatnessToleranceData(FlatnessToleranceRequestDto request, String status, int pageNumber, int pageSize,
+			String filter, String sort, String group, int skip, boolean requireTotalCount, boolean requireGroupCount,
+			String searchValue, Integer pageStore, Integer latestGroupCount) {
+		
+		List<String> filterList = DevExtGridFilterUtils.extractElements(filter);
+		int[] pageSizeArr = processPageAndSize(pageNumber, pageSize, pageStore);
+		pageNumber = pageSizeArr[0];
+		pageSize = pageSizeArr[1];
+
+		List<String> groupList = DevExtGridFilterUtils.getSortListFromString(group);
+
+		List<String> sortList = DevExtGridFilterUtils.getSortListFromString(sort);
+		if (DevExtGridFilterUtils.isGroupWithoutFilterOrSort(group, filter, sort)) {
+			return handleGroupOnlyFlatnessTolerance(request, groupList, pageNumber, pageSize, skip);
+
+		}
+
+		if (DevExtGridFilterUtils.isGroupWithFilterOrSort(group, filter, sort)) {
+			return handleGroupWithFilterOrSortFlatnessTolerance(request, groupList, filterList, pageNumber, pageSize, skip,
+					requireTotalCount, pageStore, latestGroupCount);
+		}
+
+		if (DevExtGridFilterUtils.isFilterOrSortOnly(group, filter, sort)) {
+			return handleFilterOrSortFlatnessTolerance(request, filterList, sortList, pageNumber, pageSize, skip, requireTotalCount);
+		}
+
+		return null;
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T handleFilterOrSortFlatnessTolerance(FlatnessToleranceRequestDto request, List<String> filterList,
+			List<String> sortList, Integer page, Integer size, Integer skip, boolean requireTotalCount) {
+
+		if (!requireTotalCount) {
+			size = page + size;
+			page = 0;
+		}
+		filterlistDetailsData(filterList);
+		String query = getMainDetailsQueryFlatnessTolerance();
+		String countQuery = getMaindetailsQueryCountFlatnessTolerance();
+		if (!filterList.isEmpty()) {
+			query = filterQueryUsingFilterListFlatnessTolerance(filterList, query);
+			countQuery = filterQueryUsingFilterListFlatnessTolerance(filterList, countQuery);
+		}
+
+		query = applySortingFlatnessTolerance(sortList, query);
+		Page<FlatnessToleranceDto> paginatedResult = custRepository.getDetailsFlatnessTolerance(request, page, size, query,
+				countQuery, skip);
+		return (T) new FluentaPaginatedResponse<>(paginatedResult.getContent(), paginatedResult.getTotalElements());
+	}
+
+	private String applySortingFlatnessTolerance(List<String> sortList, String query) {
+		StringBuilder queryBuilder = new StringBuilder(query);
+
+		if (!sortList.isEmpty()) {
+			Map<String, String> columnAlias = checkClassAleasWithNoStopFlatnessTolerance();
+			String sortColumn = columnAlias.get(sortList.get(1));
+
+			queryBuilder.append(OfsConstants.ORDER_BY).append(sortColumn);
+
+			if ("true".equals(sortList.get(3))) {
+				queryBuilder.append(" ").append(OfsConstants.DESC).append(" ");
+			}
+		} else {
+			queryBuilder.append(" ORDER BY ca.id.rangeCode ASC, ca.id.version desc ");
+		}
+
+		return queryBuilder.toString();
+	}
+
+	public String getMainDetailsQueryFlatnessTolerance() {
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY)
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_WHERE_CONDITION);
+		return queryBuilder.toString();
+	}
+
+	public String getMaindetailsQueryCountFlatnessTolerance() {
+		return new StringBuilder().append(OfsConstants.SELECT).append(" COUNT(ca) ")
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_WHERE_CONDITION).toString();
+	}
+
+	private <T> T handleGroupOnlyFlatnessTolerance(FlatnessToleranceRequestDto request, List<String> groupList, int pageNumber,
+			int pageSize, int skip) {
+		pageSize = pageNumber + pageSize;
+		pageNumber = 0;
+		String groupQuery = getQueryForGroupingFlatnessTolerance(groupList);
+		String groupCountQuery = getQueryForGroupingCountFlatnessTolerance(groupList);
+		String mainCountQuery = getMaindetailsQueryCountFlatnessTolerance();
+		Long mainQueryCount = custRepository.getMaindetailsQueryCountFlatnessTolerance(request, mainCountQuery);
+
+		Page<Object[]> groupingListData = custRepository.getGroupingListDataFlatnessTolerance(groupQuery, groupCountQuery, pageNumber,
+				pageSize, skip, request);
+		Long totalDistCount = custRepository.groupCountQueryFlatnessTolerance(groupCountQuery, request);
+
+		return buildGroupedDataResponseFlatnessTolerance(groupingListData, mainQueryCount, totalDistCount);
+	}
+
+	private String getQueryForGroupingFlatnessTolerance(List<String> groupList) {
+		if (groupList == null || groupList.isEmpty()) {
+			throw new IllegalArgumentException("groupList cannot be null or empty");
+		}
+
+		String descFlag = groupList.get(3);
+		String groupColumn = groupList.get(1);
+
+		StringBuilder query = new StringBuilder().append(OfsConstants.SELECT).append(" ")
+				.append(checkClassAleasFlatnessTolerance().get(groupColumn)).append(", COUNT(*) ")
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_WHERE_CONDITION).append(" ")
+				.append(OfsConstants.GROUP_BY).append(" ").append(checkClassAleasFlatnessTolerance().get(groupColumn)).append(" ")
+				.append(OfsConstants.ORDER_BY).append(" ").append(checkClassAleasFlatnessTolerance().get(groupColumn));
+
+		if ("true".equalsIgnoreCase(descFlag)) {
+			query.append(" ").append(OfsConstants.DESC);
+		}
+
+		return query.toString();
+	}
+
+	private String getQueryForGroupingCountFlatnessTolerance(List<String> groupList) {
+		String groupColumn = groupList.get(1); // Assuming the second element is the group column
+
+		StringBuilder query = new StringBuilder().append(OfsConstants.SELECT).append(" ")
+				.append(OfsConstants.COUNT_DISTINCT).append(checkClassAleasFlatnessTolerance().get(groupColumn)).append(")")
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_WHERE_CONDITION);
+
+		return query.toString();
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T buildGroupedDataResponseFlatnessTolerance(Page<Object[]> groupingListData, Long mainQueryCount, Long totalDistCount) {
+		GroupedDataResponse<FlatnessToleranceDto> result = new GroupedDataResponse<>(null, 0L, 0L);
+		List<Group<FlatnessToleranceDto>> list = new ArrayList<>();
+
+		if (groupingListData != null && !groupingListData.isEmpty()) {
+			for (Object[] row : groupingListData) {
+				if (row == null || row.length < 2) {
+					continue;
+				}
+
+				String groupKey;
+				if (row[0] instanceof BigDecimal bigDecimal) {
+					groupKey = bigDecimal.toPlainString();
+				} else {
+					groupKey = String.valueOf(row[0]);
+				}
+
+				Long count;
+				if (row[1] instanceof BigDecimal bigDecimalCount) {
+					count = bigDecimalCount.longValue();
+				} else {
+					count = (Long) row[1];
+				}
+
+				list.add(new Group<>(groupKey, null, count));
+			}
+		}
+
+		result.setData(list);
+		result.setTotalCount(mainQueryCount);
+		result.setGroupCount(totalDistCount);
+		return (T) result;
+	}
+
+	private <T> T handleGroupWithFilterOrSortFlatnessTolerance(FlatnessToleranceRequestDto request, List<String> groupList,
+			List<String> filterList, Integer page, Integer size, Integer skip, boolean requireTotalCount,
+			Integer pageStore, Integer latestGroupCounts) {
+		if (requireTotalCount && size == null) {
+			size = pageStore;
+		} else {
+			size = page + size;
+			page = 0;
+		}
+
+		String queryForGrouping = getDetailsQueryForGroupingAndFilteringFlatnessTolerance(groupList, filterList);
+		String queryForGroupingAndFilteringCount = getDetailsQueryForGroupingAndFilteringCountFlatnessTolerance(groupList, filterList);
+		String mainCountQuery = getMaindetailsQueryCountFlatnessTolerance();
+		Long mainQueryCount = custRepository.getMaindetailsQueryCountFlatnessTolerance(request, mainCountQuery);
+		Page<Object[]> groupingListData = custRepository.getGroupingListDataFlatnessTolerance(queryForGrouping,
+				queryForGroupingAndFilteringCount, page, size, skip, request);
+		Long totalDistCount = custRepository.groupCountQueryFlatnessTolerance(queryForGroupingAndFilteringCount, request);
+		return buildGroupedDataResponseFlatnessTolerance(groupingListData, mainQueryCount,
+				(totalDistCount != null && totalDistCount != 0) ? (long) totalDistCount : latestGroupCounts);
+	}
+
+	public String getDetailsQueryForGroupingAndFilteringFlatnessTolerance(List<String> groupList, List<String> filterList) {
+		String groupColumn = groupList.get(1);
+		String desc = groupList.get(3);
+		filterlistDetailsData(filterList);
+		StringBuilder query = new StringBuilder();
+		query.append(OfsConstants.SELECT).append(" ").append(checkClassAleasFlatnessTolerance().get(groupColumn)).append(" ,COUNT(*)")
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_WHERE_CONDITION);
+
+		String filterQueryUsingFilterListFlatnessTolerance = query.toString();
+
+		if (!filterList.isEmpty()) {
+			filterQueryUsingFilterListFlatnessTolerance = filterQueryUsingFilterListFlatnessTolerance(filterList, query.toString());
+		}
+		filterQueryUsingFilterListFlatnessTolerance = new StringBuilder(filterQueryUsingFilterListFlatnessTolerance).append(" ")
+				.append(OfsConstants.GROUP_BY).append(" ").append(checkClassAleasFlatnessTolerance().get(groupColumn)).append(" ")
+				.append(OfsConstants.ORDER_BY).append(" ").append(checkClassAleasFlatnessTolerance().get(groupColumn)).toString();
+		if ("true".equals(desc)) {
+			filterQueryUsingFilterListFlatnessTolerance = new StringBuilder(filterQueryUsingFilterListFlatnessTolerance).append(" ")
+					.append(OfsConstants.DESC).append(" ").toString();
+		}
+
+		return filterQueryUsingFilterListFlatnessTolerance;
+
+	}
+
+	public String getDetailsQueryForGroupingAndFilteringCountFlatnessTolerance(List<String> groupList, List<String> filterList) {
+		String filterQueryUsingFilterListFlatnessTolerance = null;
+		String groupColumn = groupList.get(1);
+		filterlistDetailsData(filterList);
+		StringBuilder query = new StringBuilder();
+		query.append(OfsConstants.SELECT).append(" ").append(OfsConstants.COUNT_DISTINCT)
+				.append(checkClassAleasFlatnessTolerance().get(groupColumn)).append(") ")
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_CONDITION)
+				.append(FlatnessToleranceCustRepository.FLATNESS_TOL_QUERY_WHERE_CONDITION);
+
+		filterQueryUsingFilterListFlatnessTolerance = query.toString();
+
+		if (!filterList.isEmpty()) {
+			filterQueryUsingFilterListFlatnessTolerance = filterQueryUsingFilterListFlatnessTolerance(filterList, query.toString());
+		}
+
+		return filterQueryUsingFilterListFlatnessTolerance;
+
+	}
+
+}

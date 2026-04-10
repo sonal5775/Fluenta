@@ -1,0 +1,39 @@
+package com.hindindustec.fluenta.hsm.masters.repository;
+
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.hindindustec.fluenta.hsm.masters.entities.ExtGrdJmEntity;
+
+public interface ExtGrdJmEntityRepository extends JpaRepository<ExtGrdJmEntity, String> {
+
+	@Query("select e.extgrdnm from ExtGrdJmEntity e where e.isactv = 1")
+	public List<String> getExternalGradeList();
+	
+	@Query("SELECT MAX(TO_NUMBER(e.egid)) FROM ExtGrdJmEntity e")
+    BigDecimal countTotalRecords();
+
+	@Query("select e from ExtGrdJmEntity e where TRIM(e.extgrdnm) = TRIM(:extgrdnm)")
+	Optional<ExtGrdJmEntity> findByExtGrdNm(@Param("extgrdnm") String extgrdnm);
+	
+	@Query("select e from ExtGrdJmEntity e where TRIM(e.egid) = TRIM(:egid)")
+	Optional<ExtGrdJmEntity> findByEgid(@Param("egid") String egid);
+	
+	@Modifying
+	@Transactional
+	@SuppressWarnings("java : S107")
+	@Query(value = "UPDATE HITTRAN.EXTGRD_JM ext SET ext.extgrdnm = :extgrdnm,ext.MO_BY = :client,ext.MO_MAC_ADDR = :macAddr,ext.MO_DT = :moDate,ext.SPEC = :spec,ext.SUBQLTY = :subqlty,ext.grd = :grd,ext.ISMULTISTD = :ismultistd WHERE ext.extgrdnm = :prevExtGrdNm", nativeQuery = true)
+	void updatePrimaryKey( String extgrdnm, String prevExtGrdNm, String client, String macAddr, Date moDate,String spec,String subqlty,String grd,String ismultistd);
+	
+	@Query("select e from ExtGrdJmEntity e where TRIM(e.normid) = TRIM(:normid)")
+	Optional<ExtGrdJmEntity> findByNormid(@Param("normid") String normid);
+	
+}
